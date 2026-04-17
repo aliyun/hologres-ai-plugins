@@ -58,13 +58,15 @@ hologres sql "SELECT * FROM orders LIMIT 10"
 | `hologres warehouse [name]` | List or query warehouses |
 | `hologres schema tables` | List all tables |
 | `hologres schema describe <table>` | Show table structure |
-| `hologres schema dump [--table t]` | Export DDL |
+| `hologres schema dump <schema.table>` | Export DDL |
+| `hologres schema size <schema.table>` | Get table storage size |
 | `hologres sql "<query>"` | Execute read-only SQL |
 | `hologres sql --write "<dml>"` | Execute write SQL |
 | `hologres data export <table> -f out.csv` | Export to CSV |
 | `hologres data import <table> -f in.csv` | Import from CSV |
 | `hologres data count <table>` | Count rows |
 | `hologres history` | Show command history |
+| `hologres ai-guide` | Generate AI agent guide |
 
 ## Output Formats
 
@@ -102,7 +104,7 @@ hologres sql --no-limit-check "SELECT * FROM large_table"
 ```
 
 ### 2. Write Protection
-Write operations require `--write` flag.
+Write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) require `--write` flag.
 
 ```bash
 hologres sql --write "INSERT INTO logs VALUES (1, 'test')"
@@ -128,6 +130,9 @@ hologres sql --write "DELETE FROM users WHERE status='inactive'"
 | `LIMIT_REQUIRED` | Need LIMIT clause |
 | `WRITE_GUARD_ERROR` | Missing --write flag |
 | `DANGEROUS_WRITE_BLOCKED` | DELETE/UPDATE without WHERE |
+| `WRITE_BLOCKED` | Write operation not allowed |
+| `EXPORT_ERROR` | Data export failed |
+| `IMPORT_ERROR` | Data import failed |
 
 ## Sensitive Data Masking
 
