@@ -142,3 +142,6 @@ hologres history -n 50
 | `LIMIT_REQUIRED` | SELECT without LIMIT, >100 rows | Add LIMIT or use --no-limit-check |
 | `WRITE_GUARD_ERROR` | Write operation without --write | Add --write flag |
 | `DANGEROUS_WRITE_BLOCKED` | DELETE/UPDATE without WHERE | Add WHERE clause |
+| `WRITE_BLOCKED` | Write operation not allowed | Use read-only queries |
+| `EXPORT_ERROR` | Data export failed | Check table/query and file path |
+| `IMPORT_ERROR` | Data import failed | Check CSV format and table schema |
