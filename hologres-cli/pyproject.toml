@@ -1,0 +1,67 @@
+[project]
+name = "hologres-cli"
+version = "0.1.0"
+description = "AI-agent-friendly CLI for Hologres database with safety guardrails"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1.0",
+    "psycopg[binary]>=3.1.0",
+    "tabulate>=0.9.0",
+]
+license = {text = "MIT"}
+authors = [
+    {name = "Hologres CLI Team"}
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+]
+
+[project.scripts]
+hologres = "hologres_cli.main:cli"
+hologres-cli = "hologres_cli.main:cli"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["-v", "--tb=short"]
+markers = [
+    "unit: Unit tests with mocks (fast)",
+    "integration: Integration tests requiring database (slow)",
+    "slow: Slow running tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src/hologres_cli"]
+branch = true
+omit = [
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+fail_under = 95
+show_missing = true
+skip_covered = true
