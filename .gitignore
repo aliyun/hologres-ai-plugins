@@ -1,0 +1,3 @@
+# Python / pytest
+.pytest_cache/
+dist/
