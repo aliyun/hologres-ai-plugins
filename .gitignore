@@ -1,4 +1,4 @@
 # Python / pytest
 .pytest_cache/
-__pycache__
+**/__pycache__/
 dist/
