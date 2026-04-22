@@ -199,10 +199,7 @@ hologres data count my_table --where "status='active'"
 Show command history.
 
 ```bash
-# Show recent 20 commands
 hologres history
-
-# Show more
 hologres history -n 50
 ```
 
@@ -210,10 +207,196 @@ History is logged to `~/.hologres/sql-history.jsonl`.
 
 ## ai-guide
 
-Generate AI agent guide with current schema and examples.
+Generate AI agent guide.
 
 ```bash
 hologres ai-guide
 ```
 
-Outputs a guide tailored for AI agents to interact with the database.
+## dt (Dynamic Table V3.1+)
+
+Full lifecycle management for Hologres Dynamic Tables using V3.1+ new syntax.
+
+### dt create
+
+Create a Dynamic Table.
+
+```bash
+# Minimal
+hologres dt create -t my_dt --freshness "10 minutes" \
+  -q "SELECT col1, SUM(col2) FROM src GROUP BY col1"
+
+# With partitioning
+hologres dt create -t ads_report --freshness "5 minutes" --refresh-mode auto \
+  --logical-partition-key ds --partition-active-time "2 days" \
+  --partition-time-format YYYY-MM-DD \
+  --computing-resource serverless --serverless-cores 32 \
+  -q "SELECT repo_name, COUNT(*) AS events, ds FROM src GROUP BY repo_name, ds"
+
+# Incremental refresh
+hologres dt create -t tpch_q1 --freshness "3 minutes" --refresh-mode incremental \
+  -q "SELECT l_returnflag, l_linestatus, COUNT(*) FROM lineitem GROUP BY 1,2"
+
+# Dry-run
+hologres dt create -t my_dt --freshness "10 minutes" -q "SELECT 1" --dry-run
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-t, --table` | Table name `[schema.]table` (required) |
+| `-q, --query` | SQL query defining the DT data (required) |
+| `--freshness` | Data freshness target, e.g. `"10 minutes"` (required) |
+| `--refresh-mode` | `auto` (default) / `full` / `incremental` |
+| `--auto-refresh/--no-auto-refresh` | Enable/disable auto refresh |
+| `--cdc-format` | `stream` (default) / `binlog` |
+| `--computing-resource` | `local` / `serverless` (default) / `<warehouse_name>` |
+| `--serverless-cores` | Serverless computing cores (when resource=serverless) |
+| `--logical-partition-key` | Partition column for logical partition table |
+| `--partition-active-time` | Active partition window, e.g. `"2 days"` |
+| `--partition-time-format` | `YYYYMMDDHH24`, `YYYY-MM-DD`, `YYYYMMDD`, etc. |
+| `--orientation` | `column` (default) / `row` / `row,column` |
+| `--table-group` | Table Group name |
+| `--distribution-key` | Distribution key columns (comma-separated) |
+| `--clustering-key` | Clustering key, e.g. `"created_at:asc"` |
+| `--event-time-column` | Event time column (Segment Key) |
+| `--bitmap-columns` | Bitmap index columns (comma-separated) |
+| `--dictionary-encoding-columns` | Dictionary encoding columns |
+| `--ttl` | Data TTL in seconds |
+| `--storage-mode` | `hot` (SSD, default) / `cold` (HDD/OSS) |
+| `--columns` | Explicit column names (no types) |
+| `--refresh-guc` | GUC params for refresh (repeatable), e.g. `timezone=GMT-8:00` |
+| `--dry-run` | Preview SQL without executing |
+
+### dt list
+
+List all Dynamic Tables with refresh info.
+
+```bash
+hologres dt list
+hologres dt list -f table
+```
+
+**Output:** schema_name, table_name, refresh_mode, freshness, auto_refresh, computing_resource.
+
+### dt show
+
+Show all properties of a Dynamic Table.
+
+```bash
+hologres dt show my_dt
+hologres dt show public.my_dt -f table
+```
+
+**Output:** All property key-value pairs from `hologres.hg_dynamic_table_properties`.
+
+### dt ddl
+
+Show DDL (CREATE statement) of a Dynamic Table.
+
+```bash
+hologres dt ddl public.my_dt
+```
+
+**Output:** Full CREATE DYNAMIC TABLE statement via `hg_dump_script()`.
+
+### dt lineage
+
+Show dependency lineage of Dynamic Tables.
+
+```bash
+hologres dt lineage public.my_dt     # Single table
+hologres dt lineage --all            # All DTs
+hologres dt lineage my_dt -f table
+```
+
+**Output:** Dependency graph with base_table_type: `r`=ordinary table, `v`=view, `m`=materialized view, `f`=foreign table, `d`=Dynamic Table.
+
+### dt storage
+
+Show storage size breakdown of a Dynamic Table.
+
+```bash
+hologres dt storage public.my_dt
+```
+
+**Output:** Storage details via `hologres.hg_relation_size()`.
+
+### dt state-size
+
+Show state table storage size for incremental Dynamic Tables.
+
+```bash
+hologres dt state-size public.my_dt
+```
+
+**Output:** State table size. Note: if refresh mode is changed to full, state is auto-cleaned.
+
+### dt refresh
+
+Manually trigger a refresh.
+
+```bash
+hologres dt refresh my_dt
+hologres dt refresh my_dt --overwrite --partition "ds = '2025-04-01'" --mode full
+hologres dt refresh my_dt --dry-run
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--partition` | Partition value, e.g. `"ds = '2025-04-01'"` |
+| `--mode` | Override: `full` / `incremental` |
+| `--overwrite` | Use REFRESH OVERWRITE syntax |
+| `--dry-run` | Preview SQL |
+
+### dt alter
+
+Alter properties of a Dynamic Table.
+
+```bash
+hologres dt alter my_dt --freshness "30 minutes"
+hologres dt alter my_dt --no-auto-refresh
+hologres dt alter my_dt --refresh-mode full --computing-resource serverless
+hologres dt alter my_dt --refresh-guc timezone=GMT-8:00 --dry-run
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--freshness` | New freshness target |
+| `--auto-refresh/--no-auto-refresh` | Toggle auto refresh |
+| `--refresh-mode` | `auto` / `full` / `incremental` |
+| `--computing-resource` | `local` / `serverless` / warehouse name |
+| `--serverless-cores` | Serverless cores |
+| `--partition-active-time` | Active partition window |
+| `--refresh-guc` | GUC params (repeatable) |
+| `--dry-run` | Preview SQL |
+
+### dt drop
+
+Drop a Dynamic Table. **Defaults to dry-run for safety.**
+
+```bash
+hologres dt drop my_dt               # Dry-run (preview only)
+hologres dt drop my_dt --confirm     # Actually execute
+hologres dt drop my_dt --if-exists --confirm
+```
+
+### dt convert
+
+Convert Dynamic Table from V3.0 to V3.1 syntax.
+
+```bash
+hologres dt convert my_old_dt
+hologres dt convert --all
+hologres dt convert my_old_dt --dry-run
+```
+
+**Notes:**
+- Requires Superuser privilege
+- After conversion, auto-refresh enabled tables start immediately
+- Only for non-partition tables; partition tables need manual recreation

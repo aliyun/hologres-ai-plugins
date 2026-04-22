@@ -112,6 +112,29 @@ Auto-detects sensitive columns by name pattern and masks values:
 hologres sql --no-mask "SELECT * FROM users LIMIT 10"
 ```
 
+## Dynamic Table Drop Safety
+
+### Purpose
+Prevents accidental deletion of Dynamic Tables.
+
+### Behavior
+- `hologres dt drop` defaults to **dry-run mode** (only shows the SQL)
+- Must pass `--confirm` flag to actually execute the DROP
+
+### Examples
+
+```bash
+# Dry-run (safe default) - only shows SQL, does not execute
+hologres dt drop my_dynamic_table
+# Output: {"ok": true, "data": {"sql": "DROP DYNAMIC TABLE my_dynamic_table", "dry_run": true}}
+
+# Actually drop (requires explicit --confirm)
+hologres dt drop my_dynamic_table --confirm
+
+# With IF EXISTS
+hologres dt drop my_dynamic_table --if-exists --confirm
+```
+
 ## Audit Logging
 
 ### Purpose
@@ -145,3 +168,6 @@ hologres history -n 50
 | `WRITE_BLOCKED` | Write operation not allowed | Use read-only queries |
 | `EXPORT_ERROR` | Data export failed | Check table/query and file path |
 | `IMPORT_ERROR` | Data import failed | Check CSV format and table schema |
+| `NOT_FOUND` | Table or resource not found | Verify table name and schema |
+| `INVALID_ARGS` | Invalid or missing arguments | Check required arguments |
+| `NO_CHANGES` | No alter properties specified | Specify at least one property to alter |

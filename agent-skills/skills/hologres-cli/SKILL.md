@@ -2,8 +2,9 @@
 name: hologres-cli
 description: |
   AI-agent-friendly Hologres CLI with safety guardrails and structured JSON output.
-  Use for database operations, schema inspection, SQL execution, and data import/export.
-  Triggers: "hologres cli", "hologres command", "hologres database", "hologres查询"
+  Use for database operations, schema inspection, SQL execution, data import/export,
+  and Dynamic Table lifecycle management (V3.1+ syntax).
+  Triggers: "hologres cli", "hologres command", "hologres database", "dynamic table", "hologres查询"
 ---
 
 # Hologres CLI
@@ -16,37 +17,22 @@ AI-agent-friendly command-line interface for Hologres with safety guardrails and
 # Requires Python 3.11+
 cd hologres-cli
 pip install -e .
-
-# Or using uv
-uv venv --python 3.11 && source .venv/bin/activate && uv pip install -e .
 ```
 
 ## Configuration
 
-### DSN Format
-```
-hologres://[user[:password]@]host[:port]/database
-```
+DSN format: `hologres://[user[:password]@]host[:port]/database`
 
-### Configuration Priority
-1. CLI flag: `--dsn "hologres://user:pass@host:port/db"`
-2. Environment variable: `export HOLOGRES_DSN="hologres://..."`
-3. Config file: `~/.hologres/config.env`
+Priority: `--dsn` flag > `HOLOGRES_DSN` env > `~/.hologres/config.env`
 
 ## Quick Start
 
 ```bash
-# Set connection
 export HOLOGRES_DSN="hologres://user:pass@endpoint:port/database"
-
-# Check connection
 hologres status
-
-# List tables
 hologres schema tables
-
-# Query data (JSON output by default)
 hologres sql "SELECT * FROM orders LIMIT 10"
+hologres dt list
 ```
 
 ## Core Commands
@@ -61,12 +47,134 @@ hologres sql "SELECT * FROM orders LIMIT 10"
 | `hologres schema dump <schema.table>` | Export DDL |
 | `hologres schema size <schema.table>` | Get table storage size |
 | `hologres sql "<query>"` | Execute read-only SQL |
-| `hologres sql --write "<dml>"` | Execute write SQL |
 | `hologres data export <table> -f out.csv` | Export to CSV |
 | `hologres data import <table> -f in.csv` | Import from CSV |
 | `hologres data count <table>` | Count rows |
 | `hologres history` | Show command history |
 | `hologres ai-guide` | Generate AI agent guide |
+
+## Dynamic Table Commands (V3.1+)
+
+Full lifecycle management for Hologres Dynamic Tables.
+
+| Command | Description |
+|---------|-------------|
+| `hologres dt create` | Create a Dynamic Table |
+| `hologres dt list` | List all Dynamic Tables |
+| `hologres dt show <table>` | Show Dynamic Table properties |
+| `hologres dt ddl <table>` | Show DDL (CREATE statement) |
+| `hologres dt lineage <table>` | Show dependency lineage |
+| `hologres dt lineage --all` | Show lineage for all DTs |
+| `hologres dt storage <table>` | Show storage details |
+| `hologres dt state-size <table>` | Show state table size (incremental) |
+| `hologres dt refresh <table>` | Trigger manual refresh |
+| `hologres dt alter <table>` | Alter DT properties |
+| `hologres dt drop <table>` | Drop DT (dry-run by default) |
+| `hologres dt convert [table]` | Convert V3.0 → V3.1 syntax |
+
+### dt create
+
+```bash
+# Minimal
+hologres dt create -t my_dt --freshness "10 minutes" \
+  -q "SELECT col1, SUM(col2) FROM src GROUP BY col1"
+
+# With partitioning and serverless
+hologres dt create -t ads_report --freshness "5 minutes" --refresh-mode auto \
+  --logical-partition-key ds --partition-active-time "2 days" \
+  --partition-time-format YYYY-MM-DD \
+  --computing-resource serverless --serverless-cores 32 \
+  -q "SELECT repo_name, COUNT(*) AS events, ds FROM src GROUP BY repo_name, ds"
+
+# Incremental refresh
+hologres dt create -t tpch_q1 --freshness "3 minutes" --refresh-mode incremental \
+  -q "SELECT l_returnflag, l_linestatus, COUNT(*) FROM lineitem GROUP BY 1,2"
+
+# Dry-run (preview SQL without executing)
+hologres dt create -t my_dt --freshness "10 minutes" -q "SELECT 1" --dry-run
+```
+
+**Key create options:**
+
+| Option | Description |
+|--------|-------------|
+| `-t, --table` | Table name `[schema.]table` (required) |
+| `-q, --query` | SQL query for data definition (required) |
+| `--freshness` | Data freshness target, e.g. `"10 minutes"` (required) |
+| `--refresh-mode` | `auto` / `full` / `incremental` |
+| `--auto-refresh/--no-auto-refresh` | Enable/disable auto refresh |
+| `--cdc-format` | `stream` (default) / `binlog` |
+| `--computing-resource` | `local` / `serverless` / `<warehouse>` |
+| `--serverless-cores` | Serverless computing cores |
+| `--logical-partition-key` | Partition column for logical partition |
+| `--partition-active-time` | Active partition window, e.g. `"2 days"` |
+| `--partition-time-format` | Partition key format, e.g. `YYYY-MM-DD` |
+| `--orientation` | `column` / `row` / `row,column` |
+| `--distribution-key` | Distribution key columns |
+| `--clustering-key` | Clustering key with sort order |
+| `--event-time-column` | Event time column (Segment Key) |
+| `--ttl` | Data TTL in seconds |
+| `--refresh-guc` | GUC params for refresh (repeatable) |
+| `--dry-run` | Preview SQL without executing |
+
+### dt list / show / ddl
+
+```bash
+hologres dt list                     # List all DTs with refresh info
+hologres dt show public.my_dt        # Show all properties
+hologres dt ddl public.my_dt         # Show CREATE statement
+hologres dt list -f table            # Table format output
+```
+
+### dt lineage
+
+```bash
+hologres dt lineage public.my_dt     # Single table lineage
+hologres dt lineage --all            # All DTs lineage
+hologres dt lineage my_dt -f table   # Table format
+```
+
+base_table_type: `r`=table, `v`=view, `m`=materialized view, `f`=foreign table, `d`=Dynamic Table.
+
+### dt storage / state-size
+
+```bash
+hologres dt storage public.my_dt      # Storage breakdown
+hologres dt state-size public.my_dt   # State table size (incremental DTs)
+```
+
+### dt refresh
+
+```bash
+hologres dt refresh my_dt
+hologres dt refresh my_dt --overwrite --partition "ds = '2025-04-01'" --mode full
+hologres dt refresh my_dt --dry-run
+```
+
+### dt alter
+
+```bash
+hologres dt alter my_dt --freshness "30 minutes"
+hologres dt alter my_dt --no-auto-refresh
+hologres dt alter my_dt --refresh-mode full --computing-resource serverless
+hologres dt alter my_dt --refresh-guc timezone=GMT-8:00 --dry-run
+```
+
+### dt drop
+
+```bash
+hologres dt drop my_dt               # Dry-run by default (safety)
+hologres dt drop my_dt --confirm     # Actually drop
+hologres dt drop my_dt --if-exists --confirm
+```
+
+### dt convert (V3.0 → V3.1)
+
+```bash
+hologres dt convert my_old_dt          # Convert single table
+hologres dt convert --all              # Convert all V3.0 tables
+hologres dt convert my_old_dt --dry-run
+```
 
 ## Output Formats
 
@@ -89,37 +197,10 @@ hologres -f jsonl schema tables   # JSON Lines
 
 ## Safety Features
 
-### 1. Row Limit Protection
-Queries without `LIMIT` returning >100 rows fail with `LIMIT_REQUIRED`.
-
-```bash
-# Will fail if >100 rows
-hologres sql "SELECT * FROM large_table"
-
-# Fix: add LIMIT
-hologres sql "SELECT * FROM large_table LIMIT 50"
-
-# Or disable check
-hologres sql --no-limit-check "SELECT * FROM large_table"
-```
-
-### 2. Write Protection
-Write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) require `--write` flag.
-
-```bash
-hologres sql --write "INSERT INTO logs VALUES (1, 'test')"
-```
-
-### 3. Dangerous Write Blocking
-DELETE/UPDATE without WHERE clause are blocked.
-
-```bash
-# Blocked
-hologres sql --write "DELETE FROM users"
-
-# Must have WHERE
-hologres sql --write "DELETE FROM users WHERE status='inactive'"
-```
+1. **Row Limit**: Queries without `LIMIT` returning >100 rows fail. Fix: add `LIMIT` or `--no-limit-check`.
+2. **Write Protection**: Write SQL blocked by default in `hologres sql`.
+3. **Dangerous Write Blocking**: DELETE/UPDATE without WHERE blocked.
+4. **Drop Safety**: `hologres dt drop` defaults to dry-run, requires `--confirm`.
 
 ## Error Codes
 
@@ -128,9 +209,10 @@ hologres sql --write "DELETE FROM users WHERE status='inactive'"
 | `CONNECTION_ERROR` | Failed to connect |
 | `QUERY_ERROR` | SQL execution error |
 | `LIMIT_REQUIRED` | Need LIMIT clause |
-| `WRITE_GUARD_ERROR` | Missing --write flag |
-| `DANGEROUS_WRITE_BLOCKED` | DELETE/UPDATE without WHERE |
 | `WRITE_BLOCKED` | Write operation not allowed |
+| `NOT_FOUND` | Table or resource not found |
+| `INVALID_ARGS` | Invalid or missing arguments |
+| `NO_CHANGES` | No properties specified to alter |
 | `EXPORT_ERROR` | Data export failed |
 | `IMPORT_ERROR` | Data import failed |
 
@@ -146,14 +228,16 @@ Disable: `hologres sql --no-mask "SELECT * FROM users LIMIT 10"`
 ## References
 
 | Document | Content |
-|----------|---------|
-| [commands.md](references/commands.md) | Complete command reference |
+|----------|--------|
+| [commands.md](references/commands.md) | Complete command reference with DT commands |
 | [safety-features.md](references/safety-features.md) | Safety guardrails details |
 
 ## Best Practices
 
 1. Always use `LIMIT` for large result sets
-2. Use `--write` flag explicitly for write operations
-3. Include `WHERE` clause in DELETE/UPDATE
-4. Use JSON output for automation/scripting
-5. Check `hologres status` before batch operations
+2. Use `--dry-run` to preview DT SQL before executing
+3. Use `--confirm` explicitly for destructive operations (dt drop)
+4. Include `WHERE` clause in DELETE/UPDATE
+5. Use JSON output for automation/scripting
+6. Check `hologres status` before batch operations
+7. Use `hologres dt lineage` to understand DT dependencies before altering
