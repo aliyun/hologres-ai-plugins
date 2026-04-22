@@ -24,6 +24,7 @@ hologres-ai-plugins/
 
 - **结构化输出** — 所有命令默认返回 JSON 格式，便于 AI Agent 解析
 - **安全防护** — 行数限制保护、写操作拦截、危险 SQL 检测
+- **Dynamic Table 管理** — Dynamic Table 全生命周期管理（V3.1+ 新语法）
 - **敏感数据脱敏** — 自动对手机号、邮箱、密码、身份证号、银行卡号等字段进行脱敏
 - **多种输出格式** — 支持 JSON、表格（table）、CSV、JSON Lines（JSONL）
 - **审计日志** — 所有操作记录到 `~/.hologres/sql-history.jsonl`
@@ -43,6 +44,17 @@ hologres-ai-plugins/
 | `hologres data export <table> -f out.csv` | 导出表数据到 CSV |
 | `hologres data import <table> -f in.csv` | 从 CSV 导入数据到表 |
 | `hologres data count <table>` | 统计行数 |
+| `hologres dt create` | 创建 Dynamic Table（V3.1+ 新语法） |
+| `hologres dt list` | 列出所有 Dynamic Table |
+| `hologres dt show <table>` | 查看 Dynamic Table 属性 |
+| `hologres dt ddl <table>` | 查看 Dynamic Table 建表语句（DDL） |
+| `hologres dt lineage <table>` | 查看 Dynamic Table 血缘关系 |
+| `hologres dt storage <table>` | 查看 Dynamic Table 存储明细 |
+| `hologres dt state-size <table>` | 查看状态表（State）存储量 |
+| `hologres dt refresh <table>` | 手动触发刷新 |
+| `hologres dt alter <table>` | 修改 Dynamic Table 属性 |
+| `hologres dt drop <table>` | 删除 Dynamic Table（默认安全模式） |
+| `hologres dt convert [table]` | 从 V3.0 转换为 V3.1 语法 |
 | `hologres history` | 查看最近的命令历史 |
 | `hologres ai-guide` | 生成 AI Agent 使用指南 |
 
@@ -64,6 +76,16 @@ hologres -f table schema tables
 
 # 查询数据
 hologres sql "SELECT * FROM orders LIMIT 10"
+
+# 创建 Dynamic Table
+hologres dt create -t my_dt --freshness "10 minutes" \
+  -q "SELECT col1, SUM(col2) FROM src GROUP BY col1"
+
+# 列出所有 Dynamic Table
+hologres dt list
+
+# 查看血缘关系
+hologres dt lineage public.my_dt
 ```
 
 完整文档请参考 [hologres-cli/README.md](hologres-cli/README.md)。
@@ -134,7 +156,7 @@ pytest -m integration
 pytest --cov=src/hologres_cli --cov-report=term-missing
 ```
 
-当前测试覆盖率：**95%+**（342 个单元测试 + 46 个集成测试）。
+当前测试覆盖率：**95%+**。
 
 ## 许可证
 

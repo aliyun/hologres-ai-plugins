@@ -24,6 +24,7 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 
 - **Structured Output** — All commands return JSON by default for easy parsing by AI agents
 - **Safety Guardrails** — Row limit protection, write operation blocking, dangerous SQL detection
+- **Dynamic Table Management** — Full lifecycle management for Dynamic Tables (V3.1+ syntax)
 - **Sensitive Data Masking** — Auto-masks phone, email, password, ID card, and bank card fields
 - **Multiple Output Formats** — JSON, table, CSV, JSON Lines (JSONL)
 - **Audit Logging** — All operations logged to `~/.hologres/sql-history.jsonl`
@@ -43,6 +44,17 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres data export <table> -f out.csv` | Export table to CSV |
 | `hologres data import <table> -f in.csv` | Import CSV to table |
 | `hologres data count <table>` | Count rows |
+| `hologres dt create` | Create a Dynamic Table (V3.1+ syntax) |
+| `hologres dt list` | List all Dynamic Tables |
+| `hologres dt show <table>` | Show Dynamic Table properties |
+| `hologres dt ddl <table>` | Show Dynamic Table DDL |
+| `hologres dt lineage <table>` | Show Dynamic Table dependency lineage |
+| `hologres dt storage <table>` | Show Dynamic Table storage details |
+| `hologres dt state-size <table>` | Show state table size (incremental) |
+| `hologres dt refresh <table>` | Trigger manual refresh |
+| `hologres dt alter <table>` | Alter Dynamic Table properties |
+| `hologres dt drop <table>` | Drop a Dynamic Table (safe by default) |
+| `hologres dt convert [table]` | Convert from V3.0 to V3.1 syntax |
 | `hologres history` | Show recent command history |
 | `hologres ai-guide` | Generate AI agent guide |
 
@@ -64,6 +76,16 @@ hologres -f table schema tables
 
 # Query data
 hologres sql "SELECT * FROM orders LIMIT 10"
+
+# Create a Dynamic Table
+hologres dt create -t my_dt --freshness "10 minutes" \
+  -q "SELECT col1, SUM(col2) FROM src GROUP BY col1"
+
+# List Dynamic Tables
+hologres dt list
+
+# View lineage
+hologres dt lineage public.my_dt
 ```
 
 For full documentation, see [hologres-cli/README.md](hologres-cli/README.md).
@@ -134,7 +156,7 @@ pytest -m integration
 pytest --cov=src/hologres_cli --cov-report=term-missing
 ```
 
-Current test coverage: **95%+** (342 unit tests + 46 integration tests).
+Current test coverage: **95%+**.
 
 ## License
 
