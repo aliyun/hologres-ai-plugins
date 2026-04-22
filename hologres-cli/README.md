@@ -7,6 +7,7 @@ AI-agent-friendly command-line interface for Hologres database with safety guard
 - **Structured Output**: All commands return JSON by default for easy parsing
 - **Safety Guardrails**: Row limits, write protection, dangerous operation blocking
 - **Multiple Formats**: JSON, table, CSV, JSONL output formats
+- **Dynamic Table Management**: Full lifecycle management for Dynamic Tables (V3.1+)
 - **Sensitive Data Masking**: Auto-masks phone, email, password fields
 - **Audit Logging**: All operations logged to `~/.hologres/sql-history.jsonl`
 
@@ -29,62 +30,9 @@ uv pip install -e .
 
 ### Development Installation
 
-To run tests, install with dev dependencies:
-
 ```bash
 pip install -e ".[dev]"
 ```
-
-## Testing
-
-### Unit Tests
-
-Unit tests use mocks and run without a database connection:
-
-```bash
-# Run unit tests only (fast, no database required)
-pytest -m unit
-
-# Run specific test file
-pytest tests/test_masking.py
-pytest tests/test_commands/test_sql.py
-
-# Run with coverage report
-pytest --cov=src/hologres_cli --cov-report=term-missing
-```
-
-### Integration Tests
-
-Integration tests require a real Hologres database connection:
-
-```bash
-# Set test database DSN
-export HOLOGRES_TEST_DSN="hologres://user:password@host:port/database"
-
-# Run integration tests
-pytest -m integration
-
-# Run all tests (unit + integration)
-pytest
-```
-
-Integration tests will be **automatically skipped** if `HOLOGRES_TEST_DSN` is not set.
-
-### Test Markers
-
-| Marker | Description |
-|--------|-------------|
-| `unit` | Unit tests with mocks (fast) |
-| `integration` | Integration tests requiring database |
-| `slow` | Slow running tests |
-
-```bash
-pytest -m unit           # Run unit tests only
-pytest -m integration    # Run integration tests only
-pytest -m "not slow"     # Skip slow tests
-```
-
-Current test coverage: **95%+** with 345 test cases (342 unit + 46 integration).
 
 ## Configuration
 
@@ -110,54 +58,36 @@ HOLOGRES_DSN="hologres://user:password@endpoint:port/database"
 ### Status
 
 ```bash
-# Check connection status
 hologres status
 ```
 
 ### Instance Information
 
 ```bash
-# Query instance version and max connections
 hologres instance <instance_name>
 ```
 
 ### Warehouse (计算组)
 
 ```bash
-# List all warehouses
-hologres warehouse
-
-# Query specific warehouse
-hologres warehouse <warehouse_name>
+hologres warehouse                    # List all warehouses
+hologres warehouse <warehouse_name>   # Query specific warehouse
 ```
 
 ### Schema Inspection
 
 ```bash
-# List all tables
-hologres schema tables
-
-# Describe table structure
-hologres schema describe <table_name>
-hologres schema describe public.my_table
-
-# Export DDL using hg_dump_script()
-hologres schema dump <schema.table>
-hologres schema dump public.my_table
-
-# Get table storage size
-hologres schema size <schema.table>
-hologres schema size public.my_table
+hologres schema tables                      # List all tables
+hologres schema describe <table_name>       # Describe table structure
+hologres schema dump <schema.table>         # Export DDL
+hologres schema size <schema.table>         # Get table storage size
 ```
 
 ### SQL Execution
 
 ```bash
-# Read-only query (LIMIT required for >100 rows)
-hologres sql "SELECT * FROM users LIMIT 10"
-
-# Disable row limit check
-hologres sql --no-limit-check "SELECT * FROM large_table"
+hologres sql "SELECT * FROM users LIMIT 10"                 # Read-only query
+hologres sql --no-limit-check "SELECT * FROM large_table"   # Disable row limit
 ```
 
 > **Note:** Write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, etc.) are blocked for safety.
@@ -165,41 +95,111 @@ hologres sql --no-limit-check "SELECT * FROM large_table"
 ### Data Import/Export
 
 ```bash
-# Export table to CSV
-hologres data export my_table -f output.csv
-
-# Export with custom query
-hologres data export -q "SELECT * FROM users WHERE active=true" -f users.csv
-
-# Import CSV to table
-hologres data import my_table -f input.csv
-
-# Import with truncate
-hologres data import my_table -f input.csv --truncate
-
-# Count rows
-hologres data count my_table
-hologres data count my_table --where "status='active'"
+hologres data export my_table -f output.csv                           # Export to CSV
+hologres data export -q "SELECT * FROM users WHERE active" -f out.csv # Export with query
+hologres data import my_table -f input.csv                            # Import CSV
+hologres data import my_table -f input.csv --truncate                 # Import with truncate
+hologres data count my_table                                          # Count rows
+hologres data count my_table --where "status='active'"                # Count with filter
 ```
 
-### History
+### Dynamic Table (V3.1+)
+
+Full lifecycle management for Hologres Dynamic Tables using the V3.1+ new syntax.
+
+#### Create
 
 ```bash
-# Show recent command history
-hologres history
-hologres history -n 50
+# Minimal creation
+hologres dt create -t my_dt --freshness "10 minutes" \
+  -q "SELECT col1, SUM(col2) FROM src GROUP BY col1"
+
+# With partitioning and serverless computing
+hologres dt create -t ads_report --freshness "5 minutes" --refresh-mode auto \
+  --logical-partition-key ds --partition-active-time "2 days" \
+  --partition-time-format YYYY-MM-DD \
+  --computing-resource serverless --serverless-cores 32 \
+  -q "SELECT repo_name, COUNT(*) AS events, ds FROM src GROUP BY repo_name, ds"
+
+# Dry-run to preview SQL
+hologres dt create -t my_dt --freshness "10 minutes" -q "SELECT 1" --dry-run
 ```
 
-### AI Guide
+Key options: `--refresh-mode` (auto/full/incremental), `--auto-refresh/--no-auto-refresh`, `--cdc-format` (stream/binlog), `--computing-resource` (local/serverless/warehouse), `--orientation`, `--distribution-key`, `--clustering-key`, `--ttl`, etc. Use `hologres dt create --help` for full details.
+
+#### List & Show
 
 ```bash
-# Generate AI agent guide
-hologres ai-guide
+hologres dt list                    # List all Dynamic Tables
+hologres dt show public.my_dt       # Show properties of a Dynamic Table
+hologres dt list -f table           # List in table format
+```
+
+#### DDL (Table Structure)
+
+```bash
+hologres dt ddl public.my_dt        # Show CREATE statement via hg_dump_script()
+```
+
+#### Lineage (Blood Lineage)
+
+```bash
+hologres dt lineage public.my_dt    # View lineage for a single table
+hologres dt lineage --all           # View lineage for all Dynamic Tables
+hologres dt lineage my_dt -f table  # Table format output
+```
+
+base_table_type mapping: `r` = ordinary table, `v` = view, `m` = materialized view, `f` = foreign table, `d` = Dynamic Table.
+
+#### Storage & State
+
+```bash
+hologres dt storage public.my_dt      # View storage size breakdown
+hologres dt state-size public.my_dt   # View state table size (incremental refresh)
+```
+
+#### Refresh
+
+```bash
+hologres dt refresh my_dt                                                    # Trigger refresh
+hologres dt refresh my_dt --overwrite --partition "ds = '2025-04-01'" --mode full  # Overwrite partition
+hologres dt refresh my_dt --dry-run                                          # Preview SQL
+```
+
+#### Alter
+
+```bash
+hologres dt alter my_dt --freshness "30 minutes"
+hologres dt alter my_dt --no-auto-refresh
+hologres dt alter my_dt --refresh-mode full --computing-resource serverless
+hologres dt alter my_dt --refresh-guc timezone=GMT-8:00 --dry-run
+```
+
+#### Drop
+
+```bash
+hologres dt drop my_dt               # Dry-run by default (safety)
+hologres dt drop my_dt --confirm     # Actually drop
+hologres dt drop my_dt --if-exists --confirm
+```
+
+#### Convert (V3.0 → V3.1)
+
+```bash
+hologres dt convert my_old_dt          # Convert single table
+hologres dt convert --all              # Convert all V3.0 tables
+hologres dt convert my_old_dt --dry-run
+```
+
+### History & AI Guide
+
+```bash
+hologres history          # Show recent command history
+hologres history -n 50    # Show last 50 entries
+hologres ai-guide         # Generate AI agent guide
 ```
 
 ## Output Formats
-
-Use `--format` or `-f` to change output format:
 
 ```bash
 hologres -f json schema tables    # JSON (default)
@@ -239,25 +239,17 @@ hologres -f jsonl schema tables   # JSON Lines
 Queries without `LIMIT` that return more than 100 rows will fail with `LIMIT_REQUIRED` error.
 
 ```bash
-# This will fail if table has >100 rows
-hologres sql "SELECT * FROM large_table"
-
-# Add LIMIT to fix
-hologres sql "SELECT * FROM large_table LIMIT 50"
-
-# Or disable check (use with caution)
-hologres sql --no-limit-check "SELECT * FROM large_table"
+hologres sql "SELECT * FROM large_table LIMIT 50"           # OK
+hologres sql --no-limit-check "SELECT * FROM large_table"   # Bypass limit check
 ```
 
 ### Write Protection
 
-All write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) are blocked:
+All write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) are blocked via `hologres sql`.
 
-```bash
-# This will be blocked
-hologres sql "INSERT INTO logs VALUES (1, 'test')"
-# Error: WRITE_BLOCKED - Write operations are not allowed
-```
+### Drop Safety
+
+`hologres dt drop` defaults to dry-run mode. Use `--confirm` to actually execute.
 
 ## Error Codes
 
@@ -267,6 +259,9 @@ hologres sql "INSERT INTO logs VALUES (1, 'test')"
 | `QUERY_ERROR` | SQL execution error |
 | `LIMIT_REQUIRED` | Query needs LIMIT clause |
 | `WRITE_BLOCKED` | Write operation not allowed |
+| `NOT_FOUND` | Table or resource not found |
+| `INVALID_ARGS` | Invalid or missing arguments |
+| `NO_CHANGES` | No properties specified to alter |
 
 ## Sensitive Data Masking
 
@@ -286,27 +281,16 @@ Disable with `--no-mask`:
 hologres sql --no-mask "SELECT * FROM users LIMIT 10"
 ```
 
-## Examples
+## Testing
 
 ```bash
-# Set DSN
-export HOLOGRES_DSN="hologres://user:pass@endpoint:port/database"
-
-# Check connection
-hologres status
-
-# List tables in table format
-hologres -f table schema tables
-
-# Query with JSON output
-hologres sql "SELECT * FROM orders WHERE status='pending' LIMIT 20"
-
-# Check warehouse info
-hologres warehouse
-
-# View command history
-hologres history
+pytest -m unit                                          # Unit tests only (fast)
+pytest -m integration                                   # Integration tests (needs DB)
+pytest tests/test_commands/test_dt.py                   # DT command tests
+pytest --cov=src/hologres_cli --cov-report=term-missing # With coverage
 ```
+
+Integration tests require `HOLOGRES_TEST_DSN` environment variable and are auto-skipped otherwise.
 
 ## License
 

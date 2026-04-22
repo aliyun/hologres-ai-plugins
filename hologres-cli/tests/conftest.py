@@ -170,4 +170,5 @@ def mock_get_connection(mocker, mock_connection_class):
     mocker.patch("hologres_cli.commands.data.get_connection", return_value=mock_conn)
     mocker.patch("hologres_cli.commands.status.get_connection", return_value=mock_conn)
     mocker.patch("hologres_cli.commands.warehouse.get_connection", return_value=mock_conn)
+    mocker.patch("hologres_cli.commands.dt.get_connection", return_value=mock_conn)
     return mock_conn

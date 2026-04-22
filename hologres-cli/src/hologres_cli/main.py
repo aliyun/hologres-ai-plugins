@@ -21,25 +21,14 @@ def cli(ctx: click.Context, dsn: Optional[str], format: str) -> None:
     """Hologres CLI - AI-agent-friendly database interface.
 
     \b
-    Configuration:
-      DSN can be provided via:
-      1. --dsn flag
-      2. HOLOGRES_DSN environment variable
-      3. ~/.hologres/config.env file
-
-    \b
-    Examples:
-      hologres schema tables
-      hologres schema describe my_table
-      hologres sql "SELECT * FROM users LIMIT 10"
-      hologres status
+    DSN: --dsn flag | HOLOGRES_DSN env | ~/.hologres/config.env
     """
     ctx.ensure_object(dict)
     ctx.obj["dsn"] = dsn
     ctx.obj["format"] = format
 
 
-from .commands import schema, sql, data, status, instance, warehouse  # noqa: E402
+from .commands import schema, sql, data, status, instance, warehouse, dt  # noqa: E402
 
 cli.add_command(schema.schema_cmd)
 cli.add_command(sql.sql_cmd)
@@ -47,6 +36,7 @@ cli.add_command(data.data_cmd)
 cli.add_command(status.status_cmd)
 cli.add_command(instance.instance_cmd)
 cli.add_command(warehouse.warehouse_cmd)
+cli.add_command(dt.dt_cmd)
 
 
 @cli.command("ai-guide")
