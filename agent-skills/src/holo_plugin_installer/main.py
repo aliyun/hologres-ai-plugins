@@ -8,7 +8,7 @@ from typing import Dict, List
 
 try:
     import questionary
-    from questionary import Style
+    from questionary import Choice, Style
 except ImportError:
     print("Error: questionary is not installed. Please install it with: pip install questionary")
     sys.exit(1)
@@ -180,8 +180,11 @@ def main():
         try:
             selected_skills = questionary.checkbox(
                 "Select skills (use ↑↓ to navigate, Space to select, Enter to confirm, Ctrl+C to cancel):",
-                choices=AVAILABLE_SKILLS,
-                default="hologres-cli",
+                choices=[
+                    questionary.Choice("hologres-cli", checked=True),
+                    "hologres-query-optimizer",
+                    "hologres-slow-query-analysis",
+                ],
                 instruction="(Select multiple with Space)",
                 style=_NO_BG_STYLE,
             ).ask()
