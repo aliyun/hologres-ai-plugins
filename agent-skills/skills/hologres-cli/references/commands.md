@@ -317,6 +317,31 @@ hologres table size myschema.orders
 }
 ```
 
+### table properties
+
+Show Hologres-specific table properties (orientation, distribution_key, clustering_key, TTL, etc.).
+
+```bash
+hologres table properties my_table
+hologres table properties public.my_table
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "rows": [
+      {"property_key": "orientation", "property_value": "column"},
+      {"property_key": "distribution_key", "property_value": "user_id"},
+      {"property_key": "clustering_key", "property_value": "created_at:asc"},
+      {"property_key": "time_to_live_in_seconds", "property_value": "2592000"}
+    ],
+    "count": 4
+  }
+}
+```
+
 ## history
 
 Show command history.

@@ -18,7 +18,7 @@ from ..output import (
     success,
     success_rows,
 )
-from .schema import _dump_table_ddl, _get_table_size, _list_tables, fetch_table_structure
+from .schema import _dump_table_ddl, _get_table_size, _list_tables, _validate_identifier, fetch_table_structure
 
 
 @click.group("table")
@@ -117,3 +117,71 @@ def size_cmd(ctx: click.Context, table: str) -> None:
     """
     _get_table_size(ctx.obj.get("dsn"), table, ctx.obj.get("format", FORMAT_JSON),
                     operation="table.size")
+
+
+@table_cmd.command("properties")
+@click.argument("table")
+@click.pass_context
+def properties_cmd(ctx: click.Context, table: str) -> None:
+    """Show Hologres-specific table properties (orientation, distribution_key, etc.).
+
+    TABLE: 'table_name' or 'schema.table_name'.
+
+    \b
+    Examples:
+      hologres table properties public.my_table
+      hologres table properties myschema.orders
+    """
+    dsn = ctx.obj.get("dsn")
+    fmt = ctx.obj.get("format", FORMAT_JSON)
+    start_time = time.time()
+
+    try:
+        conn = get_connection(dsn)
+    except DSNError as e:
+        print_output(connection_error(str(e), fmt))
+        return
+
+    try:
+        # Parse schema.table format
+        if "." in table:
+            schema_name, table_name = table.rsplit(".", 1)
+        else:
+            schema_name, table_name = "public", table
+
+        # Validate identifiers
+        _validate_identifier(schema_name, "schema name")
+        _validate_identifier(table_name, "table name")
+
+        # NOTE: 实际列名可能与需求示例不同，若查询失败需确认
+        # hologres.hg_table_properties 的实际列名
+        properties_sql = """
+            SELECT property_key, property_value
+            FROM hologres.hg_table_properties
+            WHERE table_namespace = %s AND table_name = %s
+            ORDER BY property_key
+        """
+        rows = conn.execute(properties_sql, (schema_name, table_name))
+
+        if not rows:
+            print_output(error("TABLE_NOT_FOUND",
+                               f"Table '{schema_name}.{table_name}' not found or has no properties",
+                               fmt))
+            return
+
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation("table.properties", sql=properties_sql, dsn_masked=conn.masked_dsn,
+                      success=True, row_count=len(rows), duration_ms=duration_ms)
+        print_output(success_rows(rows, fmt))
+    except ValueError as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation("table.properties", dsn_masked=conn.masked_dsn, success=False,
+                      error_code="INVALID_INPUT", error_message=str(e), duration_ms=duration_ms)
+        print_output(error("INVALID_INPUT", str(e), fmt))
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation("table.properties", dsn_masked=conn.masked_dsn, success=False,
+                      error_code="QUERY_ERROR", error_message=str(e), duration_ms=duration_ms)
+        print_output(query_error(str(e), fmt))
+    finally:
+        conn.close()

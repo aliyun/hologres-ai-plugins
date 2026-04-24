@@ -491,3 +491,163 @@ class TestTableSizeCmd:
         assert table_result.exit_code == 0
         assert schema_result.exit_code == 0
         assert json.loads(table_result.output) == json.loads(schema_result.output)
+
+
+class TestTablePropertiesCmd:
+    """Tests for table properties command."""
+
+    def test_properties_cmd_success(self, mock_get_connection):
+        """Test successful table properties query."""
+        mock_get_connection.execute.return_value = [
+            {"property_key": "clustering_key", "property_value": "created_at:asc"},
+            {"property_key": "distribution_key", "property_value": "user_id"},
+            {"property_key": "orientation", "property_value": "column"},
+            {"property_key": "time_to_live_in_seconds", "property_value": "2592000"},
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "properties", "public.users"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["count"] == 4
+        assert len(output["data"]["rows"]) == 4
+        mock_get_connection.close.assert_called_once()
+
+    def test_properties_cmd_without_schema(self, mock_get_connection):
+        """Test properties without schema defaults to public."""
+        mock_get_connection.execute.return_value = [
+            {"property_key": "orientation", "property_value": "column"},
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "properties", "users"])
+
+        assert result.exit_code == 0
+        # Verify "public" was passed as table_namespace
+        call_args = mock_get_connection.execute.call_args
+        assert call_args[0][1] == ("public", "users")
+
+    def test_properties_cmd_with_schema(self, mock_get_connection):
+        """Test properties with schema.table format."""
+        mock_get_connection.execute.return_value = [
+            {"property_key": "orientation", "property_value": "column"},
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "properties", "myschema.orders"])
+
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        assert call_args[0][1] == ("myschema", "orders")
+
+    def test_properties_cmd_table_not_found(self, mock_get_connection):
+        """Test properties for non-existent table."""
+        mock_get_connection.execute.return_value = []
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "properties", "public.nonexistent"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "TABLE_NOT_FOUND"
+
+    def test_properties_cmd_invalid_identifier(self, mock_get_connection):
+        """Test properties with invalid identifier."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "properties", "public.bad;table"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_INPUT"
+
+    def test_properties_cmd_connection_error(self, mocker):
+        """Test connection error handling."""
+        mocker.patch("hologres_cli.commands.table.get_connection",
+                     side_effect=DSNError("No DSN configured"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "properties", "public.users"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_properties_cmd_query_error(self, mock_get_connection):
+        """Test query error during properties."""
+        mock_get_connection.execute.side_effect = Exception("Query failed")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "properties", "public.users"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+
+    def test_properties_cmd_table_format(self, mock_get_connection):
+        """Test table format output."""
+        mock_get_connection.execute.return_value = [
+            {"property_key": "orientation", "property_value": "column"},
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--format", "table", "table", "properties", "public.users"])
+
+        assert result.exit_code == 0
+        assert "property_key" in result.output
+        assert "orientation" in result.output
+
+    def test_properties_cmd_csv_format(self, mock_get_connection):
+        """Test CSV format output."""
+        mock_get_connection.execute.return_value = [
+            {"property_key": "orientation", "property_value": "column"},
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--format", "csv", "table", "properties", "public.users"])
+
+        assert result.exit_code == 0
+        assert "property_key" in result.output
+        assert "orientation" in result.output
+
+    def test_properties_cmd_logs_success(self, mock_get_connection, mocker):
+        """Test that successful properties logs operation."""
+        mock_log = mocker.patch("hologres_cli.commands.table.log_operation")
+        mock_get_connection.execute.return_value = [
+            {"property_key": "orientation", "property_value": "column"},
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "properties", "public.users"])
+
+        assert result.exit_code == 0
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args
+        assert call_kwargs[1]["success"] is True
+        assert call_kwargs[0][0] == "table.properties"
+
+    def test_properties_cmd_logs_failure(self, mock_get_connection, mocker):
+        """Test that failed properties logs operation with error."""
+        mock_log = mocker.patch("hologres_cli.commands.table.log_operation")
+        mock_get_connection.execute.side_effect = Exception("DB error")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "properties", "public.users"])
+
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args
+        assert call_kwargs[1]["success"] is False
+        assert call_kwargs[1]["error_code"] == "QUERY_ERROR"
+
+    def test_properties_cmd_connection_closed(self, mock_get_connection):
+        """Test that connection is closed after properties."""
+        mock_get_connection.execute.return_value = [
+            {"property_key": "orientation", "property_value": "column"},
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "properties", "public.users"])
+
+        assert result.exit_code == 0
+        mock_get_connection.close.assert_called_once()
