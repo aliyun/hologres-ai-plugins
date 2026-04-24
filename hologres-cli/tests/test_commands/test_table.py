@@ -477,6 +477,40 @@ class TestTableSizeCmd:
         assert result.exit_code == 0
         assert "public.users: 123 MB" in result.output
 
+    def test_size_cmd_uses_string_param(self, mock_get_connection):
+        """Test that size command uses parameterized string query, not SQL identifier."""
+        mock_get_connection.execute.return_value = [
+            {"size": "123 MB", "size_bytes": 128974848}
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "size", "public.users"])
+
+        assert result.exit_code == 0
+        # Verify execute was called with parameterized query
+        call_args = mock_get_connection.execute.call_args
+        sql_str = call_args[0][0]
+        params = call_args[0][1]
+        assert "%s" in sql_str
+        assert params == ("public.users", "public.users")
+        # Ensure no double-quoted identifiers in SQL
+        assert '"public"' not in sql_str
+        assert '"users"' not in sql_str
+
+    def test_size_cmd_uses_string_param_with_schema(self, mock_get_connection):
+        """Test that schema.table format also uses parameterized string query."""
+        mock_get_connection.execute.return_value = [
+            {"size": "0 bytes", "size_bytes": 0}
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "size", "myschema.mytable"])
+
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        params = call_args[0][1]
+        assert params == ("myschema.mytable", "myschema.mytable")
+
     def test_size_matches_schema_size(self, mock_get_connection):
         """Test that table size and schema size produce identical output."""
         mock_get_connection.execute.return_value = [

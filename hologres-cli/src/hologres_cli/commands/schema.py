@@ -282,16 +282,12 @@ def _get_table_size(dsn: str, table: str, fmt: str, operation: str = "schema.siz
 
         full_table_name = f"{schema_name}.{table_name}"
 
-        # Use psycopg.sql.Identifier for safe identifier escaping
-        query = sql.SQL(
-            "SELECT pg_size_pretty(pg_relation_size({})) AS size, "
-            "pg_relation_size({}) AS size_bytes"
-        ).format(
-            sql.Identifier(schema_name, table_name),
-            sql.Identifier(schema_name, table_name),
+        # pg_relation_size accepts regclass (string), not SQL identifier
+        size_sql = (
+            "SELECT pg_size_pretty(pg_relation_size(%s)) AS size, "
+            "pg_relation_size(%s) AS size_bytes"
         )
-        size_sql = query.as_string(conn.conn)
-        result = conn.execute(size_sql)
+        result = conn.execute(size_sql, (full_table_name, full_table_name))
 
         if not result or not result[0]:
             print_output(
