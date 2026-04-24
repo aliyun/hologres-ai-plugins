@@ -8,10 +8,14 @@
 hologres-ai-plugins/
 ├── hologres-cli/          # Hologres 数据库操作的 Python CLI 工具
 └── agent-skills/          # 用于 IDE / Copilot 集成的 AI Agent 技能
-    └── skills/
-        ├── hologres-cli/                  # CLI 使用技能
-        ├── hologres-query-optimizer/      # 查询执行计划分析技能
-        └── hologres-slow-query-analysis/  # 慢查询诊断技能
+    ├── src/
+    │   └── holo_plugin_installer/     # 交互式技能安装器
+    ├── skills/
+    │   ├── hologres-cli/                  # CLI 使用技能
+    │   ├── hologres-query-optimizer/      # 查询执行计划分析技能
+    │   └── hologres-slow-query-analysis/  # 慢查询诊断技能
+    ├── pyproject.toml
+    └── upload_to_pypi.py
 ```
 
 ## 核心组件
@@ -72,6 +76,13 @@ hologres sql "SELECT * FROM orders LIMIT 10"
 
 预置的 AI 技能，可被 AI 编程助手（IDE Copilot）加载，为其提供 Hologres 相关的领域知识。
 
+**快速安装：**
+
+```bash
+# 将技能安装到你的 AI 工具（Claude Code、Cursor、Codex 等）
+uvx hologres-agent-skills
+```
+
 #### hologres-cli
 
 教会 AI Agent 如何高效使用 Hologres CLI 工具，包括命令用法、安全特性、输出格式处理和最佳实践。
@@ -108,6 +119,18 @@ pip install -e .
 
 # 开发安装（包含测试依赖）
 pip install -e ".[dev]"
+```
+
+### 安装 Agent 技能
+
+```bash
+# 方式一：一键安装（推荐）
+uvx hologres-agent-skills
+
+# 方式二：从源码安装
+cd hologres-ai-plugins/agent-skills
+uv sync
+uv run hologres-agent-skills
 ```
 
 ## 配置

@@ -8,10 +8,14 @@ A collection of AI-agent-friendly tools and skills for [Alibaba Cloud Hologres](
 hologres-ai-plugins/
 ├── hologres-cli/          # Python CLI tool for Hologres database operations
 └── agent-skills/          # AI agent skills for IDE / Copilot integration
-    └── skills/
-        ├── hologres-cli/                  # CLI usage skill
-        ├── hologres-query-optimizer/      # Query execution plan analysis skill
-        └── hologres-slow-query-analysis/  # Slow query diagnosis skill
+    ├── src/
+    │   └── holo_plugin_installer/     # Interactive skills installer
+    ├── skills/
+    │   ├── hologres-cli/                  # CLI usage skill
+    │   ├── hologres-query-optimizer/      # Query execution plan analysis skill
+    │   └── hologres-slow-query-analysis/  # Slow query diagnosis skill
+    ├── pyproject.toml
+    └── upload_to_pypi.py
 ```
 
 ## Components
@@ -72,6 +76,13 @@ For full documentation, see [hologres-cli/README.md](hologres-cli/README.md).
 
 Pre-built skills that can be loaded by AI coding assistants (IDE copilots) to provide domain-specific knowledge about Hologres.
 
+**Quick Install:**
+
+```bash
+# Install skills to your AI tool (Claude Code, Cursor, Codex, etc.)
+uvx hologres-agent-skills
+```
+
 #### hologres-cli
 
 Teaches the AI agent how to use the Hologres CLI tool effectively, including command usage, safety features, output format handling, and best practices.
@@ -108,6 +119,18 @@ pip install -e .
 
 # For development (includes test dependencies)
 pip install -e ".[dev]"
+```
+
+### Install Agent Skills
+
+```bash
+# Option 1: One-command install (recommended)
+uvx hologres-agent-skills
+
+# Option 2: Install from source
+cd hologres-ai-plugins/agent-skills
+uv sync
+uv run hologres-agent-skills
 ```
 
 ## Configuration

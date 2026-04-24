@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=77.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hologres-agent-skills"
+version = "0.1.0"
+description = "Install Hologres Agent Skills to various AI coding tools (Claude Code, GitHub Copilot, Codex, Cursor, etc.)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [
+    {name = "xincai.jiang"}
+]
+keywords = ["hologres", "database", "ai", "agent-skills", "claude-code", "copilot", "codex", "cursor"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Database",
+]
+
+dependencies = [
+    "questionary>=1.10.0",
+]
+
+[project.scripts]
+hologres-agent-skills = "holo_plugin_installer.main:main"
+
+[project.urls]
+Repository = "https://code.alibaba-inc.com/hologram/hologres-ai-plugins"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+holo_plugin_installer = ["skills/**/*"]
