@@ -111,13 +111,15 @@ def set_cmd(ctx: click.Context, param_name: str, value: str) -> None:
         dbname = conn.database
         # ALTER DATABASE <dbname> SET <param> = <value>
         # dbname and param_name are identifiers (need quoting)
-        # value is a literal (parameterized for safety)
-        alter_sql = psql.SQL("ALTER DATABASE {} SET {} = %s").format(
+        # value is a literal — DDL does not support parameterized placeholders,
+        # so use psycopg.sql.Literal for safe escaping
+        alter_sql = psql.SQL("ALTER DATABASE {} SET {} = {}").format(
             psql.Identifier(dbname),
             psql.Identifier(param_name),
+            psql.Literal(value),
         )
         final_sql = alter_sql.as_string(conn.conn)
-        conn.execute(final_sql, (value,))
+        conn.execute(final_sql)
 
         duration_ms = (time.time() - start_time) * 1000
         log_operation("guc.set", sql=final_sql, dsn_masked=conn.masked_dsn,

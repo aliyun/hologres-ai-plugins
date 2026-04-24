@@ -273,9 +273,11 @@ class TestGucSetCmd:
         assert '"optimizer_join_order"' in executed_sql
         assert "ALTER DATABASE" in executed_sql
         assert "SET" in executed_sql
+        # DDL should not use parameterized placeholder ($1)
+        assert "$1" not in executed_sql
 
-    def test_set_cmd_value_parameterized(self, mock_get_connection):
-        """Test that the parameter value is passed via parameterized query."""
+    def test_set_cmd_value_uses_literal(self, mock_get_connection):
+        """Test that the parameter value is rendered via psycopg.sql.Literal, not parameterized."""
         mock_get_connection.execute.return_value = []
         mock_get_connection.database = "testdb"
 
@@ -284,9 +286,11 @@ class TestGucSetCmd:
 
         assert result.exit_code == 0
         call_args = mock_get_connection.execute.call_args
-        # Second argument should be the params tuple containing the value
-        params = call_args[0][1]
-        assert params == ("query",)
+        # No params tuple should be passed — value is rendered inline via sql.Literal
+        assert len(call_args[0]) == 1 or call_args[0][1] is None
+        # SQL should not contain parameterized placeholder
+        executed_sql = call_args[0][0]
+        assert "$1" not in executed_sql
 
     def test_set_cmd_returns_scope_info(self, mock_get_connection):
         """Test that set returns scope=database and actual database name."""
@@ -319,3 +323,31 @@ class TestGucSetCmd:
                 "database": "testdb",
             }
         }
+
+    def test_set_cmd_value_off_rendered_as_literal(self, mock_get_connection):
+        """Test that 'off' value is rendered without $1 placeholder."""
+        mock_get_connection.execute.return_value = []
+        mock_get_connection.database = "testdb"
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "set", "hg_experimental_enable_fse_common_table", "off"])
+
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        executed_sql = call_args[0][0]
+        # DDL should not use parameterized placeholder
+        assert "$1" not in executed_sql
+
+    def test_set_cmd_value_with_special_chars(self, mock_get_connection):
+        """Test that value with special chars (e.g., spaces) does not cause $1 placeholder."""
+        mock_get_connection.execute.return_value = []
+        mock_get_connection.database = "testdb"
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "set", "statement_timeout", "5 min"])
+
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        executed_sql = call_args[0][0]
+        # DDL should not use parameterized placeholder
+        assert "$1" not in executed_sql
