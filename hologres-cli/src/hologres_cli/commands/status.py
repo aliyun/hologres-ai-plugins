@@ -15,12 +15,12 @@ from ..output import FORMAT_JSON, connection_error, print_output, query_error, s
 @click.pass_context
 def status_cmd(ctx: click.Context) -> None:
     """Show connection status and server information."""
-    dsn = ctx.obj.get("dsn")
+    profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
     start_time = time.time()
 
     try:
-        conn = get_connection(dsn)
+        conn = get_connection(profile=profile)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return

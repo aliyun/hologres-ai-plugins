@@ -28,6 +28,7 @@ class TestGenerateAiGuide:
         assert "schema describe" in result
         assert "sql" in result
         assert "status" in result
+        assert "config" in result
 
     def test_generate_ai_guide_has_safety(self):
         """Test guide contains safety information."""
@@ -43,6 +44,12 @@ class TestGenerateAiGuide:
         assert "table" in result
         assert "csv" in result
 
+    def test_generate_ai_guide_no_dsn(self):
+        """Test guide mentions config instead of DSN."""
+        result = _generate_ai_guide()
+        assert "config" in result
+        assert "--profile" in result
+
 
 class TestCli:
     """Tests for CLI main group."""
@@ -52,7 +59,7 @@ class TestCli:
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output  # Version from pyproject.toml
+        assert "0.1.0" in result.output
 
     def test_cli_help(self):
         """Test --help flag."""
@@ -62,18 +69,26 @@ class TestCli:
         assert "Hologres CLI" in result.output
         assert "schema" in result.output
         assert "sql" in result.output
+        assert "config" in result.output
+
+    def test_cli_help_no_dsn(self):
+        """Test --help does not show --dsn option."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--help"])
+        assert result.exit_code == 0
+        assert "--dsn" not in result.output
+        assert "--profile" in result.output
 
     def test_cli_format_option(self):
         """Test --format option sets context."""
         runner = CliRunner()
-        # Use a command that reads format from context
         result = runner.invoke(cli, ["--format", "table", "ai-guide"])
         assert result.exit_code == 0
 
-    def test_cli_dsn_option(self):
-        """Test --dsn option sets context."""
+    def test_cli_profile_option(self):
+        """Test --profile option sets context."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["--dsn", "hologres://user:pass@host/db", "ai-guide"])
+        result = runner.invoke(cli, ["--profile", "default", "ai-guide"])
         assert result.exit_code == 0
 
 
@@ -119,7 +134,7 @@ class TestMain:
     def test_main_dsn_error(self, monkeypatch, capsys):
         """Test main handles DSNError."""
         def mock_cli(**kwargs):
-            raise DSNError("No DSN configured")
+            raise DSNError("No profile configured")
 
         monkeypatch.setattr("hologres_cli.main.cli", mock_cli)
 
@@ -165,7 +180,7 @@ class TestSubcommands:
         runner = CliRunner()
         result = runner.invoke(cli, ["sql", "--help"])
         assert result.exit_code == 0
-        assert "--write" in result.output
+        assert "QUERY" in result.output
 
     def test_data_command_registered(self):
         """Test data command is registered."""
@@ -192,3 +207,12 @@ class TestSubcommands:
         runner = CliRunner()
         result = runner.invoke(cli, ["warehouse", "--help"])
         assert result.exit_code == 0
+
+    def test_config_command_registered(self):
+        """Test config command is registered."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["config", "--help"])
+        assert result.exit_code == 0
+        assert "set" in result.output
+        assert "get" in result.output
+        assert "list" in result.output

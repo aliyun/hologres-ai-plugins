@@ -4,6 +4,7 @@ AI-agent-friendly command-line interface for Hologres database with safety guard
 
 ## Features
 
+- **Profile-Based Configuration**: Multi-profile management via `~/.hologres/config.json`, interactive wizard setup
 - **Structured Output**: All commands return JSON by default for easy parsing
 - **Safety Guardrails**: Row limits, write protection, dangerous operation blocking
 - **Multiple Formats**: JSON, table, CSV, JSONL output formats
@@ -36,21 +37,78 @@ pip install -e ".[dev]"
 
 ## Configuration
 
-### DSN Format
+The CLI uses a **profile-based** configuration stored in `~/.hologres/config.json`. Each profile contains connection parameters including region, instance, auth credentials, database, and warehouse.
 
-```
-hologres://[user[:password]@]host[:port]/database
-```
+### Quick Setup
 
-### Configuration Methods (priority order)
-
-1. **CLI flag**: `--dsn "hologres://user:pass@host:port/db"`
-2. **Environment variable**: `export HOLOGRES_DSN="hologres://..."`
-3. **Config file**: `~/.hologres/config.env`
+Run the interactive configuration wizard:
 
 ```bash
-# ~/.hologres/config.env
-HOLOGRES_DSN="hologres://user:password@endpoint:port/database"
+hologres config
+```
+
+The wizard will prompt for:
+- **Region** (e.g., `cn-hangzhou`, `cn-shanghai`)
+- **Instance ID** (e.g., `hgprecn-cn-xxx`)
+- **Network type**: `internet` / `intranet` / `vpc`
+- **Auth mode**: `basic` (username/password) or `ram` (AccessKey)
+- **Database name**
+- **Warehouse** (computing group)
+- **Endpoint** (optional, auto-constructed from instance_id + region_id + nettype)
+- **Port** (default: `80`)
+
+### Endpoint Auto-Construction
+
+If no custom endpoint is provided, the host is auto-constructed based on `nettype`:
+
+| nettype | Host pattern |
+|---------|-------------|
+| internet | `{instance_id}-{region_id}.hologres.aliyuncs.com` |
+| intranet | `{instance_id}-{region_id}-internal.hologres.aliyuncs.com` |
+| vpc | `{instance_id}-{region_id}-vpc-st.hologres.aliyuncs.com` |
+
+### Profile Management
+
+```bash
+hologres config                       # Interactive wizard (create/edit profile)
+hologres config list                   # List all profiles
+hologres config show                   # Show current profile details
+hologres config current                # Show current profile name
+hologres config switch <name>          # Switch active profile
+hologres config set <key> <value>      # Set a configuration value
+hologres config get <key>              # Get a configuration value
+hologres config delete <name> --confirm  # Delete a profile
+```
+
+### Profile Resolution Priority
+
+1. **CLI flag**: `hologres --profile <name> status`
+2. **Current profile**: The active profile set via `config switch`
+3. **Error**: Prompted to run `hologres config` if no profile found
+
+### Config File Structure
+
+```json
+{
+  "current": "default",
+  "profiles": [
+    {
+      "name": "default",
+      "region_id": "cn-hangzhou",
+      "instance_id": "hgprecn-cn-xxx",
+      "nettype": "internet",
+      "auth_mode": "basic",
+      "username": "BASIC$myuser",
+      "password": "mypassword",
+      "database": "mydb",
+      "warehouse": "default_warehouse",
+      "endpoint": "",
+      "port": 80,
+      "output_format": "json",
+      "language": "zh"
+    }
+  ]
+}
 ```
 
 ## Commands
@@ -58,7 +116,8 @@ HOLOGRES_DSN="hologres://user:password@endpoint:port/database"
 ### Status
 
 ```bash
-hologres status
+hologres status                        # Check connection and version
+hologres --profile prod status         # Check with specific profile
 ```
 
 ### Instance Information
@@ -67,7 +126,7 @@ hologres status
 hologres instance <instance_name>
 ```
 
-### Warehouse (计算组)
+### Warehouse (Computing Group)
 
 ```bash
 hologres warehouse                    # List all warehouses
@@ -284,13 +343,14 @@ hologres sql --no-mask "SELECT * FROM users LIMIT 10"
 ## Testing
 
 ```bash
-pytest -m unit                                          # Unit tests only (fast)
-pytest -m integration                                   # Integration tests (needs DB)
-pytest tests/test_commands/test_dt.py                   # DT command tests
-pytest --cov=src/hologres_cli --cov-report=term-missing # With coverage
+pytest tests/ --ignore=tests/integration             # Unit tests only (fast, no DB)
+pytest tests/test_commands/test_dt.py                # DT command tests
+pytest tests/test_commands/test_config.py            # Config command tests
+pytest tests/test_config_store.py                    # Config store unit tests
+pytest --cov=src/hologres_cli --cov-report=term-missing  # With coverage
 ```
 
-Integration tests require `HOLOGRES_TEST_DSN` environment variable and are auto-skipped otherwise.
+Integration tests (in `tests/integration/`) require a configured profile and are skipped by default.
 
 ## License
 

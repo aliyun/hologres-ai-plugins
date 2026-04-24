@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -11,11 +11,10 @@ import pytest
 from hologres_cli.connection import (
     DSNError,
     HologresConnection,
-    _read_dsn_from_config,
     get_connection,
     mask_dsn_password,
     parse_dsn,
-    resolve_raw_dsn,
+    resolve_dsn,
 )
 
 
@@ -147,118 +146,29 @@ class TestMaskDsnPassword:
         assert "mydb" in result
 
 
-class TestReadDsnFromConfig:
-    """Tests for _read_dsn_from_config function."""
+class TestResolveDsn:
+    """Tests for resolve_dsn function."""
 
-    def test_read_dsn_from_config_valid(self, tmp_path):
-        """Test valid config file."""
-        config_file = tmp_path / "config.env"
-        config_file.write_text("HOLOGRES_DSN=hologres://user:pass@host/db\n")
-        result = _read_dsn_from_config(config_file)
-        assert result == "hologres://user:pass@host/db"
+    def test_resolve_dsn_named_profile(self, mock_config):
+        """Test resolving DSN from named profile."""
+        dsn = resolve_dsn("default")
+        assert dsn.startswith("hologres://")
+        assert "testdb" in dsn
 
-    def test_read_dsn_from_config_with_quotes(self, tmp_path):
-        """Test config with quoted value."""
-        config_file = tmp_path / "config.env"
-        config_file.write_text('HOLOGRES_DSN="hologres://user:pass@host/db"\n')
-        result = _read_dsn_from_config(config_file)
-        assert result == "hologres://user:pass@host/db"
+    def test_resolve_dsn_current_profile(self, mock_config):
+        """Test resolving DSN from current profile."""
+        dsn = resolve_dsn()
+        assert dsn.startswith("hologres://")
 
-    def test_read_dsn_from_config_with_single_quotes(self, tmp_path):
-        """Test config with single quoted value."""
-        config_file = tmp_path / "config.env"
-        config_file.write_text("HOLOGRES_DSN='hologres://user:pass@host/db'\n")
-        result = _read_dsn_from_config(config_file)
-        assert result == "hologres://user:pass@host/db"
+    def test_resolve_dsn_no_profile(self, mock_home):
+        """Test resolving DSN with no profile configured."""
+        with pytest.raises(DSNError):
+            resolve_dsn()
 
-    def test_read_dsn_from_config_with_comments(self, tmp_path):
-        """Test config with comments."""
-        config_file = tmp_path / "config.env"
-        config_file.write_text("# This is a comment\nHOLOGRES_DSN=hologres://user:pass@host/db\n")
-        result = _read_dsn_from_config(config_file)
-        assert result == "hologres://user:pass@host/db"
-
-    def test_read_dsn_from_config_missing_file(self, tmp_path):
-        """Test non-existent file returns None."""
-        config_file = tmp_path / "nonexistent.env"
-        result = _read_dsn_from_config(config_file)
-        assert result is None
-
-    def test_read_dsn_from_config_empty_file(self, tmp_path):
-        """Test empty file returns None."""
-        config_file = tmp_path / "config.env"
-        config_file.write_text("")
-        result = _read_dsn_from_config(config_file)
-        assert result is None
-
-    def test_read_dsn_from_config_shell_escapes(self, tmp_path):
-        """Test config with shell escapes."""
-        config_file = tmp_path / "config.env"
-        config_file.write_text('HOLOGRES_DSN="hologres://user:p\\$ss@host/db"\n')
-        result = _read_dsn_from_config(config_file)
-        assert result == "hologres://user:p$ss@host/db"
-
-    def test_read_dsn_from_config_no_key(self, tmp_path):
-        """Test config without HOLOGRES_DSN key."""
-        config_file = tmp_path / "config.env"
-        config_file.write_text("OTHER_KEY=value\n")
-        result = _read_dsn_from_config(config_file)
-        assert result is None
-
-    def test_read_dsn_from_config_multiline(self, tmp_path):
-        """Test config with multiple lines."""
-        config_file = tmp_path / "config.env"
-        config_file.write_text("OTHER_KEY=value\nHOLOGRES_DSN=hologres://user:pass@host/db\nANOTHER=val\n")
-        result = _read_dsn_from_config(config_file)
-        assert result == "hologres://user:pass@host/db"
-
-
-class TestResolveRawDsn:
-    """Tests for resolve_raw_dsn function."""
-
-    def test_resolve_raw_dsn_explicit(self, clean_env):
-        """Test explicit DSN is returned directly."""
-        dsn = "hologres://user:pass@host/db"
-        result = resolve_raw_dsn(dsn)
-        assert result == dsn
-
-    def test_resolve_raw_dsn_from_env(self, mock_env_dsn, tmp_path):
-        """Test DSN from environment variable."""
-        mock_env_dsn("hologres://envuser:envpass@envhost/envdb")
-        # Clear config file
-        with patch("hologres_cli.connection.CONFIG_FILE", tmp_path / "nonexistent.env"):
-            result = resolve_raw_dsn(None)
-        assert result == "hologres://envuser:envpass@envhost/envdb"
-
-    def test_resolve_raw_dsn_from_config_file(self, clean_env, tmp_path):
-        """Test DSN from config file."""
-        config_file = tmp_path / "config.env"
-        config_file.write_text("HOLOGRES_DSN=hologres://configuser:configpass@confighost/configdb\n")
-        with patch("hologres_cli.connection.CONFIG_FILE", config_file):
-            result = resolve_raw_dsn(None)
-        assert result == "hologres://configuser:configpass@confighost/configdb"
-
-    def test_resolve_raw_dsn_priority_explicit_over_env(self, mock_env_dsn):
-        """Test explicit DSN takes priority over environment."""
-        mock_env_dsn("hologres://env:pass@host/db")
-        result = resolve_raw_dsn("hologres://explicit:pass@host/db")
-        assert result == "hologres://explicit:pass@host/db"
-
-    def test_resolve_raw_dsn_priority_env_over_config(self, mock_env_dsn, tmp_path):
-        """Test environment DSN takes priority over config file."""
-        mock_env_dsn("hologres://env:pass@host/db")
-        config_file = tmp_path / "config.env"
-        config_file.write_text("HOLOGRES_DSN=hologres://config:pass@host/db\n")
-        with patch("hologres_cli.connection.CONFIG_FILE", config_file):
-            result = resolve_raw_dsn(None)
-        assert result == "hologres://env:pass@host/db"
-
-    def test_resolve_raw_dsn_no_source(self, clean_env, tmp_path):
-        """Test no DSN available raises DSNError."""
-        with patch("hologres_cli.connection.CONFIG_FILE", tmp_path / "nonexistent.env"):
-            with pytest.raises(DSNError) as exc_info:
-                resolve_raw_dsn(None)
-        assert "No DSN configured" in str(exc_info.value)
+    def test_resolve_dsn_nonexistent_profile(self, mock_config):
+        """Test resolving DSN with non-existent profile."""
+        with pytest.raises(DSNError, match="not found"):
+            resolve_dsn("nonexistent")
 
 
 class TestHologresConnection:
@@ -284,9 +194,7 @@ class TestHologresConnection:
     def test_connection_lazy_connection(self, mock_psycopg):
         """Test lazy connection creation."""
         conn = HologresConnection("hologres://user:pass@host:80/db")
-        # Connection not created yet
         assert conn._conn is None
-        # Access conn property triggers connection
         _ = conn.conn
         assert conn._conn is not None
         mock_psycopg["connect"].assert_called_once()
@@ -295,9 +203,7 @@ class TestHologresConnection:
         """Test reconnection when connection is closed."""
         conn = HologresConnection("hologres://user:pass@host:80/db")
         _ = conn.conn
-        # Simulate closed connection
         conn._conn.closed = True
-        # Access conn again should reconnect
         mock_psycopg["connect"].reset_mock()
         _ = conn.conn
         mock_psycopg["connect"].assert_called_once()
@@ -313,7 +219,6 @@ class TestHologresConnection:
     def test_connection_close_no_connection(self):
         """Test close without active connection."""
         conn = HologresConnection("hologres://user:pass@host/db")
-        # Should not raise
         conn.close()
 
     def test_connection_context_manager(self, mock_psycopg):
@@ -363,22 +268,23 @@ class TestHologresConnection:
 class TestGetConnection:
     """Tests for get_connection function."""
 
-    def test_get_connection_default(self, clean_env, tmp_path, mock_psycopg):
-        """Test get_connection with explicit DSN."""
-        with patch("hologres_cli.connection.CONFIG_FILE", tmp_path / "nonexistent.env"):
-            conn = get_connection("hologres://user:pass@host/db")
+    def test_get_connection_from_profile(self, mock_config, mock_psycopg):
+        """Test get_connection resolves from profile."""
+        conn = get_connection()
         assert isinstance(conn, HologresConnection)
-        assert conn.raw_dsn == "hologres://user:pass@host/db"
+        assert "testdb" in conn.raw_dsn
 
-    def test_get_connection_autocommit(self, clean_env, tmp_path, mock_psycopg):
+    def test_get_connection_named_profile(self, mock_config, mock_psycopg):
+        """Test get_connection with named profile."""
+        conn = get_connection(profile="default")
+        assert isinstance(conn, HologresConnection)
+
+    def test_get_connection_autocommit(self, mock_config, mock_psycopg):
         """Test get_connection with autocommit parameter."""
-        with patch("hologres_cli.connection.CONFIG_FILE", tmp_path / "nonexistent.env"):
-            conn = get_connection("hologres://user:pass@host/db", autocommit=False)
+        conn = get_connection(autocommit=False)
         assert conn.autocommit is False
 
-    def test_get_connection_from_env(self, mock_env_dsn, tmp_path, mock_psycopg):
-        """Test get_connection resolves DSN from environment."""
-        mock_env_dsn("hologres://envuser:envpass@envhost/envdb")
-        with patch("hologres_cli.connection.CONFIG_FILE", tmp_path / "nonexistent.env"):
-            conn = get_connection()
-        assert conn.raw_dsn == "hologres://envuser:envpass@envhost/envdb"
+    def test_get_connection_no_config(self, mock_home):
+        """Test get_connection with no config raises DSNError."""
+        with pytest.raises(DSNError):
+            get_connection()

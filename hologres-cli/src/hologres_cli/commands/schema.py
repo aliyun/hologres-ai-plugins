@@ -44,12 +44,12 @@ def schema_cmd() -> None:
 @click.pass_context
 def tables_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
     """List all tables in the database."""
-    dsn = ctx.obj.get("dsn")
+    profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
     start_time = time.time()
 
     try:
-        conn = get_connection(dsn)
+        conn = get_connection(profile=profile)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return
@@ -85,7 +85,7 @@ def tables_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
 @click.pass_context
 def describe_cmd(ctx: click.Context, table: str) -> None:
     """Describe a table's structure. TABLE: 'table_name' or 'schema.table_name'."""
-    dsn = ctx.obj.get("dsn")
+    profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
 
     if "." in table:
@@ -96,7 +96,7 @@ def describe_cmd(ctx: click.Context, table: str) -> None:
     start_time = time.time()
 
     try:
-        conn = get_connection(dsn)
+        conn = get_connection(profile=profile)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return
@@ -165,12 +165,12 @@ def dump_cmd(ctx: click.Context, table: str) -> None:
       hologres schema dump public.my_table
       hologres schema dump myschema.orders
     """
-    dsn = ctx.obj.get("dsn")
+    profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
     start_time = time.time()
 
     try:
-        conn = get_connection(dsn)
+        conn = get_connection(profile=profile)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return
@@ -233,12 +233,12 @@ def size_cmd(ctx: click.Context, table: str) -> None:
       hologres schema size public.my_table
       hologres schema size myschema.orders
     """
-    dsn = ctx.obj.get("dsn")
+    profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
     start_time = time.time()
 
     try:
-        conn = get_connection(dsn)
+        conn = get_connection(profile=profile)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return

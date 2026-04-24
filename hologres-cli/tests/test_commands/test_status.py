@@ -18,7 +18,7 @@ class TestStatusCmd:
     def test_status_cmd_success(self, mock_get_connection):
         """Test successful status check."""
         mock_get_connection.execute.side_effect = [
-            [{"version": "PostgreSQL 11.0 (Hologres)"}],
+            [{"hg_version": "PostgreSQL 11.0 (Hologres)"}],
             [{"current_database": "testdb"}],
             [{"current_user": "testuser"}],
             [{"inet_server_addr": "127.0.0.1", "inet_server_port": 80}],
@@ -61,7 +61,7 @@ class TestStatusCmd:
     def test_status_cmd_server_addr_error(self, mock_get_connection):
         """Test handling of server address query failure."""
         mock_get_connection.execute.side_effect = [
-            [{"version": "PostgreSQL 11.0"}],
+            [{"hg_version": "PostgreSQL 11.0"}],
             [{"current_database": "testdb"}],
             [{"current_user": "testuser"}],
             Exception("Function not available"),  # inet_server_addr fails
@@ -79,7 +79,7 @@ class TestStatusCmd:
     def test_status_cmd_table_format(self, mock_get_connection):
         """Test table format output."""
         mock_get_connection.execute.side_effect = [
-            [{"version": "PostgreSQL 11.0"}],
+            [{"hg_version": "PostgreSQL 11.0"}],
             [{"current_database": "testdb"}],
             [{"current_user": "testuser"}],
             [{"inet_server_addr": "127.0.0.1", "inet_server_port": 80}],
@@ -96,7 +96,7 @@ class TestStatusCmd:
         """Test that DSN is masked in output."""
         mock_get_connection.masked_dsn = "hologres://user:***@host/db"
         mock_get_connection.execute.side_effect = [
-            [{"version": "PostgreSQL 11.0"}],
+            [{"hg_version": "PostgreSQL 11.0"}],
             [{"current_database": "testdb"}],
             [{"current_user": "testuser"}],
             [{"inet_server_addr": "127.0.0.1", "inet_server_port": 80}],

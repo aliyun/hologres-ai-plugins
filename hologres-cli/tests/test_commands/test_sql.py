@@ -12,7 +12,6 @@ from hologres_cli.connection import DSNError
 from hologres_cli.main import cli
 from hologres_cli.commands.sql import (
     _add_limit,
-    _check_dangerous_write,
     _has_limit,
     _is_select,
     _is_write_operation,
@@ -177,60 +176,6 @@ class TestIsSelect:
     def test_is_select_subquery(self):
         """Test statement starting with SELECT in subquery."""
         assert _is_select("SELECT * FROM (SELECT 1) t") is True
-
-
-class TestCheckDangerousWrite:
-    """Tests for _check_dangerous_write function."""
-
-    def test_check_dangerous_write_delete_no_where(self):
-        """Test DELETE without WHERE."""
-        result = _check_dangerous_write("DELETE FROM t")
-        assert result == "DELETE"
-
-    def test_check_dangerous_write_update_no_where(self):
-        """Test UPDATE without WHERE."""
-        result = _check_dangerous_write("UPDATE t SET x = 1")
-        assert result == "UPDATE"
-
-    def test_check_dangerous_write_delete_with_where(self):
-        """Test DELETE with WHERE."""
-        result = _check_dangerous_write("DELETE FROM t WHERE id = 1")
-        assert result is None
-
-    def test_check_dangerous_write_update_with_where(self):
-        """Test UPDATE with WHERE."""
-        result = _check_dangerous_write("UPDATE t SET x = 1 WHERE id = 1")
-        assert result is None
-
-    def test_check_dangerous_write_insert(self):
-        """Test INSERT statement (not dangerous)."""
-        result = _check_dangerous_write("INSERT INTO t VALUES (1)")
-        assert result is None
-
-    def test_check_dangerous_write_case_insensitive(self):
-        """Test case insensitive matching."""
-        result = _check_dangerous_write("delete from t")
-        assert result == "DELETE"
-
-        result = _check_dangerous_write("update t set x = 1")
-        assert result == "UPDATE"
-
-    def test_check_dangerous_write_with_comments(self):
-        """Test with SQL comments."""
-        # WHERE after comment should still be detected
-        result = _check_dangerous_write("DELETE FROM t -- comment\nWHERE id = 1")
-        assert result is None
-
-    def test_check_dangerous_write_where_in_string(self):
-        """Test WHERE inside string (should still be detected)."""
-        # The regex searches for WHERE keyword, even in strings
-        result = _check_dangerous_write("DELETE FROM t WHERE name = 'WHERE'")
-        assert result is None  # Has WHERE
-
-    def test_check_dangerous_write_subquery_where(self):
-        """Test with WHERE in subquery."""
-        result = _check_dangerous_write("DELETE FROM t WHERE id IN (SELECT id FROM t2 WHERE x = 1)")
-        assert result is None  # Has WHERE
 
 
 class TestHasLimit:
@@ -421,34 +366,32 @@ class TestSqlCmd:
         assert output["ok"] is True
         mock_get_connection.close.assert_called_once()
 
-    def test_sql_cmd_write_without_flag(self, mock_get_connection):
-        """Test write operation without --write flag returns error."""
+    def test_sql_cmd_write_blocked(self, mock_get_connection):
+        """Test write operation is blocked."""
         runner = CliRunner()
         result = runner.invoke(cli, ["sql", "INSERT INTO users VALUES (1)"])
 
         output = json.loads(result.output)
         assert output["ok"] is False
-        assert output["error"]["code"] == "WRITE_GUARD_ERROR"
+        assert output["error"]["code"] == "WRITE_BLOCKED"
 
-    def test_sql_cmd_dangerous_write_blocked(self, mock_get_connection):
-        """Test dangerous write operation is blocked."""
+    def test_sql_cmd_delete_blocked(self, mock_get_connection):
+        """Test DELETE operation is blocked."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["sql", "--write", "DELETE FROM users"])
+        result = runner.invoke(cli, ["sql", "DELETE FROM users"])
 
         output = json.loads(result.output)
         assert output["ok"] is False
-        assert output["error"]["code"] == "DANGEROUS_WRITE_BLOCKED"
+        assert output["error"]["code"] == "WRITE_BLOCKED"
 
-    def test_sql_cmd_write_with_where(self, mock_get_connection):
-        """Test write operation with WHERE clause is allowed."""
-        mock_get_connection.execute.return_value = []
-
+    def test_sql_cmd_update_blocked(self, mock_get_connection):
+        """Test UPDATE operation is blocked."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["sql", "--write", "DELETE FROM users WHERE id = 1"])
+        result = runner.invoke(cli, ["sql", "UPDATE users SET name = 'test' WHERE id = 1"])
 
-        assert result.exit_code == 0
         output = json.loads(result.output)
-        assert output["ok"] is True
+        assert output["ok"] is False
+        assert output["error"]["code"] == "WRITE_BLOCKED"
 
     def test_sql_cmd_limit_required(self, mock_get_connection):
         """Test query without LIMIT that returns too many rows."""
@@ -532,17 +475,14 @@ class TestSqlCmd:
         # Phone should not be masked
         assert output["data"]["rows"][0]["phone"] == "13812345678"
 
-    def test_sql_cmd_insert_success(self, mock_get_connection):
-        """Test successful INSERT."""
-        mock_get_connection.execute.return_value = []
-
+    def test_sql_cmd_drop_blocked(self, mock_get_connection):
+        """Test DROP operation is blocked."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["sql", "--write", "INSERT INTO users VALUES (1, 'test')"])
+        result = runner.invoke(cli, ["sql", "DROP TABLE users"])
 
-        assert result.exit_code == 0
         output = json.loads(result.output)
-        assert output["ok"] is True
-        assert output["data"]["operation"] == "write"
+        assert output["ok"] is False
+        assert output["error"]["code"] == "WRITE_BLOCKED"
 
     def test_sql_cmd_table_format(self, mock_get_connection):
         """Test table format output."""

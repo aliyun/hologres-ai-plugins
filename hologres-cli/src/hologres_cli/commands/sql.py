@@ -48,26 +48,26 @@ def sql_cmd(ctx: click.Context, query: str, with_schema: bool,
       hologres sql "SELECT * FROM users LIMIT 10"
       hologres sql --no-limit-check "SELECT * FROM large_table"
     """
-    dsn = ctx.obj.get("dsn")
+    profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
 
     statements = _split_statements(query)
     if len(statements) > 1:
         results = []
         for stmt in statements:
-            r = _execute_single(stmt, dsn, fmt, with_schema, no_limit_check, no_mask)
+            r = _execute_single(stmt, profile, fmt, with_schema, no_limit_check, no_mask)
             results.append(r)
         if fmt == FORMAT_JSON:
             print_output(success({"statements": results, "count": len(results)}))
     else:
-        _execute_single(query, dsn, fmt, with_schema, no_limit_check, no_mask, print_result=True)
+        _execute_single(query, profile, fmt, with_schema, no_limit_check, no_mask, print_result=True)
 
 
-def _execute_single(query: str, dsn, fmt, with_schema, no_limit_check, no_mask,
+def _execute_single(query: str, profile, fmt, with_schema, no_limit_check, no_mask,
                      print_result=False) -> dict[str, Any]:
     start_time = time.time()
     try:
-        conn = get_connection(dsn)
+        conn = get_connection(profile=profile)
     except DSNError as e:
         if print_result:
             print_output(connection_error(str(e), fmt))

@@ -56,7 +56,7 @@ def data_cmd() -> None:
 def export_cmd(ctx: click.Context, table: Optional[str], file_path: str,
                query: Optional[str], delimiter: str) -> None:
     """Export data to CSV file."""
-    dsn = ctx.obj.get("dsn")
+    profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
 
     if not table and not query:
@@ -65,7 +65,7 @@ def export_cmd(ctx: click.Context, table: Optional[str], file_path: str,
 
     start_time = time.time()
     try:
-        conn = get_connection(dsn)
+        conn = get_connection(profile=profile)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return
@@ -131,7 +131,7 @@ def export_cmd(ctx: click.Context, table: Optional[str], file_path: str,
 def import_cmd(ctx: click.Context, table: str, file_path: str, delimiter: str,
                truncate: bool) -> None:
     """Import data from CSV file."""
-    dsn = ctx.obj.get("dsn")
+    profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
 
     input_path = Path(file_path)
@@ -148,7 +148,7 @@ def import_cmd(ctx: click.Context, table: str, file_path: str, delimiter: str,
 
     start_time = time.time()
     try:
-        conn = get_connection(dsn)
+        conn = get_connection(profile=profile)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return
@@ -219,12 +219,12 @@ def import_cmd(ctx: click.Context, table: str, file_path: str, delimiter: str,
 @click.pass_context
 def count_cmd(ctx: click.Context, table: str, where_clause: Optional[str]) -> None:
     """Count rows in a table."""
-    dsn = ctx.obj.get("dsn")
+    profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
     start_time = time.time()
 
     try:
-        conn = get_connection(dsn)
+        conn = get_connection(profile=profile)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return

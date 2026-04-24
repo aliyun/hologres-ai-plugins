@@ -30,8 +30,8 @@ from ..output import (
 
 def _get_conn(ctx: click.Context):
     """Get connection from context."""
-    dsn = ctx.obj.get("dsn")
-    return get_connection(dsn)
+    profile = ctx.obj.get("profile")
+    return get_connection(profile=profile)
 
 
 def _execute_sql(ctx: click.Context, sql: str, dry_run: bool = False) -> Optional[str]:

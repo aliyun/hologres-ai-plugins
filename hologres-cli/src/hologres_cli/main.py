@@ -13,22 +13,22 @@ from .output import FORMAT_JSON, VALID_FORMATS, error, print_output, success
 
 
 @click.group()
-@click.option("--dsn", envvar="HOLOGRES_DSN", help="Hologres DSN (hologres://user:pass@host:port/db)")
+@click.option("--profile", "-p", default=None, help="Use named profile from config")
 @click.option("--format", "-f", type=click.Choice(VALID_FORMATS), default=FORMAT_JSON, help="Output format")
 @click.version_option(version=__version__)
 @click.pass_context
-def cli(ctx: click.Context, dsn: Optional[str], format: str) -> None:
+def cli(ctx: click.Context, profile: Optional[str], format: str) -> None:
     """Hologres CLI - AI-agent-friendly database interface.
 
     \b
-    DSN: --dsn flag | HOLOGRES_DSN env | ~/.hologres/config.env
+    Connection: hologres config  |  --profile to switch
     """
     ctx.ensure_object(dict)
-    ctx.obj["dsn"] = dsn
+    ctx.obj["profile"] = profile
     ctx.obj["format"] = format
 
 
-from .commands import schema, sql, data, status, instance, warehouse, dt  # noqa: E402
+from .commands import schema, sql, data, status, instance, warehouse, dt, config  # noqa: E402
 
 cli.add_command(schema.schema_cmd)
 cli.add_command(sql.sql_cmd)
@@ -37,6 +37,7 @@ cli.add_command(status.status_cmd)
 cli.add_command(instance.instance_cmd)
 cli.add_command(warehouse.warehouse_cmd)
 cli.add_command(dt.dt_cmd)
+cli.add_command(config.config_cmd)
 
 
 @cli.command("ai-guide")
@@ -55,9 +56,11 @@ def _generate_ai_guide() -> str:
     return """# Hologres CLI - AI Agent Guide
 
 ## Connection
-Set DSN: `--dsn "hologres://user:pass@host:port/db"` or `HOLOGRES_DSN` env var.
+Run `hologres config` to set up connection profile.
+Use `--profile <name>` to switch profiles.
 
 ## Commands
+- `hologres config` - Configure connection profiles
 - `hologres schema tables` - List tables
 - `hologres schema describe <table>` - Describe table
 - `hologres schema dump` - Export DDL

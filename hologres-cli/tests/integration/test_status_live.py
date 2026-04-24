@@ -38,14 +38,10 @@ class TestStatusLive:
         assert "connected" in result.output
 
     def test_status_connection_error(self, monkeypatch):
-        """Test status with invalid DSN returns connection error."""
+        """Test status with no profile configured returns connection error."""
         monkeypatch.delenv("HOLOGRES_TEST_DSN", raising=False)
         runner = CliRunner()
-        result = runner.invoke(cli, ["--dsn", "http://invalid", "status"])
-
-        output = json.loads(result.output)
-        assert output["ok"] is False
-        assert output["error"]["code"] == "CONNECTION_ERROR"
+        result = runner.invoke(cli, ["--profile", "nonexistent_profile", "status"])
 
         output = json.loads(result.output)
         assert output["ok"] is False

@@ -1,21 +1,19 @@
 """Connection management for Hologres CLI.
 
-Supports DSN format: hologres://[user[:password]@]host[:port]/database[?options]
+All connection parameters are resolved from config profiles (~/.hologres/config.json).
+DSN format: hologres://[user[:password]@]host[:port]/database[?options]
 """
 
 from __future__ import annotations
 
-import os
 import re
-from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
 import psycopg
 from psycopg.rows import dict_row
 
-CONFIG_DIR = Path.home() / ".hologres"
-CONFIG_FILE = CONFIG_DIR / "config.env"
+from .config_store import ConfigError, build_dsn_from_profile, get_current_profile, get_profile
 
 DEFAULT_PORT = 80
 DEFAULT_KEEPALIVES = {
@@ -32,89 +30,26 @@ class ConnectionError(Exception):
 
 
 class DSNError(Exception):
-    """Exception raised for DSN parsing errors."""
+    """Exception raised for DSN parsing or configuration errors."""
     pass
 
 
-def resolve_raw_dsn(dsn: Optional[str] = None) -> str:
-    """Resolve DSN from multiple sources in priority order.
+def resolve_dsn(profile_name: Optional[str] = None) -> str:
+    """Resolve DSN from config profile.
 
-    1. CLI --dsn flag
-    2. HOLOGRES_DSN environment variable
-    3. ~/.hologres/config.env file
-    4. Fail with helpful error message
+    Priority:
+    1. Named profile (--profile flag)
+    2. Current profile from config.json
+    3. Fail with helpful error message
     """
-    if dsn:
-        return dsn
-
-    env_dsn = os.environ.get("HOLOGRES_DSN")
-    if env_dsn:
-        return env_dsn
-
-    if CONFIG_FILE.exists():
-        dsn_from_file = _read_dsn_from_config(CONFIG_FILE)
-        if dsn_from_file:
-            return dsn_from_file
-
-    raise DSNError(
-        "No DSN configured. Please provide a DSN using one of these methods:\n"
-        "  1. --dsn flag: hologres --dsn 'hologres://user:pass@host:port/db' ...\n"
-        "  2. HOLOGRES_DSN environment variable\n"
-        "  3. ~/.hologres/config.env file with HOLOGRES_DSN=..."
-    )
-
-
-def _read_dsn_from_config(config_path: Path, key: str = "HOLOGRES_DSN") -> Optional[str]:
-    """Read DSN from a config.env file by key name."""
-    prefix = f"{key}="
     try:
-        content = config_path.read_text()
-        for line in content.splitlines():
-            line = line.strip()
-            if line.startswith("#") or not line:
-                continue
-            if line.startswith(prefix):
-                value = line[len(prefix):].strip()
-                if (value.startswith('"') and value.endswith('"')) or \
-                   (value.startswith("'") and value.endswith("'")):
-                    value = value[1:-1]
-                # Handle common shell escapes (\$ -> $, \" -> ", etc.)
-                value = value.replace("\\$", "$").replace('\\"', '"').replace("\\\\", "\\")
-                return value
-    except Exception:
-        pass
-    return None
-
-
-def resolve_instance_dsn(instance_name: str) -> str:
-    """Resolve DSN for a named instance from config.env.
-
-    Looks up HOLOGRES_DSN_<instance_name> in:
-      1. Environment variable
-      2. ~/.hologres/config.env
-
-    Config example:
-      HOLOGRES_DSN_myinstance="hologres://user:pass@host:port/db"
-    """
-    env_key = f"HOLOGRES_DSN_{instance_name}"
-
-    # 1. Check environment variable
-    env_dsn = os.environ.get(env_key)
-    if env_dsn:
-        return env_dsn
-
-    # 2. Check config file
-    if CONFIG_FILE.exists():
-        dsn = _read_dsn_from_config(CONFIG_FILE, key=env_key)
-        if dsn:
-            return dsn
-
-    raise DSNError(
-        f"No DSN configured for instance '{instance_name}'.\n"
-        f"Please add the following to ~/.hologres/config.env:\n"
-        f"  {env_key}=\"hologres://user:pass@host:port/database\"\n"
-        f"Or set environment variable: export {env_key}=\"hologres://...\""
-    )
+        if profile_name:
+            profile = get_profile(profile_name)
+        else:
+            profile = get_current_profile()
+        return build_dsn_from_profile(profile)
+    except ConfigError as e:
+        raise DSNError(str(e))
 
 
 def parse_dsn(dsn: str) -> dict[str, Any]:
@@ -222,7 +157,12 @@ class HologresConnection:
         self.close()
 
 
-def get_connection(dsn: Optional[str] = None, autocommit: bool = True) -> HologresConnection:
-    """Get a Hologres connection. Resolves DSN from multiple sources."""
-    resolved_dsn = resolve_raw_dsn(dsn)
+def get_connection(profile: Optional[str] = None, autocommit: bool = True) -> HologresConnection:
+    """Get a Hologres connection from config profile.
+
+    Args:
+        profile: Profile name to use. If None, uses current profile.
+        autocommit: Whether to use autocommit mode.
+    """
+    resolved_dsn = resolve_dsn(profile)
     return HologresConnection(resolved_dsn, autocommit=autocommit)

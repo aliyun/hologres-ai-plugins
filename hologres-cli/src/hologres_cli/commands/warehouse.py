@@ -48,12 +48,12 @@ def warehouse_cmd(ctx: click.Context, warehouse_name: Optional[str]) -> None:
       hologres warehouse init_warehouse     # Query specific warehouse
       hologres -f table warehouse           # List in table format
     """
-    dsn = ctx.obj.get("dsn")
+    profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
     start_time = time.time()
 
     try:
-        conn = get_connection(dsn)
+        conn = get_connection(profile=profile)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return
