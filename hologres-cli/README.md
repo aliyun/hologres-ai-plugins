@@ -187,6 +187,19 @@ hologres table size <schema.table>
 hologres table size public.my_table
 ```
 
+### Extension Management
+
+```bash
+# List installed extensions
+hologres extension list
+
+# Create (install) an extension
+hologres extension create roaring_bitmap
+
+# Create with IF NOT EXISTS
+hologres extension create postgis --if-not-exists
+```
+
 ### SQL Execution
 
 ```bash

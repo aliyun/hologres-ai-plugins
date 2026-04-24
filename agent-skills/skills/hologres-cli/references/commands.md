@@ -373,6 +373,65 @@ hologres view list -s myschema
 }
 ```
 
+## extension
+
+Extension management commands.
+
+### extension list
+
+List installed extensions in the database.
+
+```bash
+hologres extension list
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "rows": [
+      {"name": "plpgsql", "version": "1.0", "schema": "pg_catalog"},
+      {"name": "roaring_bitmap", "version": "0.5", "schema": "public"}
+    ],
+    "count": 2
+  }
+}
+```
+
+### extension create
+
+Create (install) a database extension.
+
+```bash
+hologres extension create roaring_bitmap
+hologres extension create postgis --if-not-exists
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--if-not-exists` | Do not error if extension already exists |
+
+**Common extensions:**
+- `flow_analysis` (漏斗/留存)
+- `roaring_bitmap`
+- `postgis`
+- `hstore`
+- `hologres_fdw` (跨库)
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "extension": "roaring_bitmap",
+    "created": true
+  }
+}
+```
+
 ## history
 
 Show command history.

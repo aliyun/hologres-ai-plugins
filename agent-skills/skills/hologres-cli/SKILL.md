@@ -65,6 +65,8 @@ hologres sql run "SELECT * FROM orders LIMIT 10"
 | `hologres table show <table>` | Show table structure (columns, types, nullable, defaults, primary key, comments) |
 | `hologres table size <schema.table>` | Get table storage size |
 | `hologres table properties <table>` | Show Hologres-specific table properties (orientation, distribution_key, clustering_key, TTL, etc.) |
+| `hologres extension list` | List installed extensions |
+| `hologres extension create <name> [--if-not-exists]` | Create (install) a database extension |
 | `hologres sql run "<query>"` | Execute read-only SQL |
 | `hologres sql run --write "<dml>"` | Execute write SQL |
 | `hologres data export <table> -f out.csv` | Export to CSV |

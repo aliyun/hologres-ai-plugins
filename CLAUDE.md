@@ -57,6 +57,7 @@ Key modules:
 - `connection.py` — DSN resolution (CLI flag > env var > `~/.hologres/config.env`), `HologresConnection` wrapper around psycopg3. Accepts `hologres://` and `postgresql://` schemes.
 - `commands/sql.py` — SQL execution with safety: write guard (`--write` flag), LIMIT enforcement (>100 rows), dangerous write block (DELETE/UPDATE without WHERE), sensitive data masking, field truncation.
 - `commands/schema.py` — Schema inspection. Uses `psycopg.sql.Identifier` for safe identifier escaping. Shared helpers `_list_tables`, `fetch_table_structure`, `_dump_table_ddl` are reused by `commands/table.py`.
+- `commands/extension.py` — Extension management. List installed extensions and create new extensions with `psycopg.sql.Identifier` for safe identifier escaping.
 - `output.py` — Unified output in JSON/table/CSV/JSONL. All responses follow `{ok: true/false, data/error: ...}`.
 - `masking.py` — Auto-masks phone/email/password/id_card/bank_card columns by name pattern matching.
 - `logger.py` — Audit log to `~/.hologres/sql-history.jsonl` with auto-rotation at 10MB. Redacts sensitive SQL literals.
