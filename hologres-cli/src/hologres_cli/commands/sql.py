@@ -14,12 +14,14 @@ from ..masking import mask_rows
 from ..output import (
     FORMAT_JSON,
     connection_error,
+    dangerous_write_error,
     error,
     limit_required_error,
     print_output,
     query_error,
     success,
     success_rows,
+    write_guard_error,
 )
 
 DEFAULT_ROW_LIMIT = 100
@@ -53,6 +55,7 @@ def sql_cmd(ctx: click.Context) -> None:
     \b
     Examples:
       hologres sql run "SELECT * FROM users LIMIT 10"
+      hologres sql run --write "INSERT INTO logs VALUES (1, 'test')"
       hologres sql run --no-limit-check "SELECT * FROM large_table"
     """
     pass
@@ -63,16 +66,18 @@ def sql_cmd(ctx: click.Context) -> None:
 @click.option("--with-schema", "with_schema", is_flag=True, help="Include schema context")
 @click.option("--no-limit-check", "no_limit_check", is_flag=True, help="Disable row limit check")
 @click.option("--no-mask", "no_mask", is_flag=True, help="Disable sensitive field masking")
+@click.option("--write", "write_allowed", is_flag=True, help="Enable write operations")
 @click.pass_context
 def run_cmd(ctx: click.Context, query: str, with_schema: bool,
-            no_limit_check: bool, no_mask: bool) -> None:
-    """Execute a read-only SQL query with safety guardrails.
+            no_limit_check: bool, no_mask: bool, write_allowed: bool) -> None:
+    """Execute a SQL query with safety guardrails.
 
-    Write operations (INSERT, UPDATE, DELETE, DROP, etc.) are blocked.
+    Write operations (INSERT, UPDATE, DELETE, DROP, etc.) require the --write flag.
 
     \b
     Examples:
       hologres sql run "SELECT * FROM users LIMIT 10"
+      hologres sql run --write "INSERT INTO logs VALUES (1, 'test')"
       hologres sql run --no-limit-check "SELECT * FROM large_table"
     """
     dsn = ctx.obj.get("dsn")
@@ -82,16 +87,18 @@ def run_cmd(ctx: click.Context, query: str, with_schema: bool,
     if len(statements) > 1:
         results = []
         for stmt in statements:
-            r = _execute_single(stmt, dsn, fmt, with_schema, no_limit_check, no_mask)
+            r = _execute_single(stmt, dsn, fmt, with_schema, no_limit_check, no_mask,
+                                write_allowed=write_allowed)
             results.append(r)
         if fmt == FORMAT_JSON:
             print_output(success({"statements": results, "count": len(results)}))
     else:
-        _execute_single(query, dsn, fmt, with_schema, no_limit_check, no_mask, print_result=True)
+        _execute_single(query, dsn, fmt, with_schema, no_limit_check, no_mask,
+                        write_allowed=write_allowed, print_result=True)
 
 
 def _execute_single(query: str, dsn, fmt, with_schema, no_limit_check, no_mask,
-                     print_result=False) -> dict[str, Any]:
+                     write_allowed=False, print_result=False) -> dict[str, Any]:
     start_time = time.time()
     try:
         conn = get_connection(dsn)
@@ -102,15 +109,47 @@ def _execute_single(query: str, dsn, fmt, with_schema, no_limit_check, no_mask,
 
     query = query.strip()
 
-    # Block all write operations
+    # Write operation guard: require --write flag
     if _is_write_operation(query):
-        log_operation("sql", sql=query, dsn_masked=conn.masked_dsn, success=False,
-                      error_code="WRITE_BLOCKED")
-        msg = "Write operations (INSERT, UPDATE, DELETE, DROP, etc.) are not allowed"
-        if print_result:
-            print_output(error("WRITE_BLOCKED", msg, fmt))
-        conn.close()
-        return {"error": {"code": "WRITE_BLOCKED", "message": msg}}
+        if not write_allowed:
+            log_operation("sql", sql=query, dsn_masked=conn.masked_dsn, success=False,
+                          error_code="WRITE_GUARD_ERROR")
+            msg = "Write operations require the --write flag."
+            if print_result:
+                print_output(write_guard_error(fmt))
+            conn.close()
+            return {"error": {"code": "WRITE_GUARD_ERROR", "message": msg}}
+
+        # Dangerous write check: DELETE/UPDATE without WHERE
+        dangerous = _check_dangerous_write(query)
+        if dangerous:
+            log_operation("sql", sql=query, dsn_masked=conn.masked_dsn, success=False,
+                          error_code="DANGEROUS_WRITE_BLOCKED")
+            msg = f"{dangerous} without WHERE clause is blocked."
+            if print_result:
+                print_output(dangerous_write_error(dangerous, fmt))
+            conn.close()
+            return {"error": {"code": "DANGEROUS_WRITE_BLOCKED", "message": msg}}
+
+        # Execute write operation
+        try:
+            rows = conn.execute(query)
+            duration_ms = (time.time() - start_time) * 1000
+            log_operation("sql", sql=query, dsn_masked=conn.masked_dsn, success=True,
+                          row_count=len(rows) if rows else 0, duration_ms=duration_ms)
+            result = {"operation": "write", "rows": rows, "count": len(rows) if rows else 0}
+            if print_result:
+                print_output(success(result, fmt))
+            return result
+        except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+            log_operation("sql", sql=query, dsn_masked=conn.masked_dsn, success=False,
+                          error_code="QUERY_ERROR", error_message=str(e), duration_ms=duration_ms)
+            if print_result:
+                print_output(query_error(str(e), fmt))
+            return {"error": {"code": "QUERY_ERROR", "message": str(e)}}
+        finally:
+            conn.close()
 
     try:
         is_select = _is_select(query)
@@ -199,7 +238,20 @@ def _is_select(query: str) -> bool:
     return bool(SELECT_PATTERN.match(query))
 
 
+def _check_dangerous_write(query: str) -> str | None:
+    """Check if a write operation is dangerous (DELETE/UPDATE without WHERE).
 
+    Returns the operation type string (e.g. "DELETE", "UPDATE") if dangerous,
+    None otherwise.
+    """
+    match = re.match(r"^\s*(\w+)", query, re.IGNORECASE)
+    if not match:
+        return None
+    operation = match.group(1).upper()
+    if operation in ("DELETE", "UPDATE"):
+        if not re.search(r"\bWHERE\b", query, re.IGNORECASE):
+            return operation
+    return None
 def _has_limit(query: str) -> bool:
     return bool(LIMIT_PATTERN.search(query))
 

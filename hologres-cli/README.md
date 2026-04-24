@@ -251,12 +251,21 @@ hologres sql run --no-limit-check "SELECT * FROM large_table"
 
 ### Write Protection
 
-All write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) are blocked:
+Write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) require the `--write` flag:
 
 ```bash
-# This will be blocked
+# This will return WRITE_GUARD_ERROR
 hologres sql run "INSERT INTO logs VALUES (1, 'test')"
-# Error: WRITE_BLOCKED - Write operations are not allowed
+
+# Use --write flag to allow write operations
+hologres sql run --write "INSERT INTO logs VALUES (1, 'test')"
+
+# DELETE/UPDATE without WHERE clause is blocked even with --write
+hologres sql run --write "DELETE FROM users"
+# Error: DANGEROUS_WRITE_BLOCKED - DELETE without WHERE clause is blocked
+
+# DELETE/UPDATE with WHERE clause is allowed
+hologres sql run --write "DELETE FROM users WHERE id = 1"
 ```
 
 ## Error Codes
@@ -266,7 +275,8 @@ hologres sql run "INSERT INTO logs VALUES (1, 'test')"
 | `CONNECTION_ERROR` | Failed to connect to database |
 | `QUERY_ERROR` | SQL execution error |
 | `LIMIT_REQUIRED` | Query needs LIMIT clause |
-| `WRITE_BLOCKED` | Write operation not allowed |
+| `WRITE_GUARD_ERROR` | Write operation attempted without `--write` flag |
+| `DANGEROUS_WRITE_BLOCKED` | DELETE/UPDATE without WHERE clause |
 
 ## Sensitive Data Masking
 
