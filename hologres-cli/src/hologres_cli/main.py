@@ -39,7 +39,7 @@ def cli(ctx: click.Context, dsn: Optional[str], format: str) -> None:
     ctx.obj["format"] = format
 
 
-from .commands import schema, sql, data, status, instance, warehouse, table  # noqa: E402
+from .commands import schema, sql, data, status, instance, warehouse, table, view  # noqa: E402
 
 cli.add_command(schema.schema_cmd)
 cli.add_command(sql.sql_cmd)
@@ -48,6 +48,7 @@ cli.add_command(status.status_cmd)
 cli.add_command(instance.instance_cmd)
 cli.add_command(warehouse.warehouse_cmd)
 cli.add_command(table.table_cmd)
+cli.add_command(view.view_cmd)
 
 
 @cli.command("ai-guide")

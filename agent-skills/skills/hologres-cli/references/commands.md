@@ -342,6 +342,37 @@ hologres table properties public.my_table
 }
 ```
 
+## view
+
+View management commands.
+
+### view list
+
+List all views in the database (excluding system schemas).
+
+```bash
+# List all views
+hologres view list
+
+# Filter by schema
+hologres view list --schema public
+hologres view list -s myschema
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "rows": [
+      {"schema": "public", "view_name": "active_users", "owner": "admin"},
+      {"schema": "analytics", "view_name": "daily_stats", "owner": "analyst"}
+    ],
+    "count": 2
+  }
+}
+```
+
 ## history
 
 Show command history.
