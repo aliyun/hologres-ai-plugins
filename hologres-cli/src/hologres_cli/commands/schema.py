@@ -83,7 +83,8 @@ def _list_tables(dsn: str, schema_name: Optional[str], fmt: str, operation: str 
 @click.pass_context
 def tables_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
     """List all tables in the database."""
-    _list_tables(ctx.obj.get("dsn"), schema_name, ctx.obj.get("format", FORMAT_JSON))
+    _list_tables(ctx.obj.get("dsn"), schema_name,
+                 ctx.obj.get("format", FORMAT_JSON))
 
 
 def fetch_table_structure(conn, schema_name: str, table_name: str) -> dict | None:
@@ -119,7 +120,8 @@ def fetch_table_structure(conn, schema_name: str, table_name: str) -> dict | Non
             AND tc.table_schema = %s AND tc.table_name = %s
         ORDER BY kcu.ordinal_position
     """
-    pk_columns = [r["column_name"] for r in conn.execute(pk_sql, (schema_name, table_name))]
+    pk_columns = [r["column_name"]
+                  for r in conn.execute(pk_sql, (schema_name, table_name))]
 
     return {
         "schema": schema_name,
@@ -154,7 +156,8 @@ def describe_cmd(ctx: click.Context, table: str) -> None:
         result = fetch_table_structure(conn, schema_name, table_name)
 
         if result is None:
-            print_output(error("TABLE_NOT_FOUND", f"Table '{schema_name}.{table_name}' not found", fmt))
+            print_output(
+                error("TABLE_NOT_FOUND", f"Table '{schema_name}.{table_name}' not found", fmt))
             return
 
         duration_ms = (time.time() - start_time) * 1000
@@ -200,14 +203,15 @@ def _dump_table_ddl(dsn: str, table: str, fmt: str, operation: str = "schema.dum
         _validate_identifier(table_name, "table name")
 
         # Use psycopg.sql.Identifier for safe identifier escaping
-        query = sql.SQL("SELECT hg_dump_script({})").format(
+        query = sql.SQL("SELECT hg_dump_script('{}')").format(
             sql.Identifier(schema_name, table_name)
         )
         dump_sql = query.as_string(conn.conn)
         result = conn.execute(dump_sql)
 
         if not result or not result[0]:
-            print_output(error("TABLE_NOT_FOUND", f"Table '{schema_name}.{table_name}' not found", fmt))
+            print_output(
+                error("TABLE_NOT_FOUND", f"Table '{schema_name}.{table_name}' not found", fmt))
             return
 
         ddl = result[0]["hg_dump_script"]
@@ -217,7 +221,8 @@ def _dump_table_ddl(dsn: str, table: str, fmt: str, operation: str = "schema.dum
                       duration_ms=duration_ms, extra={"table": table})
 
         if fmt == FORMAT_JSON:
-            print_output(success({"schema": schema_name, "table": table_name, "ddl": ddl}))
+            print_output(
+                success({"schema": schema_name, "table": table_name, "ddl": ddl}))
         else:
             print_output(ddl)
     except ValueError as e:
@@ -247,7 +252,8 @@ def dump_cmd(ctx: click.Context, table: str) -> None:
       hologres schema dump public.my_table
       hologres schema dump myschema.orders
     """
-    _dump_table_ddl(ctx.obj.get("dsn"), table, ctx.obj.get("format", FORMAT_JSON))
+    _dump_table_ddl(ctx.obj.get("dsn"), table,
+                    ctx.obj.get("format", FORMAT_JSON))
 
 
 @schema_cmd.command("size")
@@ -298,7 +304,8 @@ def size_cmd(ctx: click.Context, table: str) -> None:
         result = conn.execute(size_sql)
 
         if not result or not result[0]:
-            print_output(error("TABLE_NOT_FOUND", f"Table '{full_table_name}' not found", fmt))
+            print_output(
+                error("TABLE_NOT_FOUND", f"Table '{full_table_name}' not found", fmt))
             return
 
         size_pretty = result[0]["size"]
