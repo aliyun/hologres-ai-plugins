@@ -252,6 +252,8 @@ def _check_dangerous_write(query: str) -> str | None:
         if not re.search(r"\bWHERE\b", query, re.IGNORECASE):
             return operation
     return None
+
+
 def _has_limit(query: str) -> bool:
     return bool(LIMIT_PATTERN.search(query))
 
