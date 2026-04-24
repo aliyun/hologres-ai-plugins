@@ -69,6 +69,7 @@ def _generate_ai_guide() -> str:
 Set DSN: `--dsn "hologres://user:pass@host:port/db"` or `HOLOGRES_DSN` env var.
 
 ## Commands
+- `hologres table list` - List tables (with optional --schema filter)
 - `hologres schema tables` - List tables
 - `hologres schema describe <table>` - Describe table
 - `hologres schema dump` - Export DDL

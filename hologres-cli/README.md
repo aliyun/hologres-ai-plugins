@@ -131,6 +131,17 @@ hologres warehouse
 hologres warehouse <warehouse_name>
 ```
 
+### Table Management
+
+```bash
+# List all tables
+hologres table list
+
+# List tables in a specific schema
+hologres table list --schema public
+hologres table list -s myschema
+```
+
 ### Schema Inspection
 
 ```bash
@@ -153,6 +164,13 @@ hologres schema size public.my_table
 ### Table Management
 
 ```bash
+# List all tables
+hologres table list
+
+# List tables in a specific schema
+hologres table list --schema public
+hologres table list -s myschema
+
 # Export DDL using hg_dump_script()
 hologres table dump <schema.table>
 hologres table dump public.my_table
