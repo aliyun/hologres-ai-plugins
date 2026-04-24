@@ -82,3 +82,4 @@ Three bundled skills:
 - Test markers: `@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.slow`
 - Hologres is a database that uses the PostgreSQL protocol.
 - schema.py是老的实现无需继续更新，新的实现迁移到 table.py 中
+- 当在 @hologres-cli 下实现/修改命令后，记得同时更新文档：@README.md @README_CN.md @hologres-cli/README.md @agent-skills/skills/hologres-cli/SKILL.md @agent-skills/skills/hologres-cli/references/commands.md
