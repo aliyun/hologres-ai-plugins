@@ -10,6 +10,9 @@ AI-agent-friendly command-line interface for Hologres database with safety guard
 - **Sensitive Data Masking**: Auto-masks phone, email, password fields
 - **Audit Logging**: All operations logged to `~/.hologres/sql-history.jsonl`
 
+## Notes
+- schema.py是老的实现无需继续更新，新的实现迁移到 table.py 中
+
 ## Installation
 
 Requires Python 3.11+

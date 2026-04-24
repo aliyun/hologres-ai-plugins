@@ -80,3 +80,4 @@ Three bundled skills:
 - Shared command logic (e.g., `_list_tables`, `_dump_table_ddl`) lives in `schema.py` and is imported by `table.py` — when adding overlapping commands, extract to a shared function first
 - Test markers: `@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.slow`
 - Hologres is a database that uses the PostgreSQL protocol.
+- schema.py是老的实现无需继续更新，新的实现迁移到 table.py 中
