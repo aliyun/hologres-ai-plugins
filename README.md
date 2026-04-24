@@ -44,6 +44,7 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres schema dump <schema.table>` | Export DDL |
 | `hologres schema size <schema.table>` | Get table storage size |
 | `hologres sql run "<query>"` | Execute read-only SQL |
+| `hologres sql explain "<query>"` | Show query execution plan |
 | `hologres data export <table> -f out.csv` | Export table to CSV |
 | `hologres data import <table> -f in.csv` | Import CSV to table |
 | `hologres data count <table>` | Count rows |

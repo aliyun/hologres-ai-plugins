@@ -200,6 +200,52 @@ def _execute_single(query: str, dsn, fmt, with_schema, no_limit_check, no_mask,
         conn.close()
 
 
+@sql_cmd.command("explain")
+@click.argument("query")
+@click.pass_context
+def explain_cmd(ctx: click.Context, query: str) -> None:
+    """Show execution plan for a SQL query.
+
+    \b
+    Examples:
+      hologres sql explain "SELECT * FROM orders"
+      hologres sql explain "SELECT * FROM orders WHERE status = 'active'"
+    """
+    dsn = ctx.obj.get("dsn")
+    fmt = ctx.obj.get("format", FORMAT_JSON)
+
+    start_time = time.time()
+    try:
+        conn = get_connection(dsn)
+    except DSNError as e:
+        print_output(connection_error(str(e), fmt))
+        return
+
+    explain_sql = f"EXPLAIN {query}"
+
+    try:
+        rows = conn.execute(explain_sql)
+        duration_ms = (time.time() - start_time) * 1000
+
+        # EXPLAIN returns [{"QUERY PLAN": "..."}] format
+        plan_lines = [row.get("QUERY PLAN", str(row)) for row in rows] if rows else []
+
+        log_operation("sql.explain", sql=explain_sql, dsn_masked=conn.masked_dsn,
+                      success=True, duration_ms=duration_ms)
+
+        result = {"plan": plan_lines, "query": query}
+        print_output(success(result, fmt))
+
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation("sql.explain", sql=explain_sql, dsn_masked=conn.masked_dsn,
+                      success=False, error_code="QUERY_ERROR",
+                      error_message=str(e), duration_ms=duration_ms)
+        print_output(query_error(str(e), fmt))
+    finally:
+        conn.close()
+
+
 def _split_statements(query: str) -> list[str]:
     statements = []
     current = []

@@ -155,6 +155,29 @@ hologres sql run --write "DELETE FROM logs WHERE created_at < '2024-01-01'"
 | `--no-limit-check` | Disable row limit protection |
 | `--no-mask` | Disable sensitive data masking |
 
+### sql explain
+
+Show execution plan for a SQL query.
+
+```bash
+hologres sql explain "SELECT * FROM orders"
+hologres sql explain "SELECT * FROM orders WHERE status = 'active'"
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "plan": [
+      "Seq Scan on orders  (cost=0.00..35.50 rows=2550 width=36)",
+      "  Filter: (status = 'active'::text)"
+    ],
+    "query": "SELECT * FROM orders WHERE status = 'active'"
+  }
+}
+```
+
 ## data
 
 Data import/export commands.
