@@ -553,3 +553,55 @@ class TestSqlCmd:
 
         assert result.exit_code == 0
         assert "Alice" in result.output
+
+
+class TestSqlGroupCompatibility:
+    """Tests for backward compatibility of sql group with 'run' subcommand."""
+
+    def test_sql_run_explicit(self, mock_get_connection):
+        """Test explicit 'sql run' subcommand."""
+        mock_get_connection.execute.return_value = [{"id": 1}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "run", "SELECT 1"])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+
+    def test_sql_backward_compat(self, mock_get_connection):
+        """Test backward compatible 'sql <query>' form."""
+        mock_get_connection.execute.return_value = [{"id": 1}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "SELECT 1"])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+
+    def test_sql_run_with_options(self, mock_get_connection):
+        """Test 'sql run' with options."""
+        mock_get_connection.execute.return_value = [{"id": 1}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "run", "--no-limit-check", "SELECT * FROM t"])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+
+    def test_sql_backward_compat_with_options(self, mock_get_connection):
+        """Test backward compat with options."""
+        mock_get_connection.execute.return_value = [{"id": 1}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "--no-limit-check", "SELECT * FROM t"])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+
+    def test_sql_help_shows_subcommands(self):
+        """Test 'sql --help' shows available subcommands including 'run'."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "--help"])
+        assert "run" in result.output
+
+    def test_sql_run_help(self):
+        """Test 'sql run --help' shows run command help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "run", "--help"])
+        assert "QUERY" in result.output

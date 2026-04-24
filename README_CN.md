@@ -43,7 +43,7 @@ hologres-ai-plugins/
 | `hologres schema describe <table>` | 查看表结构 |
 | `hologres schema dump <schema.table>` | 导出 DDL |
 | `hologres schema size <schema.table>` | 查看表存储大小 |
-| `hologres sql "<query>"` | 执行只读 SQL 查询 |
+| `hologres sql run "<query>"` | 执行只读 SQL 查询 |
 | `hologres data export <table> -f out.csv` | 导出表数据到 CSV |
 | `hologres data import <table> -f in.csv` | 从 CSV 导入数据到表 |
 | `hologres data count <table>` | 统计行数 |
@@ -67,7 +67,7 @@ hologres status
 hologres -f table schema tables
 
 # 查询数据
-hologres sql "SELECT * FROM orders LIMIT 10"
+hologres sql run "SELECT * FROM orders LIMIT 10"
 ```
 
 完整文档请参考 [hologres-cli/README.md](hologres-cli/README.md)。

@@ -31,7 +31,7 @@ def cli(ctx: click.Context, dsn: Optional[str], format: str) -> None:
     Examples:
       hologres schema tables
       hologres schema describe my_table
-      hologres sql "SELECT * FROM users LIMIT 10"
+      hologres sql run "SELECT * FROM users LIMIT 10"
       hologres status
     """
     ctx.ensure_object(dict)
@@ -71,8 +71,8 @@ Set DSN: `--dsn "hologres://user:pass@host:port/db"` or `HOLOGRES_DSN` env var.
 - `hologres schema tables` - List tables
 - `hologres schema describe <table>` - Describe table
 - `hologres schema dump` - Export DDL
-- `hologres sql "<query>"` - Execute SQL (read-only by default)
-- `hologres sql --write "<query>"` - Execute write SQL
+- `hologres sql run "<query>"` - Execute SQL (read-only by default)
+- `hologres sql run --write "<query>"` - Execute write SQL
 - `hologres data export <table> -f <file>` - Export to CSV
 - `hologres data import <table> -f <file>` - Import from CSV
 - `hologres data count <table>` - Count rows

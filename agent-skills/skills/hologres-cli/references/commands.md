@@ -124,11 +124,15 @@ hologres schema dump --table my_table
 
 Execute SQL queries.
 
+### sql run
+
+Execute a SQL query (read-only by default).
+
 ### Read-only queries
 
 ```bash
-hologres sql "SELECT * FROM users LIMIT 10"
-hologres sql "SELECT count(*) FROM orders"
+hologres sql run "SELECT * FROM users LIMIT 10"
+hologres sql run "SELECT count(*) FROM orders"
 ```
 
 ### Write operations
@@ -137,13 +141,13 @@ Requires `--write` flag.
 
 ```bash
 # INSERT
-hologres sql --write "INSERT INTO logs VALUES (now(), 'event')"
+hologres sql run --write "INSERT INTO logs VALUES (now(), 'event')"
 
 # UPDATE (must have WHERE)
-hologres sql --write "UPDATE users SET status='active' WHERE id=123"
+hologres sql run --write "UPDATE users SET status='active' WHERE id=123"
 
 # DELETE (must have WHERE)
-hologres sql --write "DELETE FROM logs WHERE created_at < '2024-01-01'"
+hologres sql run --write "DELETE FROM logs WHERE created_at < '2024-01-01'"
 ```
 
 ### Options

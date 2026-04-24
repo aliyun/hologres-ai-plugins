@@ -31,13 +31,40 @@ LIMIT_PATTERN = re.compile(r"\bLIMIT\s+\d+", re.IGNORECASE)
 SELECT_PATTERN = re.compile(r"^\s*SELECT\b", re.IGNORECASE)
 
 
-@click.command("sql")
+class SqlGroup(click.Group):
+    """Custom group that defaults to 'run' subcommand for backward compatibility.
+
+    Allows both:
+      hologres sql run "SELECT * FROM users"   (new recommended form)
+      hologres sql "SELECT * FROM users"        (backward compatible)
+    """
+
+    def parse_args(self, ctx, args):
+        if args and args[0] not in self.commands and args[0] not in ('--help', '-h'):
+            args = ['run'] + args
+        return super().parse_args(ctx, args)
+
+
+@click.group("sql", cls=SqlGroup)
+@click.pass_context
+def sql_cmd(ctx: click.Context) -> None:
+    """Execute SQL queries with safety guardrails.
+
+    \b
+    Examples:
+      hologres sql run "SELECT * FROM users LIMIT 10"
+      hologres sql run --no-limit-check "SELECT * FROM large_table"
+    """
+    pass
+
+
+@sql_cmd.command("run")
 @click.argument("query")
 @click.option("--with-schema", "with_schema", is_flag=True, help="Include schema context")
 @click.option("--no-limit-check", "no_limit_check", is_flag=True, help="Disable row limit check")
 @click.option("--no-mask", "no_mask", is_flag=True, help="Disable sensitive field masking")
 @click.pass_context
-def sql_cmd(ctx: click.Context, query: str, with_schema: bool,
+def run_cmd(ctx: click.Context, query: str, with_schema: bool,
             no_limit_check: bool, no_mask: bool) -> None:
     """Execute a read-only SQL query with safety guardrails.
 
@@ -45,8 +72,8 @@ def sql_cmd(ctx: click.Context, query: str, with_schema: bool,
 
     \b
     Examples:
-      hologres sql "SELECT * FROM users LIMIT 10"
-      hologres sql --no-limit-check "SELECT * FROM large_table"
+      hologres sql run "SELECT * FROM users LIMIT 10"
+      hologres sql run --no-limit-check "SELECT * FROM large_table"
     """
     dsn = ctx.obj.get("dsn")
     fmt = ctx.obj.get("format", FORMAT_JSON)

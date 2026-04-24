@@ -154,10 +154,10 @@ hologres schema size public.my_table
 
 ```bash
 # Read-only query (LIMIT required for >100 rows)
-hologres sql "SELECT * FROM users LIMIT 10"
+hologres sql run "SELECT * FROM users LIMIT 10"
 
 # Disable row limit check
-hologres sql --no-limit-check "SELECT * FROM large_table"
+hologres sql run --no-limit-check "SELECT * FROM large_table"
 ```
 
 > **Note:** Write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, etc.) are blocked for safety.
@@ -240,13 +240,13 @@ Queries without `LIMIT` that return more than 100 rows will fail with `LIMIT_REQ
 
 ```bash
 # This will fail if table has >100 rows
-hologres sql "SELECT * FROM large_table"
+hologres sql run "SELECT * FROM large_table"
 
 # Add LIMIT to fix
-hologres sql "SELECT * FROM large_table LIMIT 50"
+hologres sql run "SELECT * FROM large_table LIMIT 50"
 
 # Or disable check (use with caution)
-hologres sql --no-limit-check "SELECT * FROM large_table"
+hologres sql run --no-limit-check "SELECT * FROM large_table"
 ```
 
 ### Write Protection
@@ -255,7 +255,7 @@ All write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRA
 
 ```bash
 # This will be blocked
-hologres sql "INSERT INTO logs VALUES (1, 'test')"
+hologres sql run "INSERT INTO logs VALUES (1, 'test')"
 # Error: WRITE_BLOCKED - Write operations are not allowed
 ```
 
@@ -283,7 +283,7 @@ The CLI automatically masks sensitive fields based on column names:
 Disable with `--no-mask`:
 
 ```bash
-hologres sql --no-mask "SELECT * FROM users LIMIT 10"
+hologres sql run --no-mask "SELECT * FROM users LIMIT 10"
 ```
 
 ## Examples
@@ -299,7 +299,7 @@ hologres status
 hologres -f table schema tables
 
 # Query with JSON output
-hologres sql "SELECT * FROM orders WHERE status='pending' LIMIT 20"
+hologres sql run "SELECT * FROM orders WHERE status='pending' LIMIT 20"
 
 # Check warehouse info
 hologres warehouse

@@ -43,7 +43,7 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres schema describe <table>` | Show table structure |
 | `hologres schema dump <schema.table>` | Export DDL |
 | `hologres schema size <schema.table>` | Get table storage size |
-| `hologres sql "<query>"` | Execute read-only SQL |
+| `hologres sql run "<query>"` | Execute read-only SQL |
 | `hologres data export <table> -f out.csv` | Export table to CSV |
 | `hologres data import <table> -f in.csv` | Import CSV to table |
 | `hologres data count <table>` | Count rows |
@@ -67,7 +67,7 @@ hologres status
 hologres -f table schema tables
 
 # Query data
-hologres sql "SELECT * FROM orders LIMIT 10"
+hologres sql run "SELECT * FROM orders LIMIT 10"
 ```
 
 For full documentation, see [hologres-cli/README.md](hologres-cli/README.md).

@@ -46,7 +46,7 @@ hologres status
 hologres schema tables
 
 # Query data (JSON output by default)
-hologres sql "SELECT * FROM orders LIMIT 10"
+hologres sql run "SELECT * FROM orders LIMIT 10"
 ```
 
 ## Core Commands
@@ -60,8 +60,8 @@ hologres sql "SELECT * FROM orders LIMIT 10"
 | `hologres schema describe <table>` | Show table structure |
 | `hologres schema dump <schema.table>` | Export DDL |
 | `hologres schema size <schema.table>` | Get table storage size |
-| `hologres sql "<query>"` | Execute read-only SQL |
-| `hologres sql --write "<dml>"` | Execute write SQL |
+| `hologres sql run "<query>"` | Execute read-only SQL |
+| `hologres sql run --write "<dml>"` | Execute write SQL |
 | `hologres data export <table> -f out.csv` | Export to CSV |
 | `hologres data import <table> -f in.csv` | Import from CSV |
 | `hologres data count <table>` | Count rows |
@@ -94,20 +94,20 @@ Queries without `LIMIT` returning >100 rows fail with `LIMIT_REQUIRED`.
 
 ```bash
 # Will fail if >100 rows
-hologres sql "SELECT * FROM large_table"
+hologres sql run "SELECT * FROM large_table"
 
 # Fix: add LIMIT
-hologres sql "SELECT * FROM large_table LIMIT 50"
+hologres sql run "SELECT * FROM large_table LIMIT 50"
 
 # Or disable check
-hologres sql --no-limit-check "SELECT * FROM large_table"
+hologres sql run --no-limit-check "SELECT * FROM large_table"
 ```
 
 ### 2. Write Protection
 Write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) require `--write` flag.
 
 ```bash
-hologres sql --write "INSERT INTO logs VALUES (1, 'test')"
+hologres sql run --write "INSERT INTO logs VALUES (1, 'test')"
 ```
 
 ### 3. Dangerous Write Blocking
@@ -115,10 +115,10 @@ DELETE/UPDATE without WHERE clause are blocked.
 
 ```bash
 # Blocked
-hologres sql --write "DELETE FROM users"
+hologres sql run --write "DELETE FROM users"
 
 # Must have WHERE
-hologres sql --write "DELETE FROM users WHERE status='inactive'"
+hologres sql run --write "DELETE FROM users WHERE status='inactive'"
 ```
 
 ## Error Codes
@@ -141,7 +141,7 @@ Auto-masks by column name pattern:
 - email → `j***@example.com`
 - password/secret/token → `********`
 
-Disable: `hologres sql --no-mask "SELECT * FROM users LIMIT 10"`
+Disable: `hologres sql run --no-mask "SELECT * FROM users LIMIT 10"`
 
 ## References
 
