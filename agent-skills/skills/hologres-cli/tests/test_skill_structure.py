@@ -160,7 +160,7 @@ class TestReferenceFiles:
         assert len(safety_md) > 100, "safety-features.md should have substantial content"
 
     @pytest.mark.parametrize("section", [
-        "status", "instance", "warehouse", "schema", "sql", "data", "history"
+        "status", "instance", "warehouse", "schema", "sql", "data", "history", "guc"
     ])
     def test_commands_md_documents_command(self, commands_md, section):
         assert section.lower() in commands_md.lower(), \

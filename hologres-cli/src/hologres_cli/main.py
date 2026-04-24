@@ -39,7 +39,7 @@ def cli(ctx: click.Context, dsn: Optional[str], format: str) -> None:
     ctx.obj["format"] = format
 
 
-from .commands import schema, sql, data, status, instance, warehouse, table, view, extension  # noqa: E402
+from .commands import schema, sql, data, status, instance, warehouse, table, view, extension, guc  # noqa: E402
 
 cli.add_command(schema.schema_cmd)
 cli.add_command(sql.sql_cmd)
@@ -50,6 +50,7 @@ cli.add_command(warehouse.warehouse_cmd)
 cli.add_command(table.table_cmd)
 cli.add_command(view.view_cmd)
 cli.add_command(extension.extension_cmd)
+cli.add_command(guc.guc_cmd)
 
 
 @cli.command("ai-guide")
@@ -81,6 +82,8 @@ Set DSN: `--dsn "hologres://user:pass@host:port/db"` or `HOLOGRES_DSN` env var.
 - `hologres sql run --write "<query>"` - Execute write SQL
 - `hologres extension list` - List installed extensions
 - `hologres extension create <name>` - Create an extension
+- `hologres guc show <param>` - Show GUC parameter value
+- `hologres guc set <param> <value>` - Set GUC parameter (database level, persistent)
 - `hologres data export <table> -f <file>` - Export to CSV
 - `hologres data import <table> -f <file>` - Import from CSV
 - `hologres data count <table>` - Count rows

@@ -82,11 +82,11 @@ SET hg_experimental_query_mem_limit = 10737418240;  -- 10GB
 
 ## Scope
 
-| Scope | Syntax |
-|-------|--------|
-| Session | `SET param = value;` |
-| Transaction | `SET LOCAL param = value;` |
-| Database | `ALTER DATABASE db SET param = value;` |
+| Scope | SQL Syntax | CLI Equivalent |
+|-------|-----------|----------------|
+| Session | `SET param = value;` | `hologres sql run "SET param = value"` |
+| Transaction | `SET LOCAL param = value;` | `hologres sql run "SET LOCAL param = value"` |
+| Database | `ALTER DATABASE db SET param = value;` | `hologres guc set param value` |
 
 ```sql
 -- Reset to default
@@ -103,8 +103,20 @@ SET optimizer_join_order = 'query';
 SET optimizer_force_multistage_agg = on;
 ```
 
+Persisted via CLI:
+```bash
+hologres guc set optimizer_join_order query
+hologres guc set optimizer_force_multistage_agg on
+```
+
 ### Memory Issues
 ```sql
 SET hg_experimental_query_mem_limit = 5368709120;
 SET hg_experimental_enable_cross_join_rewrite = off;
+```
+
+Persisted via CLI:
+```bash
+hologres guc set hg_experimental_query_mem_limit 5368709120
+hologres guc set hg_experimental_enable_cross_join_rewrite off
 ```

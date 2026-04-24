@@ -2,8 +2,8 @@
 name: hologres-cli
 description: |
   AI-agent-friendly Hologres CLI with safety guardrails and structured JSON output.
-  Use for database operations, schema inspection, SQL execution, and data import/export.
-  Triggers: "hologres cli", "hologres command", "hologres database", "hologres查询"
+  Use for database operations, schema inspection, SQL execution, data import/export, and GUC parameter management.
+  Triggers: "hologres cli", "hologres command", "hologres database", "hologres查询", "hologres guc", "GUC parameter"
 ---
 
 # Hologres CLI
@@ -65,8 +65,11 @@ hologres sql run "SELECT * FROM orders LIMIT 10"
 | `hologres table show <table>` | Show table structure (columns, types, nullable, defaults, primary key, comments) |
 | `hologres table size <schema.table>` | Get table storage size |
 | `hologres table properties <table>` | Show Hologres-specific table properties (orientation, distribution_key, clustering_key, TTL, etc.) |
+| `hologres view list [--schema S]` | List all views |
 | `hologres extension list` | List installed extensions |
 | `hologres extension create <name> [--if-not-exists]` | Create (install) a database extension |
+| `hologres guc show <param>` | Show current value of a GUC parameter |
+| `hologres guc set <param> <value>` | Set GUC parameter at database level (persistent) |
 | `hologres sql run "<query>"` | Execute read-only SQL |
 | `hologres sql run --write "<dml>"` | Execute write SQL |
 | `hologres data export <table> -f out.csv` | Export to CSV |

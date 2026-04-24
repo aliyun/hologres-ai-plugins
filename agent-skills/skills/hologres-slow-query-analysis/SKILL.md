@@ -141,6 +141,12 @@ SET log_min_duration_statement = '250ms';
 ALTER DATABASE dbname SET hg_query_log_retention_time_sec = 2592000;
 ```
 
+Or use the CLI for database-level settings:
+```bash
+hologres guc set log_min_duration_statement '250ms'
+hologres guc set hg_query_log_retention_time_sec 2592000
+```
+
 ## References
 
 | Document | Content |

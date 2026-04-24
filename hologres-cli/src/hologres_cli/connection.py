@@ -192,6 +192,11 @@ class HologresConnection:
             self._conn = psycopg.connect(**self._params, autocommit=self.autocommit)
         return self._conn
 
+    @property
+    def database(self) -> str:
+        """Return the database name from the connection DSN."""
+        return self._params["dbname"]
+
     def cursor(self) -> psycopg.Cursor:
         """Create a cursor with dict row factory."""
         return self.conn.cursor(row_factory=dict_row)

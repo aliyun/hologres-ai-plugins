@@ -469,9 +469,67 @@ hologres extension create postgis --if-not-exists
 }
 ```
 
-## history
+## guc
 
-Show command history.
+GUC parameter management commands.
+
+### guc show
+
+Show the current value of a GUC parameter.
+
+```bash
+hologres guc show <param_name>
+```
+
+**Example:**
+```bash
+hologres guc show optimizer_join_order
+hologres guc show statement_timeout
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "param": "optimizer_join_order",
+    "value": "exhaustive"
+  }
+}
+```
+
+### guc set
+
+Set a GUC parameter at the database level (persistent).
+
+This executes `ALTER DATABASE` to set the parameter, which persists across sessions and applies to all new connections to the database.
+
+```bash
+hologres guc set <param_name> <value>
+```
+
+**Example:**
+```bash
+hologres guc set optimizer_join_order query
+hologres guc set statement_timeout '5min'
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "param": "optimizer_join_order",
+    "value": "query",
+    "scope": "database",
+    "database": "mydb"
+  }
+}
+```
+
+> **Note:** The change takes effect for new sessions. Current sessions retain the old value.
+
+## history
 
 ```bash
 # Show recent 20 commands

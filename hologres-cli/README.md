@@ -200,6 +200,19 @@ hologres extension create roaring_bitmap
 hologres extension create postgis --if-not-exists
 ```
 
+### GUC Parameter Management
+
+```bash
+# Show current value of a GUC parameter
+hologres guc show optimizer_join_order
+
+# Set a GUC parameter at database level (persistent)
+hologres guc set optimizer_join_order query
+hologres guc set statement_timeout '5min'
+```
+
+> **Note:** `guc set` sets parameters at the database level using `ALTER DATABASE`, which persists across sessions and applies to all new connections.
+
 ### SQL Execution
 
 ```bash
