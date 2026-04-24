@@ -64,6 +64,8 @@ def mock_psycopg_connection():
     mock_conn.close.return_value = None
     mock_conn.commit.return_value = None
     mock_conn.rollback.return_value = None
+    # Allow psycopg.sql.Composable.as_string() to use fallback encoding path
+    mock_conn.connection = None
     return mock_conn
 
 

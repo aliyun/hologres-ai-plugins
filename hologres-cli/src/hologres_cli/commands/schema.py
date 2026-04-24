@@ -7,6 +7,7 @@ import time
 from typing import Optional
 
 import click
+from psycopg import sql
 
 from ..connection import DSNError, get_connection
 from ..logger import log_operation
@@ -185,8 +186,11 @@ def dump_cmd(ctx: click.Context, table: str) -> None:
         _validate_identifier(schema_name, "schema name")
         _validate_identifier(table_name, "table name")
 
-        # Use validated identifiers for safe SQL construction
-        dump_sql = f'SELECT hg_dump_script("{schema_name}"."{table_name}")'
+        # Use psycopg.sql.Identifier for safe identifier escaping
+        query = sql.SQL("SELECT hg_dump_script({})").format(
+            sql.Identifier(schema_name, table_name)
+        )
+        dump_sql = query.as_string(conn.conn)
         result = conn.execute(dump_sql)
 
         if not result or not result[0]:
@@ -253,11 +257,15 @@ def size_cmd(ctx: click.Context, table: str) -> None:
 
         full_table_name = f"{schema_name}.{table_name}"
 
-        # Use validated identifiers for safe SQL construction
-        size_sql = (
-            f'SELECT pg_size_pretty(pg_relation_size("{schema_name}"."{table_name}")) AS size, '
-            f'pg_relation_size("{schema_name}"."{table_name}") AS size_bytes'
+        # Use psycopg.sql.Identifier for safe identifier escaping
+        query = sql.SQL(
+            "SELECT pg_size_pretty(pg_relation_size({})) AS size, "
+            "pg_relation_size({}) AS size_bytes"
+        ).format(
+            sql.Identifier(schema_name, table_name),
+            sql.Identifier(schema_name, table_name),
         )
+        size_sql = query.as_string(conn.conn)
         result = conn.execute(size_sql)
 
         if not result or not result[0]:

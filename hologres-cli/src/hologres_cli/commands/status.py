@@ -26,7 +26,7 @@ def status_cmd(ctx: click.Context) -> None:
         return
 
     try:
-        raw_version = conn.execute("SELECT version()")[0]["version"]
+        raw_version = conn.execute("SELECT hg_version()")[0]["hg_version"]
         # Extract short version like "Hologres 3.1.36" from full version string
         version = raw_version.split("(")[0].strip() if "(" in raw_version else raw_version
         database = conn.execute("SELECT current_database()")[0]["current_database"]
