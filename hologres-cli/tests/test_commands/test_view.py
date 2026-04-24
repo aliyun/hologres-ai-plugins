@@ -188,3 +188,175 @@ class TestViewListCmd:
         call_kwargs = mock_log.call_args
         assert call_kwargs[1]["success"] is False
         assert call_kwargs[1]["error_code"] == "QUERY_ERROR"
+
+
+MOCK_VIEW_INFO = [
+    {"definition": "SELECT id, name FROM users WHERE active = true", "viewowner": "admin"},
+]
+
+MOCK_VIEW_COLUMNS = [
+    {"column_name": "id", "data_type": "integer", "is_nullable": "NO",
+     "column_default": None, "ordinal_position": 1, "comment": ""},
+    {"column_name": "name", "data_type": "character varying", "is_nullable": "YES",
+     "column_default": None, "ordinal_position": 2, "comment": ""},
+]
+
+
+class TestViewShowCmd:
+    """Tests for view show command."""
+
+    def test_show_cmd_success(self, mock_get_connection):
+        """Test successful view show."""
+        mock_get_connection.execute.side_effect = [MOCK_VIEW_INFO, MOCK_VIEW_COLUMNS]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["view", "show", "active_users"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["schema"] == "public"
+        assert output["data"]["view"] == "active_users"
+        assert output["data"]["owner"] == "admin"
+        assert output["data"]["definition"] == "SELECT id, name FROM users WHERE active = true"
+        assert len(output["data"]["columns"]) == 2
+        mock_get_connection.close.assert_called_once()
+
+    def test_show_cmd_with_schema(self, mock_get_connection):
+        """Test view show with schema.view format."""
+        mock_get_connection.execute.side_effect = [MOCK_VIEW_INFO, MOCK_VIEW_COLUMNS]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["view", "show", "analytics.daily_stats"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["schema"] == "analytics"
+        assert output["data"]["view"] == "daily_stats"
+
+    def test_show_cmd_default_schema(self, mock_get_connection):
+        """Test view show defaults to public schema."""
+        mock_get_connection.execute.side_effect = [MOCK_VIEW_INFO, MOCK_VIEW_COLUMNS]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["view", "show", "my_view"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["data"]["schema"] == "public"
+
+    def test_show_cmd_not_found(self, mock_get_connection):
+        """Test view show with non-existent view."""
+        mock_get_connection.execute.side_effect = [[], []]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["view", "show", "nonexistent"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "VIEW_NOT_FOUND"
+
+    def test_show_cmd_table_format(self, mock_get_connection):
+        """Test table format output only shows columns."""
+        mock_get_connection.execute.side_effect = [MOCK_VIEW_INFO, MOCK_VIEW_COLUMNS]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--format", "table", "view", "show", "active_users"])
+
+        assert result.exit_code == 0
+        assert "id" in result.output
+        assert "integer" in result.output
+
+    def test_show_cmd_csv_format(self, mock_get_connection):
+        """Test CSV format output only shows columns."""
+        mock_get_connection.execute.side_effect = [MOCK_VIEW_INFO, MOCK_VIEW_COLUMNS]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--format", "csv", "view", "show", "active_users"])
+
+        assert result.exit_code == 0
+        assert "id" in result.output
+        assert "integer" in result.output
+
+    def test_show_cmd_connection_error(self, mocker):
+        """Test connection error handling."""
+        mocker.patch("hologres_cli.commands.view.get_connection",
+                     side_effect=DSNError("No DSN configured"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["view", "show", "my_view"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_show_cmd_query_error(self, mock_get_connection):
+        """Test query error handling."""
+        mock_get_connection.execute.side_effect = Exception("Query failed")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["view", "show", "my_view"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+        mock_get_connection.close.assert_called_once()
+
+    def test_show_cmd_invalid_identifier(self, mock_get_connection):
+        """Test invalid identifier in view name."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["view", "show", "invalid;name"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_INPUT"
+
+    def test_show_cmd_logging_success(self, mock_get_connection, mocker):
+        """Test that successful show logs operation."""
+        mock_log = mocker.patch("hologres_cli.commands.view.log_operation")
+        mock_get_connection.execute.side_effect = [MOCK_VIEW_INFO, MOCK_VIEW_COLUMNS]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["view", "show", "active_users"])
+
+        assert result.exit_code == 0
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args
+        assert call_kwargs[1]["success"] is True
+        assert "view.show" in str(call_kwargs)
+
+    def test_show_cmd_logging_failure(self, mock_get_connection, mocker):
+        """Test that failed show logs operation with error."""
+        mock_log = mocker.patch("hologres_cli.commands.view.log_operation")
+        mock_get_connection.execute.side_effect = Exception("DB error")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["view", "show", "my_view"])
+
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args
+        assert call_kwargs[1]["success"] is False
+        assert call_kwargs[1]["error_code"] == "QUERY_ERROR"
+
+    def test_show_cmd_definition_content(self, mock_get_connection):
+        """Test that definition field contains the view SQL."""
+        view_info = [{"definition": "SELECT 1", "viewowner": "testuser"}]
+        mock_get_connection.execute.side_effect = [view_info, MOCK_VIEW_COLUMNS]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["view", "show", "my_view"])
+
+        output = json.loads(result.output)
+        assert output["data"]["definition"] == "SELECT 1"
+
+    def test_show_cmd_columns_empty(self, mock_get_connection):
+        """Test view show with no columns (edge case)."""
+        mock_get_connection.execute.side_effect = [MOCK_VIEW_INFO, []]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["view", "show", "active_users"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["columns"] == []

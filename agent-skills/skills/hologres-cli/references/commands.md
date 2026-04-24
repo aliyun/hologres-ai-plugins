@@ -373,6 +373,43 @@ hologres view list -s myschema
 }
 ```
 
+### view show
+
+Show view structure: definition, columns, types, nullable, defaults, comments.
+
+```bash
+# Show view in public schema
+hologres view show my_view
+
+# Show view in specific schema
+hologres view show analytics.daily_stats
+```
+
+**Output (JSON):**
+```json
+{
+  "ok": true,
+  "data": {
+    "schema": "public",
+    "view": "active_users",
+    "owner": "admin",
+    "definition": "SELECT id, name FROM users WHERE active = true",
+    "columns": [
+      {"column_name": "id", "data_type": "integer", "is_nullable": "NO", "column_default": null, "ordinal_position": 1, "comment": ""},
+      {"column_name": "name", "data_type": "character varying", "is_nullable": "YES", "column_default": null, "ordinal_position": 2, "comment": ""}
+    ]
+  }
+}
+```
+
+**Error (view not found):**
+```json
+{
+  "ok": false,
+  "error": {"code": "VIEW_NOT_FOUND", "message": "View 'public.nonexistent' not found"}
+}
+```
+
 ## extension
 
 Extension management commands.
