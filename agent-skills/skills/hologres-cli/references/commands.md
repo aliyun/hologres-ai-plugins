@@ -270,6 +270,31 @@ hologres table dump myschema.orders
 }
 ```
 
+### table show
+
+Show table structure: columns, types, nullable, defaults, primary key, comments.
+
+```bash
+hologres table show my_table
+hologres table show public.my_table
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "schema": "public",
+    "table": "users",
+    "primary_key": ["id"],
+    "columns": [
+      {"column_name": "id", "data_type": "integer", "is_nullable": "NO", "column_default": null, "ordinal_position": 1, "comment": "primary id"},
+      {"column_name": "name", "data_type": "text", "is_nullable": "YES", "column_default": null, "ordinal_position": 2, "comment": "user name"}
+    ]
+  }
+}
+```
+
 ## history
 
 Show command history.
