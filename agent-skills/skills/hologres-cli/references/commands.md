@@ -10,6 +10,7 @@ Complete command reference for Hologres CLI.
 | `-f, --format` | Output format: json, table, csv, jsonl |
 | `--no-mask` | Disable sensitive data masking |
 | `--no-limit-check` | Disable row limit check |
+| `--version` | Show version and exit |
 
 ## status
 
@@ -117,6 +118,28 @@ hologres schema dump public.my_table
 hologres schema dump myschema.orders
 ```
 
+### schema size
+
+Get storage size of a table using pg_relation_size().
+
+```bash
+hologres schema size public.my_table
+hologres schema size myschema.orders
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "schema": "public",
+    "table": "my_table",
+    "size": "123 MB",
+    "size_bytes": 128974848
+  }
+}
+```
+
 ## sql
 
 Execute SQL queries.
@@ -154,6 +177,7 @@ hologres sql run --write "DELETE FROM logs WHERE created_at < '2024-01-01'"
 | `--write` | Enable write operations |
 | `--no-limit-check` | Disable row limit protection |
 | `--no-mask` | Disable sensitive data masking |
+| `--with-schema` | Include column name/type info in output |
 
 ### sql explain
 
@@ -192,6 +216,9 @@ hologres data export my_table -f output.csv
 
 # Export with custom query
 hologres data export -q "SELECT * FROM users WHERE active=true" -f users.csv
+
+# Export with custom delimiter
+hologres data export my_table -f output.csv --delimiter '|'
 ```
 
 ### data import
@@ -204,6 +231,9 @@ hologres data import my_table -f input.csv
 
 # Import with truncate (clear table first)
 hologres data import my_table -f input.csv --truncate
+
+# Import with custom delimiter
+hologres data import my_table -f input.csv --delimiter '|'
 ```
 
 ### data count

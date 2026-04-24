@@ -43,8 +43,19 @@ hologres-ai-plugins/
 | `hologres schema describe <table>` | 查看表结构 |
 | `hologres schema dump <schema.table>` | 导出 DDL |
 | `hologres schema size <schema.table>` | 查看表存储大小 |
+| `hologres table list [--schema S]` | 列出所有表 |
+| `hologres table dump <schema.table>` | 导出表 DDL |
+| `hologres table show <table>` | 查看表结构（列、类型、主键、注释等） |
+| `hologres table size <schema.table>` | 查看表存储大小 |
+| `hologres table properties <table>` | 查看表属性（存储格式、分布键、TTL 等） |
+| `hologres view list [--schema S]` | 列出所有视图 |
+| `hologres view show <view>` | 查看视图定义和结构 |
 | `hologres sql run "<query>"` | 执行只读 SQL 查询 |
 | `hologres sql explain "<query>"` | 查看 SQL 执行计划 |
+| `hologres extension list` | 列出已安装扩展 |
+| `hologres extension create <name>` | 创建（安装）扩展 |
+| `hologres guc show <param>` | 查看 GUC 参数值 |
+| `hologres guc set <param> <value>` | 设置 GUC 参数（数据库级别，持久化） |
 | `hologres data export <table> -f out.csv` | 导出表数据到 CSV |
 | `hologres data import <table> -f in.csv` | 从 CSV 导入数据到表 |
 | `hologres data count <table>` | 统计行数 |

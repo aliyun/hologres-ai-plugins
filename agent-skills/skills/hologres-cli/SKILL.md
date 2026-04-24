@@ -66,16 +66,18 @@ hologres sql run "SELECT * FROM orders LIMIT 10"
 | `hologres table size <schema.table>` | Get table storage size |
 | `hologres table properties <table>` | Show Hologres-specific table properties (orientation, distribution_key, clustering_key, TTL, etc.) |
 | `hologres view list [--schema S]` | List all views |
+| `hologres view show <view>` | Show view definition and structure |
 | `hologres extension list` | List installed extensions |
 | `hologres extension create <name> [--if-not-exists]` | Create (install) a database extension |
 | `hologres guc show <param>` | Show current value of a GUC parameter |
 | `hologres guc set <param> <value>` | Set GUC parameter at database level (persistent) |
 | `hologres sql run "<query>"` | Execute read-only SQL |
 | `hologres sql run --write "<dml>"` | Execute write SQL |
-| `hologres data export <table> -f out.csv` | Export to CSV |
-| `hologres data import <table> -f in.csv` | Import from CSV |
-| `hologres data count <table>` | Count rows |
-| `hologres history` | Show command history |
+| `hologres sql explain "<query>"` | Show SQL execution plan |
+| `hologres data export <table> -f out.csv [-q <query>] [-d <delimiter>]` | Export to CSV |
+| `hologres data import <table> -f in.csv [-d <delimiter>] [--truncate]` | Import from CSV |
+| `hologres data count <table> [-w <where>]` | Count rows |
+| `hologres history [-n <count>]` | Show command history |
 | `hologres ai-guide` | Generate AI agent guide |
 
 ## Output Formats
@@ -143,6 +145,7 @@ hologres sql run --write "DELETE FROM users WHERE status='inactive'"
 | `WRITE_BLOCKED` | Write operation not allowed |
 | `EXPORT_ERROR` | Data export failed |
 | `IMPORT_ERROR` | Data import failed |
+| `VIEW_NOT_FOUND` | View not found |
 
 ## Sensitive Data Masking
 

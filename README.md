@@ -47,8 +47,15 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres table dump <schema.table>` | Export DDL for a table |
 | `hologres table show <table>` | Show table structure |
 | `hologres table size <schema.table>` | Get table storage size |
+| `hologres table properties <table>` | Show table properties (orientation, distribution_key, TTL, etc.) |
+| `hologres view list [--schema S]` | List all views |
+| `hologres view show <view>` | Show view definition and structure |
 | `hologres sql run "<query>"` | Execute read-only SQL |
 | `hologres sql explain "<query>"` | Show query execution plan |
+| `hologres extension list` | List installed extensions |
+| `hologres extension create <name>` | Create (install) an extension |
+| `hologres guc show <param>` | Show GUC parameter value |
+| `hologres guc set <param> <value>` | Set GUC parameter at database level |
 | `hologres data export <table> -f out.csv` | Export table to CSV |
 | `hologres data import <table> -f in.csv` | Import CSV to table |
 | `hologres data count <table>` | Count rows |

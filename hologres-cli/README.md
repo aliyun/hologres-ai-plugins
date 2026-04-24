@@ -134,17 +134,6 @@ hologres warehouse
 hologres warehouse <warehouse_name>
 ```
 
-### Table Management
-
-```bash
-# List all tables
-hologres table list
-
-# List tables in a specific schema
-hologres table list --schema public
-hologres table list -s myschema
-```
-
 ### Schema Inspection
 
 ```bash
@@ -185,6 +174,25 @@ hologres table show public.my_table
 # Get table storage size
 hologres table size <schema.table>
 hologres table size public.my_table
+
+# Show table properties (orientation, distribution_key, clustering_key, TTL, etc.)
+hologres table properties <table_name>
+hologres table properties public.my_table
+```
+
+### View Management
+
+```bash
+# List all views
+hologres view list
+
+# List views in a specific schema
+hologres view list --schema public
+hologres view list -s myschema
+
+# Show view definition and structure
+hologres view show <view_name>
+hologres view show analytics.daily_stats
 ```
 
 ### Extension Management
@@ -219,11 +227,21 @@ hologres guc set statement_timeout '5min'
 # Read-only query (LIMIT required for >100 rows)
 hologres sql run "SELECT * FROM users LIMIT 10"
 
+# Include column schema in output
+hologres sql run --with-schema "SELECT * FROM users LIMIT 10"
+
 # Disable row limit check
 hologres sql run --no-limit-check "SELECT * FROM large_table"
 ```
 
 > **Note:** Write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, etc.) are blocked for safety.
+
+### SQL Explain
+
+```bash
+# Show execution plan
+hologres sql explain "SELECT * FROM orders WHERE status = 'active'"
+```
 
 ### Data Import/Export
 
@@ -234,11 +252,17 @@ hologres data export my_table -f output.csv
 # Export with custom query
 hologres data export -q "SELECT * FROM users WHERE active=true" -f users.csv
 
+# Export with custom delimiter
+hologres data export my_table -f output.csv --delimiter '|'
+
 # Import CSV to table
 hologres data import my_table -f input.csv
 
 # Import with truncate
 hologres data import my_table -f input.csv --truncate
+
+# Import with custom delimiter
+hologres data import my_table -f input.csv --delimiter '|'
 
 # Count rows
 hologres data count my_table
@@ -340,6 +364,10 @@ hologres sql run --write "DELETE FROM users WHERE id = 1"
 | `LIMIT_REQUIRED` | Query needs LIMIT clause |
 | `WRITE_GUARD_ERROR` | Write operation attempted without `--write` flag |
 | `DANGEROUS_WRITE_BLOCKED` | DELETE/UPDATE without WHERE clause |
+| `WRITE_BLOCKED` | Write operation not allowed |
+| `EXPORT_ERROR` | Data export failed |
+| `IMPORT_ERROR` | Data import failed |
+| `VIEW_NOT_FOUND` | View not found |
 
 ## Sensitive Data Masking
 
