@@ -17,10 +17,6 @@ from ..output import (
     success_rows,
 )
 
-# 系统schema列表，与 _list_tables 保持一致
-_SYSTEM_SCHEMAS = ('pg_catalog', 'information_schema', 'hologres', 'hg_internal')
-
-
 @click.group("view")
 def view_cmd() -> None:
     """View management commands."""
@@ -45,9 +41,9 @@ def list_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
     sql = """
         SELECT schemaname AS schema, viewname AS view_name, viewowner AS owner
         FROM pg_catalog.pg_views
-        WHERE schemaname NOT IN %s
+        WHERE schemaname NOT IN ('pg_catalog', 'information_schema', 'hologres', 'hg_internal')
     """
-    params: list = [_SYSTEM_SCHEMAS]
+    params: list = []
     if schema_name:
         sql += " AND schemaname = %s"
         params.append(schema_name)

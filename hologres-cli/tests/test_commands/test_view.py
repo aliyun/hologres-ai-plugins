@@ -133,6 +133,49 @@ class TestViewListCmd:
         assert call_kwargs[1]["success"] is True
         assert "view.list" in str(call_kwargs)
 
+    def test_list_cmd_sql_uses_inline_not_in(self, mock_get_connection):
+        """Test that view list SQL uses inline NOT IN literals, not parameterized tuple.
+
+        psycopg3 does not support NOT IN %s with a tuple parameter — it produces
+        invalid SQL like 'NOT IN $1'. The system schema names must be inlined.
+        """
+        mock_get_connection.execute.return_value = MOCK_VIEW_ROWS
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["view", "list"])
+
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        sql_arg = call_args[0][0]
+        # SQL should contain inline NOT IN with literal schema names
+        assert "NOT IN ('pg_catalog', 'information_schema', 'hologres', 'hg_internal')" in sql_arg
+        # SQL should NOT contain parameterized NOT IN %s
+        assert "NOT IN %s" not in sql_arg
+        # params should not contain a tuple element
+        params_arg = call_args[0][1] if len(call_args[0]) > 1 else call_args[1].get("params", ())
+        for p in (params_arg or ()):
+            assert not isinstance(p, tuple)
+
+    def test_list_cmd_with_schema_sql_params(self, mock_get_connection):
+        """Test that view list with --schema passes correct params without tuple elements."""
+        mock_get_connection.execute.return_value = [
+            {"schema": "public", "view_name": "active_users", "owner": "admin"},
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["view", "list", "--schema", "public"])
+
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        sql_arg = call_args[0][0]
+        params_arg = call_args[0][1] if len(call_args[0]) > 1 else call_args[1].get("params", ())
+        # SQL should contain inline NOT IN
+        assert "NOT IN ('pg_catalog', 'information_schema', 'hologres', 'hg_internal')" in sql_arg
+        # params should only contain the schema name string, no tuple
+        assert "public" in str(params_arg)
+        for p in (params_arg or ()):
+            assert not isinstance(p, tuple)
+
     def test_list_cmd_logging_failure(self, mock_get_connection, mocker):
         """Test that failed list logs operation with error."""
         mock_log = mocker.patch("hologres_cli.commands.view.log_operation")
