@@ -178,6 +178,10 @@ hologres table dump public.my_table
 # Show table structure (columns, types, nullable, defaults, primary key, comments)
 hologres table show <table_name>
 hologres table show public.my_table
+
+# Get table storage size
+hologres table size <schema.table>
+hologres table size public.my_table
 ```
 
 ### SQL Execution

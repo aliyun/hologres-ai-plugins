@@ -256,21 +256,11 @@ def dump_cmd(ctx: click.Context, table: str) -> None:
                     ctx.obj.get("format", FORMAT_JSON))
 
 
-@schema_cmd.command("size")
-@click.argument("table")
-@click.pass_context
-def size_cmd(ctx: click.Context, table: str) -> None:
-    """Get storage size of a table.
+def _get_table_size(dsn: str, table: str, fmt: str, operation: str = "schema.size") -> None:
+    """Core logic for getting table storage size using pg_relation_size().
 
-    TABLE should be in format 'schema_name.table_name'.
-
-    \b
-    Examples:
-      hologres schema size public.my_table
-      hologres schema size myschema.orders
+    Shared by ``schema size`` and ``table size`` commands.
     """
-    dsn = ctx.obj.get("dsn")
-    fmt = ctx.obj.get("format", FORMAT_JSON)
     start_time = time.time()
 
     try:
@@ -312,7 +302,7 @@ def size_cmd(ctx: click.Context, table: str) -> None:
         size_bytes = result[0]["size_bytes"]
 
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.size", sql=size_sql, dsn_masked=conn.masked_dsn, success=True,
+        log_operation(operation, sql=size_sql, dsn_masked=conn.masked_dsn, success=True,
                       duration_ms=duration_ms, extra={"table": table})
 
         if fmt == FORMAT_JSON:
@@ -326,13 +316,30 @@ def size_cmd(ctx: click.Context, table: str) -> None:
             print_output(f"{full_table_name}: {size_pretty}")
     except ValueError as e:
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.size", dsn_masked=conn.masked_dsn, success=False,
+        log_operation(operation, dsn_masked=conn.masked_dsn, success=False,
                       error_code="INVALID_INPUT", error_message=str(e), duration_ms=duration_ms)
         print_output(error("INVALID_INPUT", str(e), fmt))
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.size", dsn_masked=conn.masked_dsn, success=False,
+        log_operation(operation, dsn_masked=conn.masked_dsn, success=False,
                       error_code="QUERY_ERROR", error_message=str(e), duration_ms=duration_ms)
         print_output(query_error(str(e), fmt))
     finally:
         conn.close()
+
+
+@schema_cmd.command("size")
+@click.argument("table")
+@click.pass_context
+def size_cmd(ctx: click.Context, table: str) -> None:
+    """Get storage size of a table.
+
+    TABLE should be in format 'schema_name.table_name'.
+
+    \b
+    Examples:
+      hologres schema size public.my_table
+      hologres schema size myschema.orders
+    """
+    _get_table_size(ctx.obj.get("dsn"), table,
+                    ctx.obj.get("format", FORMAT_JSON))

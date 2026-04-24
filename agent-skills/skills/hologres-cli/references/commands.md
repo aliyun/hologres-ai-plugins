@@ -295,6 +295,28 @@ hologres table show public.my_table
 }
 ```
 
+### table size
+
+Get storage size of a table using pg_relation_size().
+
+```bash
+hologres table size public.my_table
+hologres table size myschema.orders
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "schema": "public",
+    "table": "my_table",
+    "size": "123 MB",
+    "size_bytes": 128974848
+  }
+}
+```
+
 ## history
 
 Show command history.

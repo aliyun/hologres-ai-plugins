@@ -18,7 +18,7 @@ from ..output import (
     success,
     success_rows,
 )
-from .schema import _dump_table_ddl, _list_tables, fetch_table_structure
+from .schema import _dump_table_ddl, _get_table_size, _list_tables, fetch_table_structure
 
 
 @click.group("table")
@@ -100,3 +100,20 @@ def show_cmd(ctx: click.Context, table: str) -> None:
         print_output(query_error(str(e), fmt))
     finally:
         conn.close()
+
+
+@table_cmd.command("size")
+@click.argument("table")
+@click.pass_context
+def size_cmd(ctx: click.Context, table: str) -> None:
+    """Get storage size of a table.
+
+    TABLE should be in format 'schema_name.table_name'.
+
+    \b
+    Examples:
+      hologres table size public.my_table
+      hologres table size myschema.orders
+    """
+    _get_table_size(ctx.obj.get("dsn"), table, ctx.obj.get("format", FORMAT_JSON),
+                    operation="table.size")
