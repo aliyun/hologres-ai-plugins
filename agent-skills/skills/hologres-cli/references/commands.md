@@ -222,6 +222,33 @@ hologres data count my_table --where "status='active'"
 
 Table management commands.
 
+### table list
+
+List all tables in the database (excluding system schemas).
+
+```bash
+# List all tables
+hologres table list
+
+# Filter by schema
+hologres table list --schema public
+hologres table list -s myschema
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "rows": [
+      {"schema": "public", "table_name": "users", "owner": "admin"},
+      {"schema": "public", "table_name": "orders", "owner": "admin"}
+    ],
+    "count": 2
+  }
+}
+```
+
 ### table dump
 
 Export DDL for a table using hg_dump_script().

@@ -172,5 +172,6 @@ def mock_get_connection(mocker, mock_connection_class):
     mocker.patch("hologres_cli.commands.data.get_connection", return_value=mock_conn)
     mocker.patch("hologres_cli.commands.status.get_connection", return_value=mock_conn)
     mocker.patch("hologres_cli.commands.warehouse.get_connection", return_value=mock_conn)
-    mocker.patch("hologres_cli.commands.table.get_connection", return_value=mock_conn)
+    # table.py delegates to schema._list_tables and schema._dump_table_ddl,
+    # so it does not import get_connection directly — no need to patch here.
     return mock_conn

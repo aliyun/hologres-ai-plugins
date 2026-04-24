@@ -209,7 +209,7 @@ class TestTableListCmd:
 
     def test_list_connection_error(self, mocker):
         """Test connection error handling."""
-        mocker.patch("hologres_cli.commands.table.get_connection",
+        mocker.patch("hologres_cli.commands.schema.get_connection",
                      side_effect=DSNError("No DSN configured"))
 
         runner = CliRunner()
@@ -233,7 +233,7 @@ class TestTableListCmd:
 
     def test_list_logs_operation_on_success(self, mock_get_connection, mocker):
         """Test that successful list logs operation."""
-        mock_log = mocker.patch("hologres_cli.commands.table.log_operation")
+        mock_log = mocker.patch("hologres_cli.commands.schema.log_operation")
         mock_get_connection.execute.return_value = [
             {"schema": "public", "table_name": "t1", "owner": "admin"},
         ]
@@ -249,7 +249,7 @@ class TestTableListCmd:
 
     def test_list_logs_operation_on_failure(self, mock_get_connection, mocker):
         """Test that failed list logs operation with error."""
-        mock_log = mocker.patch("hologres_cli.commands.table.log_operation")
+        mock_log = mocker.patch("hologres_cli.commands.schema.log_operation")
         mock_get_connection.execute.side_effect = Exception("DB error")
 
         runner = CliRunner()

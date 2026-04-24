@@ -2,21 +2,12 @@
 
 from __future__ import annotations
 
-import time
 from typing import Optional
 
 import click
 
-from ..connection import DSNError, get_connection
-from ..logger import log_operation
-from ..output import (
-    FORMAT_JSON,
-    connection_error,
-    print_output,
-    query_error,
-    success_rows,
-)
-from .schema import _dump_table_ddl
+from ..output import FORMAT_JSON
+from .schema import _dump_table_ddl, _list_tables
 
 
 @click.group("table")
@@ -47,37 +38,5 @@ def dump_cmd(ctx: click.Context, table: str) -> None:
 @click.pass_context
 def list_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
     """List all tables in the database (excluding system schemas)."""
-    dsn = ctx.obj.get("dsn")
-    fmt = ctx.obj.get("format", FORMAT_JSON)
-    start_time = time.time()
-
-    try:
-        conn = get_connection(dsn)
-    except DSNError as e:
-        print_output(connection_error(str(e), fmt))
-        return
-
-    sql = """
-        SELECT schemaname AS schema, tablename AS table_name, tableowner AS owner
-        FROM pg_catalog.pg_tables
-        WHERE schemaname NOT IN ('pg_catalog', 'information_schema', 'hologres', 'hg_internal')
-    """
-    params = []
-    if schema_name:
-        sql += " AND schemaname = %s"
-        params.append(schema_name)
-    sql += " ORDER BY schemaname, tablename"
-
-    try:
-        rows = conn.execute(sql, tuple(params) if params else None)
-        duration_ms = (time.time() - start_time) * 1000
-        log_operation("table.list", sql=sql, dsn_masked=conn.masked_dsn, success=True,
-                      row_count=len(rows), duration_ms=duration_ms)
-        print_output(success_rows(rows, fmt))
-    except Exception as e:
-        duration_ms = (time.time() - start_time) * 1000
-        log_operation("table.list", sql=sql, dsn_masked=conn.masked_dsn, success=False,
-                      error_code="QUERY_ERROR", error_message=str(e), duration_ms=duration_ms)
-        print_output(query_error(str(e), fmt))
-    finally:
-        conn.close()
+    _list_tables(ctx.obj.get("dsn"), schema_name, ctx.obj.get("format", FORMAT_JSON),
+                 operation="table.list")

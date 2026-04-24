@@ -39,13 +39,11 @@ def schema_cmd() -> None:
     pass
 
 
-@schema_cmd.command("tables")
-@click.option("--schema", "-s", "schema_name", default=None, help="Filter by schema name")
-@click.pass_context
-def tables_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
-    """List all tables in the database."""
-    dsn = ctx.obj.get("dsn")
-    fmt = ctx.obj.get("format", FORMAT_JSON)
+def _list_tables(dsn: str, schema_name: Optional[str], fmt: str, operation: str = "schema.tables") -> None:
+    """Core logic for listing tables in the database.
+
+    Shared by ``schema tables`` and ``table list`` commands.
+    """
     start_time = time.time()
 
     try:
@@ -68,16 +66,24 @@ def tables_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
     try:
         rows = conn.execute(sql, tuple(params) if params else None)
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.tables", sql=sql, dsn_masked=conn.masked_dsn, success=True,
+        log_operation(operation, sql=sql, dsn_masked=conn.masked_dsn, success=True,
                       row_count=len(rows), duration_ms=duration_ms)
         print_output(success_rows(rows, fmt))
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.tables", sql=sql, dsn_masked=conn.masked_dsn, success=False,
+        log_operation(operation, sql=sql, dsn_masked=conn.masked_dsn, success=False,
                       error_code="QUERY_ERROR", error_message=str(e), duration_ms=duration_ms)
         print_output(query_error(str(e), fmt))
     finally:
         conn.close()
+
+
+@schema_cmd.command("tables")
+@click.option("--schema", "-s", "schema_name", default=None, help="Filter by schema name")
+@click.pass_context
+def tables_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
+    """List all tables in the database."""
+    _list_tables(ctx.obj.get("dsn"), schema_name, ctx.obj.get("format", FORMAT_JSON))
 
 
 @schema_cmd.command("describe")
