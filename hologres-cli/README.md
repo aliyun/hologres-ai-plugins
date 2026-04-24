@@ -150,6 +150,14 @@ hologres schema size <schema.table>
 hologres schema size public.my_table
 ```
 
+### Table Management
+
+```bash
+# Export DDL using hg_dump_script()
+hologres table dump <schema.table>
+hologres table dump public.my_table
+```
+
 ### SQL Execution
 
 ```bash

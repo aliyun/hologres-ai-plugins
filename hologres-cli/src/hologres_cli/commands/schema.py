@@ -152,21 +152,11 @@ def describe_cmd(ctx: click.Context, table: str) -> None:
         conn.close()
 
 
-@schema_cmd.command("dump")
-@click.argument("table")
-@click.pass_context
-def dump_cmd(ctx: click.Context, table: str) -> None:
-    """Export DDL for a table using hg_dump_script().
+def _dump_table_ddl(dsn: str, table: str, fmt: str, operation: str = "schema.dump") -> None:
+    """Core logic for dumping table DDL using hg_dump_script().
 
-    TABLE should be in format 'schema_name.table_name'.
-
-    \b
-    Examples:
-      hologres schema dump public.my_table
-      hologres schema dump myschema.orders
+    Shared by ``schema dump`` and ``table dump`` commands.
     """
-    dsn = ctx.obj.get("dsn")
-    fmt = ctx.obj.get("format", FORMAT_JSON)
     start_time = time.time()
 
     try:
@@ -200,7 +190,7 @@ def dump_cmd(ctx: click.Context, table: str) -> None:
         ddl = result[0]["hg_dump_script"]
 
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.dump", sql=dump_sql, dsn_masked=conn.masked_dsn, success=True,
+        log_operation(operation, sql=dump_sql, dsn_masked=conn.masked_dsn, success=True,
                       duration_ms=duration_ms, extra={"table": table})
 
         if fmt == FORMAT_JSON:
@@ -209,16 +199,32 @@ def dump_cmd(ctx: click.Context, table: str) -> None:
             print_output(ddl)
     except ValueError as e:
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.dump", dsn_masked=conn.masked_dsn, success=False,
+        log_operation(operation, dsn_masked=conn.masked_dsn, success=False,
                       error_code="INVALID_INPUT", error_message=str(e), duration_ms=duration_ms)
         print_output(error("INVALID_INPUT", str(e), fmt))
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.dump", dsn_masked=conn.masked_dsn, success=False,
+        log_operation(operation, dsn_masked=conn.masked_dsn, success=False,
                       error_code="QUERY_ERROR", error_message=str(e), duration_ms=duration_ms)
         print_output(query_error(str(e), fmt))
     finally:
         conn.close()
+
+
+@schema_cmd.command("dump")
+@click.argument("table")
+@click.pass_context
+def dump_cmd(ctx: click.Context, table: str) -> None:
+    """Export DDL for a table using hg_dump_script().
+
+    TABLE should be in format 'schema_name.table_name'.
+
+    \b
+    Examples:
+      hologres schema dump public.my_table
+      hologres schema dump myschema.orders
+    """
+    _dump_table_ddl(ctx.obj.get("dsn"), table, ctx.obj.get("format", FORMAT_JSON))
 
 
 @schema_cmd.command("size")

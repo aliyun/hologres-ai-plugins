@@ -60,6 +60,7 @@ hologres sql run "SELECT * FROM orders LIMIT 10"
 | `hologres schema describe <table>` | Show table structure |
 | `hologres schema dump <schema.table>` | Export DDL |
 | `hologres schema size <schema.table>` | Get table storage size |
+| `hologres table dump <schema.table>` | Export DDL for a table |
 | `hologres sql run "<query>"` | Execute read-only SQL |
 | `hologres sql run --write "<dml>"` | Execute write SQL |
 | `hologres data export <table> -f out.csv` | Export to CSV |

@@ -110,14 +110,11 @@ hologres schema describe public.my_table
 
 ### schema dump
 
-Export DDL statements.
+Export DDL for a table using hg_dump_script().
 
 ```bash
-# Dump all tables
-hologres schema dump
-
-# Dump specific table
-hologres schema dump --table my_table
+hologres schema dump public.my_table
+hologres schema dump myschema.orders
 ```
 
 ## sql
@@ -196,6 +193,31 @@ hologres data count my_table
 
 # Count with filter
 hologres data count my_table --where "status='active'"
+```
+
+## table
+
+Table management commands.
+
+### table dump
+
+Export DDL for a table using hg_dump_script().
+
+```bash
+hologres table dump public.my_table
+hologres table dump myschema.orders
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "schema": "public",
+    "table": "my_table",
+    "ddl": "CREATE TABLE public.my_table (...);"
+  }
+}
 ```
 
 ## history
