@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Optional
 
 import click
-from psycopg import sql
 
 from ..connection import DSNError, get_connection
 from ..logger import log_operation
@@ -84,10 +83,7 @@ def export_cmd(ctx: click.Context, table: Optional[str], file_path: str,
             _validate_identifier(schema_name, "schema name")
             _validate_identifier(table_name, "table name")
 
-            query_obj = sql.SQL("SELECT * FROM {}").format(
-                sql.Identifier(schema_name, table_name)
-            )
-            source = f"({query_obj.as_string(conn.conn)})"
+            source = f'(SELECT * FROM "{schema_name}"."{table_name}")'
             copy_sql = f"COPY {source} TO STDOUT WITH ({_copy_options(delimiter)})"
 
         output_path = Path(file_path)
@@ -162,11 +158,8 @@ def import_cmd(ctx: click.Context, table: str, file_path: str, delimiter: str,
             _validate_identifier(schema_name, "schema name")
             _validate_identifier(table_name, "table name")
 
-            truncate_query = sql.SQL("TRUNCATE TABLE {}").format(
-                sql.Identifier(schema_name, table_name)
-            )
             with conn.cursor() as cur:
-                cur.execute(truncate_query.as_string(conn.conn))
+                cur.execute(f'TRUNCATE TABLE "{schema_name}"."{table_name}"')
 
         # Build safe COPY statement
         if "." in table:
@@ -176,12 +169,8 @@ def import_cmd(ctx: click.Context, table: str, file_path: str, delimiter: str,
         _validate_identifier(schema_name, "schema name")
         _validate_identifier(table_name, "table name")
 
-        columns_list = sql.SQL(", ").join(sql.Identifier(col) for col in columns)
-        copy_query = sql.SQL("COPY {} ({}) FROM STDIN WITH (FORMAT csv, HEADER true)").format(
-            sql.Identifier(schema_name, table_name),
-            columns_list,
-        )
-        copy_sql = copy_query.as_string(conn.conn)
+        columns_quoted = ", ".join(f'"{col}"' for col in columns)
+        copy_sql = f'COPY "{schema_name}"."{table_name}" ({columns_quoted}) FROM STDIN WITH (FORMAT csv, HEADER true)'
 
         row_count = 0
         with conn.cursor() as cur:
@@ -239,10 +228,7 @@ def count_cmd(ctx: click.Context, table: str, where_clause: Optional[str]) -> No
         _validate_identifier(table_name, "table name")
 
         # Build safe count query
-        query_obj = sql.SQL("SELECT COUNT(*) AS count FROM {}").format(
-            sql.Identifier(schema_name, table_name)
-        )
-        count_sql = query_obj.as_string(conn.conn)
+        count_sql = f'SELECT COUNT(*) AS count FROM "{schema_name}"."{table_name}"'
         if where_clause:
             count_sql += f" WHERE {where_clause}"
         rows = conn.execute(count_sql)

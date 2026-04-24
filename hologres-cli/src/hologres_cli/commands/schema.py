@@ -7,7 +7,6 @@ import time
 from typing import Optional
 
 import click
-from psycopg import sql
 
 from ..connection import DSNError, get_connection
 from ..logger import log_operation
@@ -186,11 +185,9 @@ def dump_cmd(ctx: click.Context, table: str) -> None:
         _validate_identifier(schema_name, "schema name")
         _validate_identifier(table_name, "table name")
 
-        # Use psycopg.sql.Identifier for safe identifier escaping
-        query = sql.SQL("SELECT hg_dump_script({})").format(
-            sql.Identifier(schema_name, table_name)
-        )
-        result = conn.execute(query.as_string(conn.conn))
+        # Use validated identifiers for safe SQL construction
+        dump_sql = f'SELECT hg_dump_script("{schema_name}"."{table_name}")'
+        result = conn.execute(dump_sql)
 
         if not result or not result[0]:
             print_output(error("TABLE_NOT_FOUND", f"Table '{schema_name}.{table_name}' not found", fmt))
@@ -199,7 +196,7 @@ def dump_cmd(ctx: click.Context, table: str) -> None:
         ddl = result[0]["hg_dump_script"]
 
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.dump", sql=query.as_string(conn.conn), dsn_masked=conn.masked_dsn, success=True,
+        log_operation("schema.dump", sql=dump_sql, dsn_masked=conn.masked_dsn, success=True,
                       duration_ms=duration_ms, extra={"table": table})
 
         if fmt == FORMAT_JSON:
@@ -256,15 +253,12 @@ def size_cmd(ctx: click.Context, table: str) -> None:
 
         full_table_name = f"{schema_name}.{table_name}"
 
-        # Use psycopg.sql.Identifier for safe identifier escaping
-        query = sql.SQL(
-            "SELECT pg_size_pretty(pg_relation_size({})) AS size, "
-            "pg_relation_size({}) AS size_bytes"
-        ).format(
-            sql.Identifier(schema_name, table_name),
-            sql.Identifier(schema_name, table_name),
+        # Use validated identifiers for safe SQL construction
+        size_sql = (
+            f'SELECT pg_size_pretty(pg_relation_size("{schema_name}"."{table_name}")) AS size, '
+            f'pg_relation_size("{schema_name}"."{table_name}") AS size_bytes'
         )
-        result = conn.execute(query.as_string(conn.conn))
+        result = conn.execute(size_sql)
 
         if not result or not result[0]:
             print_output(error("TABLE_NOT_FOUND", f"Table '{full_table_name}' not found", fmt))
@@ -274,7 +268,7 @@ def size_cmd(ctx: click.Context, table: str) -> None:
         size_bytes = result[0]["size_bytes"]
 
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.size", sql=query.as_string(conn.conn), dsn_masked=conn.masked_dsn, success=True,
+        log_operation("schema.size", sql=size_sql, dsn_masked=conn.masked_dsn, success=True,
                       duration_ms=duration_ms, extra={"table": table})
 
         if fmt == FORMAT_JSON:
