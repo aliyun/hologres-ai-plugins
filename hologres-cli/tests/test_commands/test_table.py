@@ -1,4 +1,4 @@
-"""Tests for table commands."""
+"""Tests for table command module."""
 
 from __future__ import annotations
 
@@ -259,3 +259,113 @@ class TestTableListCmd:
         call_kwargs = mock_log.call_args
         assert call_kwargs[1]["success"] is False
         assert call_kwargs[1]["error_code"] == "QUERY_ERROR"
+
+
+class TestShowCmd:
+    """Tests for table show command."""
+
+    def test_show_cmd_success(self, mock_get_connection):
+        """Test successful table show."""
+        mock_get_connection.execute.side_effect = [
+            # Columns query result
+            [
+                {"column_name": "id", "data_type": "integer", "is_nullable": "NO", "column_default": None, "ordinal_position": 1, "comment": "primary id"},
+                {"column_name": "name", "data_type": "text", "is_nullable": "YES", "column_default": None, "ordinal_position": 2, "comment": "user name"},
+            ],
+            # Primary key query result
+            [{"column_name": "id"}],
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "show", "users"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["schema"] == "public"
+        assert output["data"]["table"] == "users"
+        assert output["data"]["primary_key"] == ["id"]
+        assert len(output["data"]["columns"]) == 2
+        mock_get_connection.close.assert_called_once()
+
+    def test_show_cmd_with_schema(self, mock_get_connection):
+        """Test show with schema.table format."""
+        mock_get_connection.execute.side_effect = [
+            [{"column_name": "id", "data_type": "integer", "is_nullable": "NO", "column_default": None, "ordinal_position": 1, "comment": ""}],
+            [],
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "show", "myschema.mytable"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["data"]["schema"] == "myschema"
+        assert output["data"]["table"] == "mytable"
+
+    def test_show_cmd_table_not_found(self, mock_get_connection):
+        """Test show non-existent table."""
+        mock_get_connection.execute.return_value = []
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "show", "nonexistent"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "TABLE_NOT_FOUND"
+
+    def test_show_cmd_connection_error(self, mocker):
+        """Test connection error handling."""
+        mocker.patch("hologres_cli.commands.table.get_connection",
+                     side_effect=DSNError("No DSN configured"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "show", "users"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_show_cmd_query_error(self, mock_get_connection):
+        """Test query error during show."""
+        mock_get_connection.execute.side_effect = Exception("Query failed")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "show", "users"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+
+    def test_show_cmd_table_format(self, mock_get_connection):
+        """Test table format output."""
+        mock_get_connection.execute.side_effect = [
+            [
+                {"column_name": "id", "data_type": "integer", "is_nullable": "NO", "column_default": None, "ordinal_position": 1, "comment": ""},
+            ],
+            [{"column_name": "id"}],
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--format", "table", "table", "show", "users"])
+
+        assert result.exit_code == 0
+        assert "id" in result.output
+        assert "integer" in result.output
+
+    def test_show_cmd_no_pk(self, mock_get_connection):
+        """Test show table with no primary key."""
+        mock_get_connection.execute.side_effect = [
+            [
+                {"column_name": "col1", "data_type": "text", "is_nullable": "YES", "column_default": None, "ordinal_position": 1, "comment": ""},
+            ],
+            [],  # No primary key
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "show", "no_pk_table"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["primary_key"] == []

@@ -86,6 +86,49 @@ def tables_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
     _list_tables(ctx.obj.get("dsn"), schema_name, ctx.obj.get("format", FORMAT_JSON))
 
 
+def fetch_table_structure(conn, schema_name: str, table_name: str) -> dict | None:
+    """Fetch table structure (columns and primary key).
+
+    Shared by ``schema describe`` and ``table show``.
+
+    Returns:
+        dict with keys: schema, table, primary_key, columns; or None if table not found.
+    """
+    columns_sql = """
+        SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
+               c.ordinal_position, COALESCE(pd.description, '') AS comment
+        FROM information_schema.columns c
+        LEFT JOIN pg_catalog.pg_statio_all_tables st
+            ON c.table_schema = st.schemaname AND c.table_name = st.relname
+        LEFT JOIN pg_catalog.pg_description pd
+            ON st.relid = pd.objoid AND c.ordinal_position = pd.objsubid
+        WHERE c.table_schema = %s AND c.table_name = %s
+        ORDER BY c.ordinal_position
+    """
+    columns = conn.execute(columns_sql, (schema_name, table_name))
+
+    if not columns:
+        return None
+
+    pk_sql = """
+        SELECT kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+            ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+        WHERE tc.constraint_type = 'PRIMARY KEY'
+            AND tc.table_schema = %s AND tc.table_name = %s
+        ORDER BY kcu.ordinal_position
+    """
+    pk_columns = [r["column_name"] for r in conn.execute(pk_sql, (schema_name, table_name))]
+
+    return {
+        "schema": schema_name,
+        "table": table_name,
+        "primary_key": pk_columns,
+        "columns": columns,
+    }
+
+
 @schema_cmd.command("describe")
 @click.argument("table")
 @click.pass_context
@@ -108,47 +151,21 @@ def describe_cmd(ctx: click.Context, table: str) -> None:
         return
 
     try:
-        columns_sql = """
-            SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
-                   c.ordinal_position, COALESCE(pd.description, '') AS comment
-            FROM information_schema.columns c
-            LEFT JOIN pg_catalog.pg_statio_all_tables st
-                ON c.table_schema = st.schemaname AND c.table_name = st.relname
-            LEFT JOIN pg_catalog.pg_description pd
-                ON st.relid = pd.objoid AND c.ordinal_position = pd.objsubid
-            WHERE c.table_schema = %s AND c.table_name = %s
-            ORDER BY c.ordinal_position
-        """
-        columns = conn.execute(columns_sql, (schema_name, table_name))
+        result = fetch_table_structure(conn, schema_name, table_name)
 
-        if not columns:
+        if result is None:
             print_output(error("TABLE_NOT_FOUND", f"Table '{schema_name}.{table_name}' not found", fmt))
             return
 
-        pk_sql = """
-            SELECT kcu.column_name
-            FROM information_schema.table_constraints tc
-            JOIN information_schema.key_column_usage kcu
-                ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-            WHERE tc.constraint_type = 'PRIMARY KEY'
-                AND tc.table_schema = %s AND tc.table_name = %s
-            ORDER BY kcu.ordinal_position
-        """
-        pk_columns = [r["column_name"] for r in conn.execute(pk_sql, (schema_name, table_name))]
-
         duration_ms = (time.time() - start_time) * 1000
         log_operation("schema.describe", sql=f"DESCRIBE {schema_name}.{table_name}",
-                      dsn_masked=conn.masked_dsn, success=True, row_count=len(columns), duration_ms=duration_ms)
-
-        result = {
-            "schema": schema_name, "table": table_name,
-            "primary_key": pk_columns, "columns": columns,
-        }
+                      dsn_masked=conn.masked_dsn, success=True, row_count=len(result["columns"]),
+                      duration_ms=duration_ms)
 
         if fmt == FORMAT_JSON:
             print_output(success(result))
         else:
-            print_output(success_rows(columns, fmt))
+            print_output(success_rows(result["columns"], fmt))
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
         log_operation("schema.describe", dsn_masked=conn.masked_dsn, success=False,

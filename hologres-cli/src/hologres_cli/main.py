@@ -74,6 +74,7 @@ Set DSN: `--dsn "hologres://user:pass@host:port/db"` or `HOLOGRES_DSN` env var.
 - `hologres schema describe <table>` - Describe table
 - `hologres schema dump` - Export DDL
 - `hologres table dump <schema.table>` - Export DDL for a table
+- `hologres table show <table>` - Show table structure
 - `hologres sql run "<query>"` - Execute SQL (read-only by default)
 - `hologres sql run --write "<query>"` - Execute write SQL
 - `hologres data export <table> -f <file>` - Export to CSV

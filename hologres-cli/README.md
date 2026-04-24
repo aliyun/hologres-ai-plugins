@@ -174,6 +174,10 @@ hologres table list -s myschema
 # Export DDL using hg_dump_script()
 hologres table dump <schema.table>
 hologres table dump public.my_table
+
+# Show table structure (columns, types, nullable, defaults, primary key, comments)
+hologres table show <table_name>
+hologres table show public.my_table
 ```
 
 ### SQL Execution
