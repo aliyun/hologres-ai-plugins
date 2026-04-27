@@ -45,7 +45,7 @@ hologres-ai-plugins/
 | `hologres schema dump <schema.table>` | 导出 DDL |
 | `hologres schema size <schema.table>` | 查看表存储大小 |
 | `hologres table list [--schema S]` | 列出所有表 |
-| `hologres table create --name TABLE --columns COLS [选项] [--dry-run]` | 创建表 |
+| `hologres table create --name TABLE --columns COLS [选项] [--dry-run]` | 创建表（支持逻辑分区表 V3.1+） |
 | `hologres table dump <schema.table>` | 导出表 DDL |
 | `hologres table show <table>` | 查看表结构（列、类型、主键、注释等） |
 | `hologres table size <schema.table>` | 查看表存储大小 |
@@ -95,6 +95,13 @@ hologres -f table schema tables
 
 # 查询数据
 hologres sql "SELECT * FROM orders LIMIT 10"
+
+# 创建逻辑分区表（V3.1+）
+hologres table create -n public.logs \
+  -c "a TEXT, b INT, ds DATE NOT NULL" \
+  --primary-key "b,ds" --partition-by ds \
+  --partition-mode logical --orientation column \
+  --partition-expiration-time "30 day" --dry-run
 
 # 创建 Dynamic Table
 hologres dt create -t my_dt --freshness "10 minutes" \

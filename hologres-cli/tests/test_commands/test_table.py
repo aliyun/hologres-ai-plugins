@@ -958,20 +958,29 @@ class TestBuildTableCreateSql:
         assert "LOGICAL" not in sql
 
     def test_build_sql_partition_logical(self):
-        """Test logical partition clause."""
+        """Test logical partition uses WITH syntax instead of CALL."""
         sql = _build_table_create_sql(name="t", columns="id INT, ds TEXT",
                                       partition_by="ds", partition_mode="logical")
         assert "LOGICAL PARTITION BY LIST (ds)" in sql
+        assert "BEGIN;" not in sql
+        assert "COMMIT;" not in sql
+        assert "CALL" not in sql
 
-    def test_build_sql_binlog_hg_binlog(self):
-        """Test binlog=hg_binlog generates property."""
-        sql = _build_table_create_sql(name="t", columns="id INT", binlog="hg_binlog")
-        assert "set_table_property('public.t', 'binlog_level', 'hg_binlog')" in sql
+    def test_build_sql_binlog_replica(self):
+        """Test binlog=replica generates binlog.level property (dot notation for CALL syntax)."""
+        sql = _build_table_create_sql(name="t", columns="id INT", binlog="replica")
+        assert "set_table_property('public.t', 'binlog.level', 'replica')" in sql
 
     def test_build_sql_binlog_none_no_property(self):
         """Test binlog=none does NOT generate property."""
         sql = _build_table_create_sql(name="t", columns="id INT", binlog="none")
+        assert "binlog.level" not in sql
         assert "binlog_level" not in sql
+
+    def test_build_sql_binlog_ttl(self):
+        """Test binlog_ttl generates binlog.ttl property (dot notation for CALL syntax)."""
+        sql = _build_table_create_sql(name="t", columns="id INT", binlog_ttl=86400)
+        assert "set_table_property('public.t', 'binlog.ttl', '86400')" in sql
 
     def test_build_sql_if_not_exists(self):
         """Test IF NOT EXISTS clause."""
@@ -1030,6 +1039,210 @@ class TestBuildTableCreateSql:
         sql = _build_table_create_sql(name="t", columns="id INT")
         assert "CALL" not in sql
 
+    # --- Logical partition table tests ---
+
+    def test_logical_partition_uses_with_syntax(self):
+        """Test logical partition uses WITH(...) syntax."""
+        sql = _build_table_create_sql(
+            name="t", columns="id INT, ds DATE NOT NULL",
+            partition_by="ds", partition_mode="logical",
+            orientation="column",
+        )
+        assert "WITH (" in sql
+        assert "orientation = 'column'" in sql
+        assert "CALL" not in sql
+
+    def test_logical_partition_no_begin_commit(self):
+        """Test logical partition SQL has no BEGIN/COMMIT."""
+        sql = _build_table_create_sql(
+            name="t", columns="id INT, ds DATE NOT NULL",
+            partition_by="ds", partition_mode="logical",
+        )
+        assert "BEGIN;" not in sql
+        assert "COMMIT;" not in sql
+
+    def test_logical_partition_with_orientation(self):
+        """Test WITH(orientation = 'column') for logical partition."""
+        sql = _build_table_create_sql(
+            name="t", columns="id INT, ds DATE NOT NULL",
+            partition_by="ds", partition_mode="logical",
+            orientation="column",
+        )
+        assert "orientation = 'column'" in sql
+
+    def test_logical_partition_with_distribution_key(self):
+        """Test WITH(distribution_key) for logical partition."""
+        sql = _build_table_create_sql(
+            name="t", columns="id INT, ds DATE NOT NULL",
+            partition_by="ds", partition_mode="logical",
+            distribution_key="id",
+        )
+        assert "distribution_key = 'id'" in sql
+
+    def test_logical_partition_with_expiration_time(self):
+        """Test partition_expiration_time property."""
+        sql = _build_table_create_sql(
+            name="t", columns="id INT, ds DATE NOT NULL",
+            partition_by="ds", partition_mode="logical",
+            partition_expiration_time="30 day",
+        )
+        assert "partition_expiration_time = '30 day'" in sql
+
+    def test_logical_partition_with_keep_hot_window(self):
+        """Test partition_keep_hot_window property."""
+        sql = _build_table_create_sql(
+            name="t", columns="id INT, ds DATE NOT NULL",
+            partition_by="ds", partition_mode="logical",
+            partition_keep_hot_window="15 day",
+        )
+        assert "partition_keep_hot_window = '15 day'" in sql
+
+    def test_logical_partition_with_require_filter_true(self):
+        """Test partition_require_filter = TRUE (no quotes)."""
+        sql = _build_table_create_sql(
+            name="t", columns="id INT, ds DATE NOT NULL",
+            partition_by="ds", partition_mode="logical",
+            partition_require_filter="true",
+        )
+        assert "partition_require_filter = TRUE" in sql
+        # Must not be quoted
+        assert "partition_require_filter = 'TRUE'" not in sql
+
+    def test_logical_partition_with_require_filter_false(self):
+        """Test partition_require_filter = FALSE."""
+        sql = _build_table_create_sql(
+            name="t", columns="id INT, ds DATE NOT NULL",
+            partition_by="ds", partition_mode="logical",
+            partition_require_filter="false",
+        )
+        assert "partition_require_filter = FALSE" in sql
+
+    def test_logical_partition_with_binlog_window(self):
+        """Test partition_generate_binlog_window property."""
+        sql = _build_table_create_sql(
+            name="t", columns="id INT, ds DATE NOT NULL",
+            partition_by="ds", partition_mode="logical",
+            partition_generate_binlog_window="3 day",
+        )
+        assert "partition_generate_binlog_window = '3 day'" in sql
+
+    def test_logical_partition_with_binlog_ttl(self):
+        """Test binlog_ttl uses underscore in WITH syntax."""
+        sql = _build_table_create_sql(
+            name="t", columns="id INT, ds DATE NOT NULL",
+            partition_by="ds", partition_mode="logical",
+            binlog_ttl=86400,
+        )
+        assert "binlog_ttl = '86400'" in sql
+
+    def test_logical_partition_with_binlog_replica(self):
+        """Test binlog_level uses underscore in WITH syntax."""
+        sql = _build_table_create_sql(
+            name="t", columns="id INT, ds DATE NOT NULL",
+            partition_by="ds", partition_mode="logical",
+            binlog="replica",
+        )
+        assert "binlog_level = 'replica'" in sql
+
+    def test_logical_partition_multi_column_key(self):
+        """Test multi-column partition key."""
+        sql = _build_table_create_sql(
+            name="t", columns="a TEXT, yy TEXT NOT NULL, mm TEXT NOT NULL",
+            partition_by="yy, mm", partition_mode="logical",
+        )
+        assert "LOGICAL PARTITION BY LIST (yy, mm)" in sql
+
+    def test_logical_partition_no_properties(self):
+        """Test logical partition with no WITH clause when no properties."""
+        sql = _build_table_create_sql(
+            name="t", columns="id INT, ds DATE NOT NULL",
+            partition_by="ds", partition_mode="logical",
+        )
+        assert "LOGICAL PARTITION BY LIST (ds)" in sql
+        assert "WITH" not in sql
+
+    def test_logical_partition_full_example(self):
+        """Test full logical partition example matching documentation."""
+        sql = _build_table_create_sql(
+            name="public.hologres_logical_parent_1",
+            columns="a TEXT, b INT, c TIMESTAMP, ds DATE NOT NULL",
+            primary_key="b, ds",
+            partition_by="ds", partition_mode="logical",
+            orientation="column",
+            distribution_key="b",
+            partition_expiration_time="30 day",
+            partition_keep_hot_window="15 day",
+            partition_require_filter="true",
+            binlog="replica",
+            partition_generate_binlog_window="3 day",
+        )
+        assert "LOGICAL PARTITION BY LIST (ds)" in sql
+        assert "PRIMARY KEY (b, ds)" in sql
+        assert "WITH (" in sql
+        assert "orientation = 'column'" in sql
+        assert "distribution_key = 'b'" in sql
+        assert "partition_expiration_time = '30 day'" in sql
+        assert "partition_keep_hot_window = '15 day'" in sql
+        assert "partition_require_filter = TRUE" in sql
+        assert "binlog_level = 'replica'" in sql
+        assert "partition_generate_binlog_window = '3 day'" in sql
+        assert "BEGIN;" not in sql
+        assert "COMMIT;" not in sql
+
+    def test_logical_partition_with_all_properties(self):
+        """Test logical partition with all possible properties."""
+        sql = _build_table_create_sql(
+            name="public.t",
+            columns="id INT, ds DATE NOT NULL",
+            primary_key="id, ds",
+            partition_by="ds", partition_mode="logical",
+            orientation="column",
+            distribution_key="id",
+            clustering_key="id:asc",
+            event_time_column="ds",
+            bitmap_columns="id",
+            dictionary_encoding_columns="id",
+            ttl=2592000,
+            storage_mode="hot",
+            table_group="my_tg",
+            binlog="replica",
+            binlog_ttl=86400,
+            partition_expiration_time="30 day",
+            partition_keep_hot_window="15 day",
+            partition_require_filter="true",
+            partition_generate_binlog_window="3 day",
+        )
+        assert "WITH (" in sql
+        assert "orientation = 'column'" in sql
+        assert "distribution_key = 'id'" in sql
+        assert "clustering_key = 'id:asc'" in sql
+        assert "event_time_column = 'ds'" in sql
+        assert "bitmap_columns = 'id'" in sql
+        assert "dictionary_encoding_columns = 'id'" in sql
+        assert "time_to_live_in_seconds = '2592000'" in sql
+        assert "storage_mode = 'hot'" in sql
+        assert "table_group = 'my_tg'" in sql
+        assert "binlog_level = 'replica'" in sql
+        assert "binlog_ttl = '86400'" in sql
+        assert "partition_expiration_time = '30 day'" in sql
+        assert "partition_keep_hot_window = '15 day'" in sql
+        assert "partition_require_filter = TRUE" in sql
+        assert "partition_generate_binlog_window = '3 day'" in sql
+
+    def test_non_logical_binlog_uses_dot_notation(self):
+        """Test non-logical table uses dot notation for binlog (binlog.level)."""
+        sql = _build_table_create_sql(name="t", columns="id INT", binlog="replica")
+        assert "set_table_property('public.t', 'binlog.level', 'replica')" in sql
+        # Must NOT use underscore notation
+        assert "binlog_level" not in sql
+
+    def test_non_logical_binlog_ttl_uses_dot_notation(self):
+        """Test non-logical table uses dot notation for binlog.ttl."""
+        sql = _build_table_create_sql(name="t", columns="id INT", binlog_ttl=86400)
+        assert "set_table_property('public.t', 'binlog.ttl', '86400')" in sql
+        # Must NOT use underscore notation
+        assert "binlog_ttl" not in sql
+
 
 class TestTableCreateCmd:
     """Tests for table create command."""
@@ -1070,7 +1283,7 @@ class TestTableCreateCmd:
             "--ttl", "2592000",
             "--storage-mode", "hot",
             "--table-group", "my_tg",
-            "--binlog", "hg_binlog",
+            "--binlog", "replica",
             "--if-not-exists",
             "--dry-run",
         ])
@@ -1091,7 +1304,7 @@ class TestTableCreateCmd:
         assert "time_to_live_in_seconds" in sql
         assert "storage_mode" in sql
         assert "table_group" in sql
-        assert "binlog_level" in sql
+        assert "binlog.level" in sql
 
     def test_create_dry_run_with_partition(self):
         """Test dry-run with partition options."""
@@ -1262,7 +1475,7 @@ class TestTableCreateCmd:
         assert result.exit_code != 0
 
     def test_create_binlog_none_no_property(self):
-        """Test --binlog none does not generate binlog_level property."""
+        """Test --binlog none does not generate binlog property."""
         runner = CliRunner()
         result = runner.invoke(cli, [
             "table", "create",
@@ -1274,6 +1487,7 @@ class TestTableCreateCmd:
 
         assert result.exit_code == 0
         output = json.loads(result.output)
+        assert "binlog.level" not in output["data"]["sql"]
         assert "binlog_level" not in output["data"]["sql"]
 
     def test_create_logs_operation_on_success(self, mock_get_connection, mocker):
@@ -1309,3 +1523,163 @@ class TestTableCreateCmd:
         call_kwargs = mock_log.call_args
         assert call_kwargs[1]["success"] is False
         assert call_kwargs[1]["error_code"] == "QUERY_ERROR"
+
+    # --- Logical partition CLI tests ---
+
+    def test_create_logical_partition_dry_run(self):
+        """Test logical partition dry-run generates WITH syntax."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "public.logs",
+            "--columns", "a TEXT, b INT, ds DATE NOT NULL",
+            "--primary-key", "b,ds",
+            "--partition-by", "ds",
+            "--partition-mode", "logical",
+            "--orientation", "column",
+            "--distribution-key", "b",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        sql = output["data"]["sql"]
+        assert "LOGICAL PARTITION BY LIST (ds)" in sql
+        assert "WITH (" in sql
+        assert "orientation = 'column'" in sql
+        assert "distribution_key = 'b'" in sql
+        assert "BEGIN;" not in sql
+        assert "COMMIT;" not in sql
+
+    def test_create_logical_partition_with_all_opts(self):
+        """Test logical partition dry-run with all options."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "public.logs",
+            "--columns", "a TEXT, b INT, ds DATE NOT NULL",
+            "--primary-key", "b,ds",
+            "--partition-by", "ds",
+            "--partition-mode", "logical",
+            "--orientation", "column",
+            "--distribution-key", "b",
+            "--partition-expiration-time", "30 day",
+            "--partition-keep-hot-window", "15 day",
+            "--partition-require-filter", "true",
+            "--binlog", "replica",
+            "--binlog-ttl", "86400",
+            "--partition-generate-binlog-window", "3 day",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "partition_expiration_time = '30 day'" in sql
+        assert "partition_keep_hot_window = '15 day'" in sql
+        assert "partition_require_filter = TRUE" in sql
+        assert "binlog_level = 'replica'" in sql
+        assert "binlog_ttl = '86400'" in sql
+        assert "partition_generate_binlog_window = '3 day'" in sql
+
+    def test_create_logical_partition_executes(self, mock_get_connection):
+        """Test logical partition without --dry-run actually executes."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+            "--columns", "id INT, ds DATE NOT NULL",
+            "--partition-by", "ds",
+            "--partition-mode", "logical",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["data"]["executed"] is True
+        mock_get_connection.execute.assert_called_once()
+
+    def test_create_logical_opts_without_logical_mode_error(self):
+        """Test logical-only options without --partition-mode logical returns error."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+            "--columns", "id INT",
+            "--partition-expiration-time", "30 day",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_ARGS"
+        assert "--partition-expiration-time" in output["error"]["message"]
+
+    def test_create_logical_partition_multi_key(self):
+        """Test multi-column partition key for logical partition."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+            "--columns", "a TEXT, yy TEXT NOT NULL, mm TEXT NOT NULL",
+            "--partition-by", "yy, mm",
+            "--partition-mode", "logical",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "LOGICAL PARTITION BY LIST (yy, mm)" in output["data"]["sql"]
+
+    def test_create_logical_partition_require_filter(self):
+        """Test --partition-require-filter option."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+            "--columns", "id INT, ds DATE NOT NULL",
+            "--partition-by", "ds",
+            "--partition-mode", "logical",
+            "--partition-require-filter", "true",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "partition_require_filter = TRUE" in output["data"]["sql"]
+
+    def test_create_logical_partition_binlog_replica(self):
+        """Test --binlog replica with logical partition."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+            "--columns", "id INT, ds DATE NOT NULL",
+            "--partition-by", "ds",
+            "--partition-mode", "logical",
+            "--binlog", "replica",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "binlog_level = 'replica'" in output["data"]["sql"]
+
+    def test_create_binlog_ttl_regular_table(self):
+        """Test --binlog-ttl works with regular (non-logical) tables."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+            "--columns", "id INT",
+            "--binlog", "replica",
+            "--binlog-ttl", "86400",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "set_table_property('public.t', 'binlog.level', 'replica')" in sql
+        assert "set_table_property('public.t', 'binlog.ttl', '86400')" in sql

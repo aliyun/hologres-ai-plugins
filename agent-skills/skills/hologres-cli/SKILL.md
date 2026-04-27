@@ -46,7 +46,7 @@ hologres dt list
 | `hologres schema dump <schema.table>` | Export DDL |
 | `hologres schema size <schema.table>` | Get table storage size |
 | `hologres table list [--schema S]` | List all tables |
-| `hologres table create -n TABLE -c COLS [options] [--dry-run]` | Create a table (compatible syntax) |
+| `hologres table create -n TABLE -c COLS [options] [--dry-run]` | Create a table (supports logical partition V3.1+) |
 | `hologres table dump <schema.table>` | Export DDL for a table |
 | `hologres table show <table>` | Show table structure (columns, types, nullable, defaults, primary key, comments) |
 | `hologres table size <schema.table>` | Get table storage size |

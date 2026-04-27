@@ -254,7 +254,8 @@ Table management commands.
 
 ### table create
 
-Create a new table using the compatible syntax (`CALL set_table_property`).
+Create a new table. Regular/physical partition tables use `CALL set_table_property` (compatible syntax).
+Logical partition tables (V3.1+) use `WITH(...)` syntax.
 
 ```bash
 # Minimal creation
@@ -268,7 +269,7 @@ hologres table create --name public.orders \
   --distribution-key user_id --clustering-key "created_at:asc" \
   --ttl 7776000 --dry-run
 
-# Partition table
+# Physical partition table
 hologres table create --name public.events \
   --columns "event_id BIGINT NOT NULL, ds TEXT NOT NULL, payload JSONB" \
   --primary-key "event_id,ds" --partition-by ds \
@@ -278,6 +279,23 @@ hologres table create --name public.events \
 hologres table create --name public.dim_user \
   --columns "user_id TEXT NOT NULL, user_level INT, data JSONB" \
   --primary-key user_id --orientation row
+
+# Logical partition table (V3.1+)
+hologres table create --name public.logs \
+  --columns "a TEXT, b INT, ds DATE NOT NULL" \
+  --primary-key "b,ds" --partition-by ds \
+  --partition-mode logical --orientation column \
+  --distribution-key b \
+  --partition-expiration-time "30 day" \
+  --partition-keep-hot-window "15 day" \
+  --partition-require-filter true \
+  --binlog replica --binlog-ttl 86400 --dry-run
+
+# Logical partition table with two partition keys
+hologres table create --name public.events_2pk \
+  --columns "a TEXT, b INT, yy TEXT NOT NULL, mm TEXT NOT NULL" \
+  --partition-by "yy, mm" --partition-mode logical \
+  --orientation column --partition-require-filter true --dry-run
 ```
 
 **Options:**
@@ -296,13 +314,23 @@ hologres table create --name public.dim_user \
 | `--ttl SECONDS` | Data TTL in seconds |
 | `--storage-mode` | `hot` (SSD) / `cold` (HDD/OSS) |
 | `--table-group` | Table Group name |
-| `--partition-by COL` | Enable LIST partition on this column |
+| `--partition-by COL` | Enable LIST partition on this column(s). Supports up to 2 columns for logical partition |
 | `--partition-mode` | `physical` (default) / `logical` (V3.1+) |
-| `--binlog` | Binlog level: `none` / `hg_binlog` |
+| `--binlog` | Binlog level: `none` / `replica` |
+| `--binlog-ttl` | Binlog TTL in seconds (default: 2592000 = 30 days) |
+| `--partition-expiration-time` | Partition expiration time (logical only). E.g. `'30 day'` |
+| `--partition-keep-hot-window` | Partition hot storage window (logical only). E.g. `'15 day'` |
+| `--partition-require-filter` | Require partition filter in queries (logical only): `true` / `false` |
+| `--partition-generate-binlog-window` | Binlog generation window (logical only). E.g. `'3 day'` |
 | `--if-not-exists` | Add IF NOT EXISTS clause |
 | `--dry-run` | Only display the SQL without executing |
 
-**Dry-run output:**
+**Note on SQL syntax:**
+- Regular/physical partition tables generate `BEGIN; CREATE TABLE ...; CALL set_table_property(...); COMMIT;`
+- Logical partition tables generate `CREATE TABLE ... LOGICAL PARTITION BY LIST (...) WITH (...);`
+- Property names differ between syntaxes: `WITH` uses underscores (`binlog_level`), `CALL` uses dots (`binlog.level`)
+
+**Dry-run output (regular table):**
 ```json
 {
   "ok": true,
@@ -314,12 +342,24 @@ hologres table create --name public.dim_user \
 }
 ```
 
+**Dry-run output (logical partition table):**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "CREATE TABLE public.logs (\n    ...\n)\nLOGICAL PARTITION BY LIST (ds)\nWITH (\n    ...\n);",
+    "dry_run": true
+  },
+  "message": "SQL generated (dry-run mode)"
+}
+```
+
 **Executed output:**
 ```json
 {
   "ok": true,
   "data": {
-    "sql": "BEGIN;\n...\nCOMMIT;",
+    "sql": "...",
     "executed": true
   },
   "message": "Table created successfully"

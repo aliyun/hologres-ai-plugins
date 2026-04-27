@@ -38,8 +38,17 @@ def _build_table_create_sql(
     partition_mode: Optional[str] = None,
     binlog: Optional[str] = None,
     if_not_exists: bool = False,
+    binlog_ttl: Optional[int] = None,
+    partition_expiration_time: Optional[str] = None,
+    partition_keep_hot_window: Optional[str] = None,
+    partition_require_filter: Optional[str] = None,
+    partition_generate_binlog_window: Optional[str] = None,
 ) -> str:
-    """Build CREATE TABLE SQL with CALL set_table_property (compatible syntax)."""
+    """Build CREATE TABLE SQL.
+
+    For logical partition tables (partition_mode='logical'), uses WITH(...) syntax.
+    For regular/physical partition tables, uses CALL set_table_property (compatible syntax).
+    """
 
     # Parse schema.table
     if "." in name:
@@ -57,15 +66,29 @@ def _build_table_create_sql(
     if primary_key:
         pk_clause = f",\n    PRIMARY KEY ({primary_key})"
 
-    # Partition clause
+    is_logical = partition_by and partition_mode == "logical"
+
+    if is_logical:
+        return _build_logical_partition_sql(
+            full_name=full_name, exists_clause=exists_clause,
+            col_defs=col_defs, pk_clause=pk_clause,
+            partition_by=partition_by, orientation=orientation,
+            distribution_key=distribution_key, clustering_key=clustering_key,
+            event_time_column=event_time_column, bitmap_columns=bitmap_columns,
+            dictionary_encoding_columns=dictionary_encoding_columns,
+            ttl=ttl, storage_mode=storage_mode, table_group=table_group,
+            binlog=binlog, binlog_ttl=binlog_ttl,
+            partition_expiration_time=partition_expiration_time,
+            partition_keep_hot_window=partition_keep_hot_window,
+            partition_require_filter=partition_require_filter,
+            partition_generate_binlog_window=partition_generate_binlog_window,
+        )
+
+    # --- Regular / physical partition table: CALL set_table_property syntax ---
     partition_clause = ""
     if partition_by:
-        if partition_mode == "logical":
-            partition_clause = f"\nLOGICAL PARTITION BY LIST ({partition_by})"
-        else:
-            partition_clause = f"\nPARTITION BY LIST ({partition_by})"
+        partition_clause = f"\nPARTITION BY LIST ({partition_by})"
 
-    # BUILD SQL lines
     lines = ["BEGIN;"]
     lines.append("")
     lines.append(
@@ -95,7 +118,9 @@ def _build_table_create_sql(
     if table_group:
         props.append(("table_group", table_group))
     if binlog and binlog != "none":
-        props.append(("binlog_level", binlog))
+        props.append(("binlog.level", binlog))
+    if binlog_ttl is not None:
+        props.append(("binlog.ttl", str(binlog_ttl)))
 
     if props:
         lines.append("")
@@ -108,6 +133,78 @@ def _build_table_create_sql(
     lines.append("COMMIT;")
 
     return "\n".join(lines)
+
+
+def _build_logical_partition_sql(
+    full_name: str,
+    exists_clause: str,
+    col_defs: str,
+    pk_clause: str,
+    partition_by: str,
+    orientation: Optional[str] = None,
+    distribution_key: Optional[str] = None,
+    clustering_key: Optional[str] = None,
+    event_time_column: Optional[str] = None,
+    bitmap_columns: Optional[str] = None,
+    dictionary_encoding_columns: Optional[str] = None,
+    ttl: Optional[int] = None,
+    storage_mode: Optional[str] = None,
+    table_group: Optional[str] = None,
+    binlog: Optional[str] = None,
+    binlog_ttl: Optional[int] = None,
+    partition_expiration_time: Optional[str] = None,
+    partition_keep_hot_window: Optional[str] = None,
+    partition_require_filter: Optional[str] = None,
+    partition_generate_binlog_window: Optional[str] = None,
+) -> str:
+    """Build CREATE TABLE SQL for logical partition tables using WITH(...) syntax."""
+
+    partition_clause = f"\nLOGICAL PARTITION BY LIST ({partition_by})"
+
+    # Collect WITH properties (use underscore naming for WITH syntax)
+    with_props: list[str] = []
+    if orientation:
+        with_props.append(f"orientation = '{orientation}'")
+    if distribution_key:
+        with_props.append(f"distribution_key = '{distribution_key}'")
+    if clustering_key:
+        with_props.append(f"clustering_key = '{clustering_key}'")
+    if event_time_column:
+        with_props.append(f"event_time_column = '{event_time_column}'")
+    if bitmap_columns:
+        with_props.append(f"bitmap_columns = '{bitmap_columns}'")
+    if dictionary_encoding_columns:
+        with_props.append(f"dictionary_encoding_columns = '{dictionary_encoding_columns}'")
+    if ttl is not None:
+        with_props.append(f"time_to_live_in_seconds = '{ttl}'")
+    if storage_mode:
+        with_props.append(f"storage_mode = '{storage_mode}'")
+    if table_group:
+        with_props.append(f"table_group = '{table_group}'")
+    if binlog and binlog != "none":
+        with_props.append(f"binlog_level = '{binlog}'")
+    if binlog_ttl is not None:
+        with_props.append(f"binlog_ttl = '{binlog_ttl}'")
+    # Logical partition specific properties
+    if partition_expiration_time:
+        with_props.append(f"partition_expiration_time = '{partition_expiration_time}'")
+    if partition_keep_hot_window:
+        with_props.append(f"partition_keep_hot_window = '{partition_keep_hot_window}'")
+    if partition_require_filter is not None:
+        with_props.append(f"partition_require_filter = {partition_require_filter.upper()}")
+    if partition_generate_binlog_window:
+        with_props.append(f"partition_generate_binlog_window = '{partition_generate_binlog_window}'")
+
+    with_clause = ""
+    if with_props:
+        formatted = ",\n    ".join(with_props)
+        with_clause = f"\nWITH (\n    {formatted}\n)"
+
+    return (
+        f"CREATE TABLE{exists_clause} {full_name} (\n"
+        f"    {col_defs}{pk_clause}\n"
+        f"){partition_clause}{with_clause};"
+    )
 
 
 @click.group("table")
@@ -141,11 +238,26 @@ def table_cmd() -> None:
               default=None, help="Storage tier: hot (SSD) / cold (HDD/OSS)")
 @click.option("--table-group", default=None, help="Table Group name")
 @click.option("--partition-by", default=None,
-              help="Enable LIST partition on this column")
+              help="Enable LIST partition on this column(s). "
+                   "Example: 'ds' or 'yy, mm' (logical partition supports up to 2 columns)")
 @click.option("--partition-mode", type=click.Choice(["physical", "logical"]),
               default=None, help="Partition mode: physical (default) / logical (V3.1+)")
-@click.option("--binlog", type=click.Choice(["none", "hg_binlog"]),
-              default=None, help="Binlog level")
+@click.option("--binlog", type=click.Choice(["none", "replica"]),
+              default=None, help="Binlog level: none / replica")
+@click.option("--binlog-ttl", type=int, default=None,
+              help="Binlog TTL in seconds (default: 2592000 = 30 days)")
+@click.option("--partition-expiration-time", default=None,
+              help="Partition expiration time (logical partition only). "
+                   "Example: '30 day', '12 month'")
+@click.option("--partition-keep-hot-window", default=None,
+              help="Partition hot storage window (logical partition only). "
+                   "Example: '15 day', '6 month'")
+@click.option("--partition-require-filter", type=click.Choice(["true", "false"]),
+              default=None,
+              help="Require partition filter in queries (logical partition only)")
+@click.option("--partition-generate-binlog-window", default=None,
+              help="Binlog generation window for partitions (logical partition only). "
+                   "Example: '3 day'")
 @click.option("--if-not-exists", is_flag=True, default=False,
               help="Add IF NOT EXISTS clause")
 @click.option("--dry-run", is_flag=True, default=False,
@@ -158,21 +270,38 @@ def create_cmd(ctx: click.Context, name: str, columns: str,
                dictionary_encoding_columns: Optional[str], ttl: Optional[int],
                storage_mode: Optional[str], table_group: Optional[str],
                partition_by: Optional[str], partition_mode: Optional[str],
-               binlog: Optional[str], if_not_exists: bool, dry_run: bool) -> None:
+               binlog: Optional[str], binlog_ttl: Optional[int],
+               partition_expiration_time: Optional[str],
+               partition_keep_hot_window: Optional[str],
+               partition_require_filter: Optional[str],
+               partition_generate_binlog_window: Optional[str],
+               if_not_exists: bool, dry_run: bool) -> None:
     """Create a new table.
 
     \b
     Examples:
+      # Regular table
       hologres table create --name public.orders \\
         --columns "order_id BIGINT NOT NULL, user_id INT, amount DECIMAL(10,2)" \\
         --primary-key order_id --orientation column \\
         --distribution-key user_id --dry-run
 
     \b
+      # Physical partition table
       hologres table create -n public.events \\
         -c "event_id BIGINT NOT NULL, ds TEXT NOT NULL, payload JSONB" \\
         --primary-key "event_id,ds" --partition-by ds \\
         --orientation column --dry-run
+
+    \b
+      # Logical partition table (V3.1+)
+      hologres table create -n public.logs \\
+        -c "a TEXT, b INT, ds DATE NOT NULL" \\
+        --primary-key "b,ds" --partition-by ds \\
+        --partition-mode logical --orientation column \\
+        --distribution-key b \\
+        --partition-expiration-time "30 day" \\
+        --partition-require-filter true --dry-run
     """
     profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
@@ -190,6 +319,22 @@ def create_cmd(ctx: click.Context, name: str, columns: str,
         print_output(error("INVALID_INPUT", str(e), fmt))
         return
 
+    # Validate logical-partition-only options
+    logical_only_opts = {
+        "partition_expiration_time": partition_expiration_time,
+        "partition_keep_hot_window": partition_keep_hot_window,
+        "partition_require_filter": partition_require_filter,
+        "partition_generate_binlog_window": partition_generate_binlog_window,
+    }
+    if partition_mode != "logical":
+        used = [k for k, v in logical_only_opts.items() if v is not None]
+        if used:
+            opt_names = ", ".join(f"--{k.replace('_', '-')}" for k in used)
+            print_output(error("INVALID_ARGS",
+                f"{opt_names} can only be used with --partition-mode logical",
+                fmt))
+            return
+
     # Build SQL
     sql = _build_table_create_sql(
         name=name, columns=columns, primary_key=primary_key,
@@ -200,6 +345,11 @@ def create_cmd(ctx: click.Context, name: str, columns: str,
         ttl=ttl, storage_mode=storage_mode, table_group=table_group,
         partition_by=partition_by, partition_mode=partition_mode,
         binlog=binlog, if_not_exists=if_not_exists,
+        binlog_ttl=binlog_ttl,
+        partition_expiration_time=partition_expiration_time,
+        partition_keep_hot_window=partition_keep_hot_window,
+        partition_require_filter=partition_require_filter,
+        partition_generate_binlog_window=partition_generate_binlog_window,
     )
 
     # Dry-run mode

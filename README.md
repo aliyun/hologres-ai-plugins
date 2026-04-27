@@ -51,7 +51,7 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres schema dump <schema.table>` | Export DDL |
 | `hologres schema size <schema.table>` | Get table storage size |
 | `hologres table list [--schema S]` | List all tables |
-| `hologres table create --name TABLE --columns COLS [options] [--dry-run]` | Create a table |
+| `hologres table create --name TABLE --columns COLS [options] [--dry-run]` | Create a table (supports logical partition V3.1+) |
 | `hologres table dump <schema.table>` | Export DDL for a table |
 | `hologres table show <table>` | Show table structure |
 | `hologres table size <schema.table>` | Get table storage size |

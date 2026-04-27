@@ -162,11 +162,28 @@ hologres table create --name public.orders \
   --distribution-key user_id --clustering-key "created_at:asc" \
   --ttl 7776000 --dry-run
 
-# Create a partition table
+# Create a physical partition table
 hologres table create --name public.events \
   --columns "event_id BIGINT NOT NULL, ds TEXT NOT NULL, payload JSONB" \
   --primary-key "event_id,ds" --partition-by ds \
   --orientation column --dry-run
+
+# Create a logical partition table (V3.1+, uses WITH syntax)
+hologres table create --name public.logs \
+  --columns "a TEXT, b INT, ds DATE NOT NULL" \
+  --primary-key "b,ds" --partition-by ds \
+  --partition-mode logical --orientation column \
+  --distribution-key b \
+  --partition-expiration-time "30 day" \
+  --partition-keep-hot-window "15 day" \
+  --partition-require-filter true \
+  --binlog replica --binlog-ttl 86400 --dry-run
+
+# Create a logical partition table with two partition keys
+hologres table create --name public.events_2pk \
+  --columns "a TEXT, b INT, yy TEXT NOT NULL, mm TEXT NOT NULL" \
+  --partition-by "yy, mm" --partition-mode logical \
+  --orientation column --partition-require-filter true --dry-run
 
 # Export DDL using hg_dump_script()
 hologres table dump <schema.table>
