@@ -86,9 +86,8 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 **Quick Start:**
 
 ```bash
-# Requires Python 3.11+
-cd hologres-cli
-pip install -e .
+# Install from PyPI
+pip install hologres-cli
 
 # Run interactive configuration wizard
 hologres config
@@ -158,12 +157,24 @@ Equips the AI agent to diagnose slow and failed queries using the `hologres.hg_q
 
 ## Installation
 
-```bash
-git clone <repo-url>
-cd hologres-ai-plugins/hologres-cli
-pip install -e .
+### Hologres CLI
 
-# For development (includes test dependencies)
+```bash
+# Install from PyPI
+pip install hologres-cli
+
+# Or install a specific version
+pip install hologres-cli==0.1.0
+
+# Initial configuration
+hologres config
+```
+
+### Development (from source)
+
+```bash
+git clone https://github.com/aliyun/hologres-ai-plugins.git
+cd hologres-ai-plugins/hologres-cli
 pip install -e ".[dev]"
 ```
 

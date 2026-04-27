@@ -20,21 +20,28 @@ AI-agent-friendly command-line interface for Hologres database with safety guard
 Requires Python 3.11+
 
 ```bash
-cd hologres-cli
-pip install -e .
+pip install hologres-cli
 ```
 
-Or using `uv`:
+Or install a specific version:
 
 ```bash
-uv venv --python 3.11
-source .venv/bin/activate
-uv pip install -e .
+pip install hologres-cli==0.1.0
+```
+
+Using `uv`:
+
+```bash
+uv pip install hologres-cli
 ```
 
 ### Development Installation
 
+For local development from source:
+
 ```bash
+git clone https://github.com/aliyun/hologres-ai-plugins.git
+cd hologres-ai-plugins/hologres-cli
 pip install -e ".[dev]"
 ```
 
@@ -495,7 +502,7 @@ hologres sql run --no-mask "SELECT * FROM users LIMIT 10"
 
 ```bash
 # Unit tests (no database required)
-pytest -m unit
+pytest tests/ --ignore=tests/integration
 
 # Run specific test files
 pytest tests/test_commands/test_dt.py                # DT command tests
@@ -504,10 +511,6 @@ pytest tests/test_config_store.py                    # Config store unit tests
 
 # With coverage
 pytest --cov=src/hologres_cli --cov-report=term-missing
-
-# Integration tests (requires configured profile)
-export HOLOGRES_DSN="hologres://user:pass@endpoint:port/database"
-pytest -m integration
 ```
 
 Integration tests (in `tests/integration/`) require a configured profile and are skipped by default.
