@@ -3,6 +3,7 @@ name = "hologres-cli"
 version = "0.1.0"
 description = "AI-agent-friendly CLI for Hologres database with safety guardrails"
 requires-python = ">=3.11"
+readme = "README.md"
 dependencies = [
     "click>=8.1.0",
     "psycopg[binary]>=3.1.0",
@@ -12,6 +13,24 @@ license = {text = "MIT"}
 authors = [
     {name = "Hologres CLI Team"}
 ]
+keywords = ["hologres", "cli", "database", "ai-agent", "alibaba-cloud"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/aliyun/hologres-ai-plugins"
+Repository = "https://github.com/aliyun/hologres-ai-plugins"
+Issues = "https://github.com/aliyun/hologres-ai-plugins/issues"
 
 [project.optional-dependencies]
 dev = [
