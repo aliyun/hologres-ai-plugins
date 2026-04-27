@@ -71,16 +71,24 @@ $ hologres-agent-skills
 
 ## 开发
 
-### 构建
+### 构建与发布
 
 ```bash
 cd agent-skills
 
-# 构建 wheel（同步 skills 到包内，构建，然后清理）
-uv run upload_to_pypi.py
+# 仅构建（产物在 dist/ 目录）
+python upload_to_pypi.py --build
 
-# 发布到 PyPI
-python -m twine upload dist/*
+# 上传到 TestPyPI（验证）
+export TEST_PYPI_TOKEN="pypi-xxx"
+python upload_to_pypi.py --test
+
+# 上传到正式 PyPI
+export UV_PUBLISH_TOKEN="pypi-xxx"
+python upload_to_pypi.py --publish
+
+# 指定版本号并发布
+python upload_to_pypi.py --publish --version 0.2.0
 ```
 
 ### 项目结构

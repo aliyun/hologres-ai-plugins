@@ -71,16 +71,24 @@ $ hologres-agent-skills
 
 ## Development
 
-### Build
+### Build & Publish
 
 ```bash
 cd agent-skills
 
-# Build wheel (syncs skills into package, builds, then cleans up)
-uv run upload_to_pypi.py
+# Build only (artifacts in dist/)
+python upload_to_pypi.py --build
 
-# Publish to PyPI
-python -m twine upload dist/*
+# Upload to TestPyPI (verification)
+export TEST_PYPI_TOKEN="pypi-xxx"
+python upload_to_pypi.py --test
+
+# Upload to official PyPI
+export UV_PUBLISH_TOKEN="pypi-xxx"
+python upload_to_pypi.py --publish
+
+# Bump version and publish
+python upload_to_pypi.py --publish --version 0.2.0
 ```
 
 ### Project Structure
