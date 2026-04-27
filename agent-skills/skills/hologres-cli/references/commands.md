@@ -1048,6 +1048,35 @@ hologres extension create postgis --if-not-exists
 
 GUC parameter management commands.
 
+### guc list
+
+List common Hologres GUC parameters with their current values.
+
+```bash
+hologres guc list
+hologres guc list --filter <keyword>
+hologres guc list -q timeout
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--filter, -q` | Filter parameters by keyword |
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "rows": [
+      {"param": "hg_enable_start_auto_analyze_worker", "value": "on"},
+      {"param": "statement_timeout", "value": "8h"},
+      ...
+    ]
+  }
+}
+```
+
 ### guc show
 
 Show the current value of a GUC parameter.
@@ -1075,21 +1104,28 @@ hologres guc show statement_timeout
 
 ### guc set
 
-Set a GUC parameter at the database level (persistent).
-
-This executes `ALTER DATABASE` to set the parameter, which persists across sessions and applies to all new connections to the database.
+Set a GUC parameter at database or session level.
 
 ```bash
-hologres guc set <param_name> <value>
+hologres guc set <param_name> <value> [--scope database|session]
 ```
+
+**Options:**
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--scope` | `database` | `database` (persistent via ALTER DATABASE) or `session` (current connection only via SET) |
 
 **Example:**
 ```bash
+# Database level (persistent, default)
 hologres guc set optimizer_join_order query
 hologres guc set statement_timeout '5min'
+
+# Session level (current connection only)
+hologres guc set hg_foreign_table_executor_max_dop 32 --scope session
 ```
 
-**Output:**
+**Output (database scope):**
 ```json
 {
   "ok": true,
@@ -1102,7 +1138,71 @@ hologres guc set statement_timeout '5min'
 }
 ```
 
-> **Note:** The change takes effect for new sessions. Current sessions retain the old value.
+**Output (session scope):**
+```json
+{
+  "ok": true,
+  "data": {
+    "param": "optimizer_join_order",
+    "value": "query",
+    "scope": "session"
+  }
+}
+```
+
+> **Note:** Database-level changes take effect for new sessions. Session-level changes apply only to the current connection.
+
+### guc reset
+
+Reset a GUC parameter to its default value.
+
+```bash
+hologres guc reset <param_name> [--scope database|session]
+```
+
+**Options:**
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--scope` | `database` | `database` (persistent via ALTER DATABASE RESET) or `session` (current via RESET) |
+
+**Example:**
+```bash
+hologres guc reset statement_timeout
+hologres guc reset optimizer_join_order --scope session
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "param": "statement_timeout",
+    "reset": true,
+    "scope": "database",
+    "database": "mydb"
+  }
+}
+```
+
+### Common Hologres GUC Parameters
+
+| Category | Parameter | Default | Description |
+|----------|-----------|---------|-------------|
+| Auto Analyze | `hg_enable_start_auto_analyze_worker` | `on` | Enable Auto Analyze |
+| Auto Analyze | `hg_auto_check_table_changes_interval` | `10min` | Table change check interval |
+| Auto Analyze | `hg_auto_analyze_max_sample_row_count` | `16777216` | Max sample rows for analyze |
+| MaxCompute | `hg_foreign_table_max_partition_limit` | `0` (v3.0.7+) | Foreign table partition limit |
+| MaxCompute | `hg_experimental_query_batch_size` | `8192` | Query batch size |
+| MaxCompute | `hg_foreign_table_split_size` | `64` | Split size |
+| MaxCompute | `hg_foreign_table_executor_max_dop` | Core count | Max DOP for queries |
+| Query | `optimizer_join_order` | `exhaustive` | Join order strategy |
+| Query | `optimizer_force_multistage_agg` | `off` | Force multi-stage aggregation |
+| Query | `hg_experimental_enable_result_cache` | `on` | Result cache |
+| Timeout | `statement_timeout` | `8h` | Active query timeout |
+| Timeout | `idle_in_transaction_session_timeout` | `10min` | Idle transaction timeout |
+| Timeout | `idle_session_timeout` | `0` | Idle session timeout (0=disabled) |
+| Security | `hg_anon_enable` | `off` | Data masking |
+| Misc | `timezone` | `PRC` | Timezone setting |
 
 ## history
 

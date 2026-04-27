@@ -145,15 +145,14 @@ class TestGucShowCmd:
         assert result.exit_code == 0
         call_args = mock_get_connection.execute.call_args
         executed_sql = call_args[0][0]
-        # psycopg.sql.Identifier quotes the name with double quotes
         assert '"optimizer_join_order"' in executed_sql
 
 
 class TestGucSetCmd:
     """Tests for guc set command."""
 
-    def test_set_cmd_success(self, mock_get_connection):
-        """Test successful GUC parameter set."""
+    def test_set_cmd_success_database_scope(self, mock_get_connection):
+        """Test successful GUC parameter set at database level (default)."""
         mock_get_connection.execute.return_value = []
         mock_get_connection.database = "testdb"
 
@@ -168,6 +167,50 @@ class TestGucSetCmd:
         assert output["data"]["scope"] == "database"
         assert output["data"]["database"] == "testdb"
         mock_get_connection.close.assert_called_once()
+
+    def test_set_cmd_success_session_scope(self, mock_get_connection):
+        """Test successful GUC parameter set at session level."""
+        mock_get_connection.execute.return_value = []
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "set", "optimizer_join_order", "query",
+                                     "--scope", "session"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["param"] == "optimizer_join_order"
+        assert output["data"]["value"] == "query"
+        assert output["data"]["scope"] == "session"
+        assert "database" not in output["data"]
+        mock_get_connection.close.assert_called_once()
+
+    def test_set_cmd_session_scope_uses_set(self, mock_get_connection):
+        """Test that session scope uses SET instead of ALTER DATABASE."""
+        mock_get_connection.execute.return_value = []
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "set", "statement_timeout", "5min",
+                                     "--scope", "session"])
+
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        executed_sql = call_args[0][0]
+        assert executed_sql.startswith("SET")
+        assert "ALTER DATABASE" not in executed_sql
+        assert '"statement_timeout"' in executed_sql
+
+    def test_set_cmd_session_scope_table_format(self, mock_get_connection):
+        """Test session scope table format output."""
+        mock_get_connection.execute.return_value = []
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--format", "table", "guc", "set",
+                                     "optimizer_join_order", "query",
+                                     "--scope", "session"])
+
+        assert result.exit_code == 0
+        assert "session level" in result.output
 
     def test_set_cmd_table_format(self, mock_get_connection):
         """Test table format output."""
@@ -268,16 +311,14 @@ class TestGucSetCmd:
         assert result.exit_code == 0
         call_args = mock_get_connection.execute.call_args
         executed_sql = call_args[0][0]
-        # psycopg.sql.Identifier quotes identifiers with double quotes
         assert '"testdb"' in executed_sql
         assert '"optimizer_join_order"' in executed_sql
         assert "ALTER DATABASE" in executed_sql
         assert "SET" in executed_sql
-        # DDL should not use parameterized placeholder ($1)
         assert "$1" not in executed_sql
 
     def test_set_cmd_value_uses_literal(self, mock_get_connection):
-        """Test that the parameter value is rendered via psycopg.sql.Literal, not parameterized."""
+        """Test that the parameter value is rendered via psycopg.sql.Literal."""
         mock_get_connection.execute.return_value = []
         mock_get_connection.database = "testdb"
 
@@ -286,9 +327,7 @@ class TestGucSetCmd:
 
         assert result.exit_code == 0
         call_args = mock_get_connection.execute.call_args
-        # No params tuple should be passed — value is rendered inline via sql.Literal
         assert len(call_args[0]) == 1 or call_args[0][1] is None
-        # SQL should not contain parameterized placeholder
         executed_sql = call_args[0][0]
         assert "$1" not in executed_sql
 
@@ -335,11 +374,10 @@ class TestGucSetCmd:
         assert result.exit_code == 0
         call_args = mock_get_connection.execute.call_args
         executed_sql = call_args[0][0]
-        # DDL should not use parameterized placeholder
         assert "$1" not in executed_sql
 
     def test_set_cmd_value_with_special_chars(self, mock_get_connection):
-        """Test that value with special chars (e.g., spaces) does not cause $1 placeholder."""
+        """Test that value with special chars does not cause $1 placeholder."""
         mock_get_connection.execute.return_value = []
         mock_get_connection.database = "testdb"
 
@@ -349,5 +387,271 @@ class TestGucSetCmd:
         assert result.exit_code == 0
         call_args = mock_get_connection.execute.call_args
         executed_sql = call_args[0][0]
-        # DDL should not use parameterized placeholder
         assert "$1" not in executed_sql
+
+
+class TestGucResetCmd:
+    """Tests for guc reset command."""
+
+    def test_reset_cmd_database_scope(self, mock_get_connection):
+        """Test reset at database level (default)."""
+        mock_get_connection.execute.return_value = []
+        mock_get_connection.database = "testdb"
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "reset", "statement_timeout"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["param"] == "statement_timeout"
+        assert output["data"]["reset"] is True
+        assert output["data"]["scope"] == "database"
+        assert output["data"]["database"] == "testdb"
+
+        call_args = mock_get_connection.execute.call_args
+        executed_sql = call_args[0][0]
+        assert "ALTER DATABASE" in executed_sql
+        assert "RESET" in executed_sql
+        assert '"statement_timeout"' in executed_sql
+        mock_get_connection.close.assert_called_once()
+
+    def test_reset_cmd_session_scope(self, mock_get_connection):
+        """Test reset at session level."""
+        mock_get_connection.execute.return_value = []
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "reset", "optimizer_join_order",
+                                     "--scope", "session"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["param"] == "optimizer_join_order"
+        assert output["data"]["reset"] is True
+        assert output["data"]["scope"] == "session"
+        assert "database" not in output["data"]
+
+        call_args = mock_get_connection.execute.call_args
+        executed_sql = call_args[0][0]
+        assert executed_sql.startswith("RESET")
+        assert "ALTER DATABASE" not in executed_sql
+
+    def test_reset_cmd_table_format_database(self, mock_get_connection):
+        """Test table format output for database scope reset."""
+        mock_get_connection.execute.return_value = []
+        mock_get_connection.database = "testdb"
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--format", "table", "guc", "reset",
+                                     "statement_timeout"])
+
+        assert result.exit_code == 0
+        assert "reset to default" in result.output
+        assert "database level" in result.output
+
+    def test_reset_cmd_table_format_session(self, mock_get_connection):
+        """Test table format output for session scope reset."""
+        mock_get_connection.execute.return_value = []
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--format", "table", "guc", "reset",
+                                     "statement_timeout", "--scope", "session"])
+
+        assert result.exit_code == 0
+        assert "reset to default" in result.output
+        assert "session level" in result.output
+
+    def test_reset_cmd_connection_error(self, mocker):
+        """Test connection error handling."""
+        mocker.patch("hologres_cli.commands.guc.get_connection",
+                     side_effect=DSNError("No DSN configured"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "reset", "statement_timeout"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_reset_cmd_query_error(self, mock_get_connection):
+        """Test query error handling."""
+        mock_get_connection.execute.side_effect = Exception("permission denied")
+        mock_get_connection.database = "testdb"
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "reset", "bad_param"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+        mock_get_connection.close.assert_called_once()
+
+    def test_reset_cmd_invalid_identifier(self, mock_get_connection):
+        """Test reset with invalid parameter name."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "reset", "bad;name"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_INPUT"
+
+    def test_reset_cmd_logging_success(self, mock_get_connection, mocker):
+        """Test that successful reset logs operation."""
+        mock_log = mocker.patch("hologres_cli.commands.guc.log_operation")
+        mock_get_connection.execute.return_value = []
+        mock_get_connection.database = "testdb"
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "reset", "statement_timeout"])
+
+        assert result.exit_code == 0
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args
+        assert call_kwargs[1]["success"] is True
+        assert call_kwargs[0][0] == "guc.reset"
+
+    def test_reset_cmd_logging_failure(self, mock_get_connection, mocker):
+        """Test that failed reset logs operation with error."""
+        mock_log = mocker.patch("hologres_cli.commands.guc.log_operation")
+        mock_get_connection.execute.side_effect = Exception("DB error")
+        mock_get_connection.database = "testdb"
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "reset", "statement_timeout"])
+
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args
+        assert call_kwargs[1]["success"] is False
+        assert call_kwargs[1]["error_code"] == "QUERY_ERROR"
+
+    def test_reset_cmd_connection_closed(self, mock_get_connection):
+        """Test that connection is closed after reset."""
+        mock_get_connection.execute.return_value = []
+        mock_get_connection.database = "testdb"
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "reset", "statement_timeout"])
+
+        assert result.exit_code == 0
+        mock_get_connection.close.assert_called_once()
+
+
+class TestGucListCmd:
+    """Tests for guc list command."""
+
+    def test_list_cmd_success(self, mock_get_connection):
+        """Test successful GUC parameter listing."""
+        mock_get_connection.execute.return_value = [
+            {"hg_enable_start_auto_analyze_worker": "on"}
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "list"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert len(output["data"]["rows"]) > 0
+        mock_get_connection.close.assert_called_once()
+
+    def test_list_cmd_with_filter(self, mock_get_connection):
+        """Test list with keyword filter."""
+        mock_get_connection.execute.return_value = [
+            {"statement_timeout": "8h"}
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "list", "--filter", "timeout"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        rows = output["data"]["rows"]
+        for row in rows:
+            assert "timeout" in row["param"].lower()
+
+    def test_list_cmd_filter_no_match(self, mock_get_connection):
+        """Test list with filter that matches nothing."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "list", "--filter", "zzzznonexistent"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert len(output["data"]["rows"]) == 0
+
+    def test_list_cmd_connection_error(self, mocker):
+        """Test connection error handling."""
+        mocker.patch("hologres_cli.commands.guc.get_connection",
+                     side_effect=DSNError("No DSN configured"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "list"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_list_cmd_handles_unavailable_params(self, mock_get_connection):
+        """Test that list gracefully handles params that fail to query."""
+        call_count = 0
+
+        def side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count % 2 == 0:
+                raise Exception("unrecognized parameter")
+            return [{"value": "on"}]
+
+        mock_get_connection.execute.side_effect = side_effect
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "list"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        rows = output["data"]["rows"]
+        has_not_available = any(r["value"] == "(not available)" for r in rows)
+        assert has_not_available
+
+    def test_list_cmd_logging(self, mock_get_connection, mocker):
+        """Test that list logs operation."""
+        mock_log = mocker.patch("hologres_cli.commands.guc.log_operation")
+        mock_get_connection.execute.return_value = [{"value": "on"}]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "list"])
+
+        assert result.exit_code == 0
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args
+        assert call_kwargs[1]["success"] is True
+        assert call_kwargs[0][0] == "guc.list"
+
+    def test_list_cmd_connection_closed(self, mock_get_connection):
+        """Test that connection is closed after list."""
+        mock_get_connection.execute.return_value = [{"value": "on"}]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "list"])
+
+        assert result.exit_code == 0
+        mock_get_connection.close.assert_called_once()
+
+    def test_list_cmd_filter_short_option(self, mock_get_connection):
+        """Test list with -q short option."""
+        mock_get_connection.execute.return_value = [
+            {"optimizer_join_order": "exhaustive"}
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["guc", "list", "-q", "optimizer"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        rows = output["data"]["rows"]
+        for row in rows:
+            assert "optimizer" in row["param"].lower()

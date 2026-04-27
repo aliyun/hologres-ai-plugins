@@ -84,13 +84,27 @@ SET hg_experimental_query_mem_limit = 10737418240;  -- 10GB
 
 | Scope | SQL Syntax | CLI Equivalent |
 |-------|-----------|----------------|
-| Session | `SET param = value;` | `hologres sql run "SET param = value"` |
+| Session | `SET param = value;` | `hologres guc set param value --scope session` |
 | Transaction | `SET LOCAL param = value;` | `hologres sql run "SET LOCAL param = value"` |
 | Database | `ALTER DATABASE db SET param = value;` | `hologres guc set param value` |
 
-```sql
--- Reset to default
-RESET optimizer_join_order;
+```bash
+# List all Hologres GUC parameters with current values
+hologres guc list
+hologres guc list --filter optimizer
+
+# Show a single parameter value
+hologres guc show optimizer_join_order
+
+# Set at database level (persistent, default)
+hologres guc set optimizer_join_order query
+
+# Set at session level (current connection only)
+hologres guc set optimizer_join_order query --scope session
+
+# Reset to default
+hologres guc reset optimizer_join_order
+hologres guc reset optimizer_join_order --scope session
 ```
 
 ---
@@ -103,10 +117,16 @@ SET optimizer_join_order = 'query';
 SET optimizer_force_multistage_agg = on;
 ```
 
-Persisted via CLI:
+Persisted via CLI (database level):
 ```bash
 hologres guc set optimizer_join_order query
 hologres guc set optimizer_force_multistage_agg on
+```
+
+Session-only (no persistence):
+```bash
+hologres guc set optimizer_join_order query --scope session
+hologres guc set optimizer_force_multistage_agg on --scope session
 ```
 
 ### Memory Issues
@@ -119,4 +139,14 @@ Persisted via CLI:
 ```bash
 hologres guc set hg_experimental_query_mem_limit 5368709120
 hologres guc set hg_experimental_enable_cross_join_rewrite off
+```
+
+### Inspect & Reset
+```bash
+# Check all GUC parameters
+hologres guc list
+
+# Reset parameters to default
+hologres guc reset optimizer_join_order
+hologres guc reset hg_experimental_query_mem_limit
 ```
