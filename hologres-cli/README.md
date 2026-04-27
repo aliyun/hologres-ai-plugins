@@ -238,14 +238,6 @@ hologres sql explain "SELECT * FROM orders WHERE status = 'active'"
 ### Data Import/Export
 
 ```bash
-<<<<<<< HEAD
-hologres data export my_table -f output.csv                           # Export to CSV
-hologres data export -q "SELECT * FROM users WHERE active" -f out.csv # Export with query
-hologres data import my_table -f input.csv                            # Import CSV
-hologres data import my_table -f input.csv --truncate                 # Import with truncate
-hologres data count my_table                                          # Count rows
-hologres data count my_table --where "status='active'"                # Count with filter
-=======
 # Export table to CSV
 hologres data export my_table -f output.csv
 
@@ -267,7 +259,6 @@ hologres data import my_table -f input.csv --delimiter '|'
 # Count rows
 hologres data count my_table
 hologres data count my_table --where "status='active'"
->>>>>>> origin/master
 ```
 
 ### Dynamic Table (V3.1+)
@@ -406,10 +397,6 @@ hologres -f jsonl schema tables   # JSON Lines
 Queries without `LIMIT` that return more than 100 rows will fail with `LIMIT_REQUIRED` error.
 
 ```bash
-<<<<<<< HEAD
-hologres sql "SELECT * FROM large_table LIMIT 50"           # OK
-hologres sql --no-limit-check "SELECT * FROM large_table"   # Bypass limit check
-=======
 # This will fail if table has >100 rows
 hologres sql run "SELECT * FROM large_table"
 
@@ -418,18 +405,10 @@ hologres sql run "SELECT * FROM large_table LIMIT 50"
 
 # Or disable check (use with caution)
 hologres sql run --no-limit-check "SELECT * FROM large_table"
->>>>>>> origin/master
 ```
 
 ### Write Protection
 
-<<<<<<< HEAD
-All write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) are blocked via `hologres sql`.
-
-### Drop Safety
-
-`hologres dt drop` defaults to dry-run mode. Use `--confirm` to actually execute.
-=======
 Write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) require the `--write` flag:
 
 ```bash
@@ -446,7 +425,10 @@ hologres sql run --write "DELETE FROM users"
 # DELETE/UPDATE with WHERE clause is allowed
 hologres sql run --write "DELETE FROM users WHERE id = 1"
 ```
->>>>>>> origin/master
+
+### Drop Safety
+
+`hologres dt drop` defaults to dry-run mode. Use `--confirm` to actually execute.
 
 ## Error Codes
 
@@ -458,15 +440,12 @@ hologres sql run --write "DELETE FROM users WHERE id = 1"
 | `WRITE_GUARD_ERROR` | Write operation attempted without `--write` flag |
 | `DANGEROUS_WRITE_BLOCKED` | DELETE/UPDATE without WHERE clause |
 | `WRITE_BLOCKED` | Write operation not allowed |
-<<<<<<< HEAD
 | `NOT_FOUND` | Table or resource not found |
 | `INVALID_ARGS` | Invalid or missing arguments |
 | `NO_CHANGES` | No properties specified to alter |
-=======
 | `EXPORT_ERROR` | Data export failed |
 | `IMPORT_ERROR` | Data import failed |
 | `VIEW_NOT_FOUND` | View not found |
->>>>>>> origin/master
 
 ## Sensitive Data Masking
 
@@ -489,31 +468,20 @@ hologres sql run --no-mask "SELECT * FROM users LIMIT 10"
 ## Testing
 
 ```bash
-<<<<<<< HEAD
-pytest tests/ --ignore=tests/integration             # Unit tests only (fast, no DB)
+# Unit tests (no database required)
+pytest -m unit
+
+# Run specific test files
 pytest tests/test_commands/test_dt.py                # DT command tests
 pytest tests/test_commands/test_config.py            # Config command tests
 pytest tests/test_config_store.py                    # Config store unit tests
-pytest --cov=src/hologres_cli --cov-report=term-missing  # With coverage
-=======
-# Set DSN
+
+# With coverage
+pytest --cov=src/hologres_cli --cov-report=term-missing
+
+# Integration tests (requires configured profile)
 export HOLOGRES_DSN="hologres://user:pass@endpoint:port/database"
-
-# Check connection
-hologres status
-
-# List tables in table format
-hologres -f table schema tables
-
-# Query with JSON output
-hologres sql run "SELECT * FROM orders WHERE status='pending' LIMIT 20"
-
-# Check warehouse info
-hologres warehouse
-
-# View command history
-hologres history
->>>>>>> origin/master
+pytest -m integration
 ```
 
 Integration tests (in `tests/integration/`) require a configured profile and are skipped by default.

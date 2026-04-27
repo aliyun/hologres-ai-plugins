@@ -2,7 +2,7 @@
 name: hologres-cli
 description: |
   AI-agent-friendly Hologres CLI with safety guardrails and structured JSON output.
-  Use for database operations, schema inspection, SQL execution, data import/export,and Dynamic Table lifecycle management (V3.1+ syntax).and GUC parameter management.
+  Use for database operations, schema inspection, SQL execution, data import/export, Dynamic Table lifecycle management (V3.1+ syntax), and GUC parameter management.
   Triggers: "hologres cli", "hologres command", "hologres database", "dynamic table", "hologres查询", "hologres guc", "GUC parameter"
 ---
 
