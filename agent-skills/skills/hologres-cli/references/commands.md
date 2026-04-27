@@ -6,11 +6,84 @@ Complete command reference for Hologres CLI.
 
 | Option | Description |
 |--------|-------------|
-| `--dsn` | Database connection string |
+| `--profile, -p` | Use named profile from config |
 | `-f, --format` | Output format: json, table, csv, jsonl |
-| `--no-mask` | Disable sensitive data masking |
-| `--no-limit-check` | Disable row limit check |
 | `--version` | Show version and exit |
+
+## config
+
+Manage Hologres CLI configuration profiles.
+
+### config (no subcommand)
+
+Run interactive configuration wizard.
+
+```bash
+hologres config
+hologres config --profile prod
+```
+
+### config list
+
+List all profiles with current marker.
+
+```bash
+hologres config list
+```
+
+### config show
+
+Show current profile details (sensitive fields masked).
+
+```bash
+hologres config show
+hologres config show --profile prod
+```
+
+### config current
+
+Show current active profile name.
+
+```bash
+hologres config current
+```
+
+### config switch
+
+Switch active profile.
+
+```bash
+hologres config switch prod
+```
+
+### config set
+
+Set a configuration value.
+
+```bash
+hologres config set region_id cn-shanghai
+hologres config set database mydb
+hologres config set auth_mode basic
+```
+
+Settable keys: `region_id`, `instance_id`, `nettype`, `auth_mode`, `access_key_id`, `access_key_secret`, `username`, `password`, `database`, `warehouse`, `endpoint`, `port`, `output_format`, `language`.
+
+### config get
+
+Get a configuration value.
+
+```bash
+hologres config get region_id
+hologres config get database
+```
+
+### config delete
+
+Delete a profile (requires `--confirm`).
+
+```bash
+hologres config delete old-profile --confirm
+```
 
 ## status
 
@@ -18,6 +91,7 @@ Check database connection status.
 
 ```bash
 hologres status
+hologres --profile prod status
 ```
 
 **Output:**

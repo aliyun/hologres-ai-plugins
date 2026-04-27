@@ -160,7 +160,7 @@ hologres history -n 50
 
 | Code | Trigger | Resolution |
 |------|---------|------------|
-| `CONNECTION_ERROR` | Cannot connect to database | Check DSN, network, credentials |
+| `CONNECTION_ERROR` | Cannot connect to database | Check profile config, network, credentials |
 | `QUERY_ERROR` | SQL syntax or execution error | Fix SQL statement |
 | `LIMIT_REQUIRED` | SELECT without LIMIT, >100 rows | Add LIMIT or use --no-limit-check |
 | `WRITE_GUARD_ERROR` | Write operation without --write | Add --write flag |
@@ -169,5 +169,7 @@ hologres history -n 50
 | `EXPORT_ERROR` | Data export failed | Check table/query and file path |
 | `IMPORT_ERROR` | Data import failed | Check CSV format and table schema |
 | `NOT_FOUND` | Table or resource not found | Verify table name and schema |
+| `INVALID_INPUT` | Invalid identifier or input | Check table/schema names |
 | `INVALID_ARGS` | Invalid or missing arguments | Check required arguments |
 | `NO_CHANGES` | No alter properties specified | Specify at least one property to alter |
+| `VIEW_NOT_FOUND` | View not found | Verify view name and schema |

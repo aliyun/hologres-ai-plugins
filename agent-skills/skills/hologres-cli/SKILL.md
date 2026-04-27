@@ -14,24 +14,38 @@ AI-agent-friendly command-line interface for Hologres with safety guardrails and
 
 ```bash
 # Requires Python 3.11+
-cd hologres-cli
-pip install -e .
+pip install hologres-cli
+
+# Or install a specific version
+pip install hologres-cli==0.1.0
 ```
 
 ## Configuration
 
-DSN format: `hologres://[user[:password]@]host[:port]/database`
+Profile-based configuration stored in `~/.hologres/config.json`.
 
-Priority: `--dsn` flag > `HOLOGRES_DSN` env > `~/.hologres/config.env`
+```bash
+# Interactive setup wizard
+hologres config
+
+# Or set values directly
+hologres config set region_id cn-hangzhou
+hologres config set instance_id hgprecn-cn-xxx
+hologres config set database mydb
+```
+
+Profile resolution priority: `--profile <name>` flag > current profile > error (prompts to run `hologres config`).
 
 ## Quick Start
 
 ```bash
-export HOLOGRES_DSN="hologres://user:pass@endpoint:port/database"
-hologres status
-hologres schema tables
-hologres sql "SELECT * FROM orders LIMIT 10"
-hologres dt list
+pip install hologres-cli
+hologres config                                   # Interactive setup
+hologres status                                    # Check connection
+hologres schema tables                             # List tables
+hologres sql run "SELECT * FROM orders LIMIT 10"   # Query data
+hologres --profile prod status                     # Use specific profile
+hologres dt list                                   # List Dynamic Tables
 ```
 
 ## Core Commands
@@ -254,8 +268,11 @@ hologres sql run --write "DELETE FROM users WHERE status='inactive'"
 | `CONNECTION_ERROR` | Failed to connect |
 | `QUERY_ERROR` | SQL execution error |
 | `LIMIT_REQUIRED` | Need LIMIT clause |
+| `WRITE_GUARD_ERROR` | Write operation without `--write` flag |
+| `DANGEROUS_WRITE_BLOCKED` | DELETE/UPDATE without WHERE clause |
 | `WRITE_BLOCKED` | Write operation not allowed |
 | `NOT_FOUND` | Table or resource not found |
+| `INVALID_INPUT` | Invalid identifier or input validation failed |
 | `INVALID_ARGS` | Invalid or missing arguments |
 | `NO_CHANGES` | No properties specified to alter |
 | `EXPORT_ERROR` | Data export failed |
