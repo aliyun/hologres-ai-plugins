@@ -636,6 +636,51 @@ hologres view show analytics.daily_stats
 }
 ```
 
+## partition
+
+Partition management commands. Currently supports logical partition tables only.
+
+### partition list
+
+List partitions of a logical partition table.
+
+```bash
+hologres partition list <table>
+hologres partition list public.logs
+hologres partition list my_table        # defaults to public schema
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "rows": [
+      {"partition": "2025-04-01"},
+      {"partition": "2025-04-02"},
+      {"partition": "2025-04-03"}
+    ],
+    "count": 3
+  }
+}
+```
+
+**Error (not a logical partition table):**
+```json
+{
+  "ok": false,
+  "error": {"code": "NOT_LOGICAL_PARTITION", "message": "Table 'public.my_table' is not a logical partition table. Only logical partition tables are supported."}
+}
+```
+
+**Error (table not found):**
+```json
+{
+  "ok": false,
+  "error": {"code": "TABLE_NOT_FOUND", "message": "Table 'public.nonexistent' not found"}
+}
+```
+
 ## extension
 
 Extension management commands.

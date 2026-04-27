@@ -227,6 +227,19 @@ hologres view show <view_name>
 hologres view show analytics.daily_stats
 ```
 
+### Partition Management
+
+```bash
+# List partitions of a logical partition table
+hologres partition list my_table
+hologres partition list public.logs
+
+# With table format output
+hologres partition list public.logs -f table
+```
+
+> **Note:** Currently only logical partition tables are supported. Non-logical partition tables will return a `NOT_LOGICAL_PARTITION` error.
+
 ### Extension Management
 
 ```bash
@@ -489,6 +502,7 @@ hologres sql run --write "DELETE FROM users WHERE id = 1"
 | `EXPORT_ERROR` | Data export failed |
 | `IMPORT_ERROR` | Data import failed |
 | `VIEW_NOT_FOUND` | View not found |
+| `NOT_LOGICAL_PARTITION` | Table is not a logical partition table |
 
 ## Sensitive Data Masking
 
