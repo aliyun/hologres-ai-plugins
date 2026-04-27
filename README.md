@@ -69,6 +69,8 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres extension create <name>` | Create (install) an extension |
 | `hologres guc show <param>` | Show GUC parameter value |
 | `hologres guc set <param> <value>` | Set GUC parameter at database level |
+| `hologres guc reset <param>` | Reset GUC parameter to default value |
+| `hologres guc list [--filter keyword]` | List common GUC parameters and current values |
 | `hologres data export <table> -f out.csv` | Export table to CSV |
 | `hologres data import <table> -f in.csv` | Import CSV to table |
 | `hologres data count <table>` | Count rows |

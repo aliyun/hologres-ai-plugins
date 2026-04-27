@@ -1104,28 +1104,20 @@ hologres guc show statement_timeout
 
 ### guc set
 
-Set a GUC parameter at database or session level.
+Set a GUC parameter at database level (persistent via ALTER DATABASE).
 
 ```bash
-hologres guc set <param_name> <value> [--scope database|session]
+hologres guc set <param_name> <value>
 ```
-
-**Options:**
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--scope` | `database` | `database` (persistent via ALTER DATABASE) or `session` (current connection only via SET) |
 
 **Example:**
 ```bash
-# Database level (persistent, default)
 hologres guc set optimizer_join_order query
 hologres guc set statement_timeout '5min'
-
-# Session level (current connection only)
-hologres guc set hg_foreign_table_executor_max_dop 32 --scope session
+hologres guc set hg_foreign_table_executor_max_dop 32
 ```
 
-**Output (database scope):**
+**Output:**
 ```json
 {
   "ok": true,
@@ -1138,37 +1130,20 @@ hologres guc set hg_foreign_table_executor_max_dop 32 --scope session
 }
 ```
 
-**Output (session scope):**
-```json
-{
-  "ok": true,
-  "data": {
-    "param": "optimizer_join_order",
-    "value": "query",
-    "scope": "session"
-  }
-}
-```
-
-> **Note:** Database-level changes take effect for new sessions. Session-level changes apply only to the current connection.
+> **Note:** Database-level changes take effect for new sessions.
 
 ### guc reset
 
-Reset a GUC parameter to its default value.
+Reset a GUC parameter to its default value (via ALTER DATABASE RESET).
 
 ```bash
-hologres guc reset <param_name> [--scope database|session]
+hologres guc reset <param_name>
 ```
-
-**Options:**
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--scope` | `database` | `database` (persistent via ALTER DATABASE RESET) or `session` (current via RESET) |
 
 **Example:**
 ```bash
 hologres guc reset statement_timeout
-hologres guc reset optimizer_join_order --scope session
+hologres guc reset optimizer_join_order
 ```
 
 **Output:**

@@ -26,6 +26,7 @@ hologres-ai-plugins/
 
 **核心特性：**
 
+- **Profile 多环境管理** — 通过 `~/.hologres/config.json` 管理多个连接配置，支持交互式配置向导
 - **结构化输出** — 所有命令默认返回 JSON 格式，便于 AI Agent 解析
 - **安全防护** — 行数限制保护、写操作拦截、危险 SQL 检测
 - **Dynamic Table 管理** — Dynamic Table 全生命周期管理（V3.1+ 新语法）
@@ -37,6 +38,11 @@ hologres-ai-plugins/
 
 | 命令 | 说明 |
 |------|------|
+| `hologres config` | 交互式配置向导 |
+| `hologres config list` | 列出所有 Profile |
+| `hologres config show` | 查看当前 Profile 详情 |
+| `hologres config switch <name>` | 切换当前 Profile |
+| `hologres config set <key> <value>` | 设置配置项 |
 | `hologres status` | 检查连接状态 |
 | `hologres instance <name>` | 查询实例版本和最大连接数 |
 | `hologres warehouse [name]` | 列出或查询计算组（Warehouse） |
@@ -53,9 +59,7 @@ hologres-ai-plugins/
 | `hologres table drop <table> [--if-exists] [--cascade] --confirm` | 删除表（默认安全模式） |
 | `hologres table truncate <table> --confirm` | 清空表数据（默认安全模式） |
 | `hologres table alter TABLE [选项] [--dry-run]` | 修改表属性（添加列、重命名、TTL 等；逻辑分区表支持 SET 语法设置分区属性） |
-| `hologres partition list --table <table>` | 列出逻辑分区表的分区列表 |
-| `hologres partition create --table <table>` | 创建分区（逻辑分区表自动创建，返回提示） |
-| `hologres partition drop --table <table> --partition VALUE --confirm` | 删除分区（删除分区数据） |
+| `hologres partition list <table>` | 列出逻辑分区表的分区列表 |
 | `hologres partition alter --table <table> --partition <value> --set <key=value> [--dry-run]` | 修改逻辑分区表的分区属性（keep_alive/storage_mode/generate_binlog） |
 | `hologres view list [--schema S]` | 列出所有视图 |
 | `hologres view show <view>` | 查看视图定义和结构 |
@@ -65,6 +69,8 @@ hologres-ai-plugins/
 | `hologres extension create <name>` | 创建（安装）扩展 |
 | `hologres guc show <param>` | 查看 GUC 参数值 |
 | `hologres guc set <param> <value>` | 设置 GUC 参数（数据库级别，持久化） |
+| `hologres guc reset <param>` | 重置 GUC 参数为默认值 |
+| `hologres guc list [--filter keyword]` | 列出常用 GUC 参数及当前值 |
 | `hologres data export <table> -f out.csv` | 导出表数据到 CSV |
 | `hologres data import <table> -f in.csv` | 从 CSV 导入数据到表 |
 | `hologres data count <table>` | 统计行数 |
@@ -85,12 +91,11 @@ hologres-ai-plugins/
 **快速开始：**
 
 ```bash
-# 需要 Python 3.11+
-cd hologres-cli
-pip install -e .
+# 从 PyPI 安装
+pip install hologres-cli
 
-# 设置连接 DSN
-export HOLOGRES_DSN="hologres://user:password@endpoint:port/database"
+# 运行交互式配置向导
+hologres config
 
 # 检查连接
 hologres status
@@ -101,12 +106,8 @@ hologres -f table schema tables
 # 查询数据
 hologres sql "SELECT * FROM orders LIMIT 10"
 
-# 创建逻辑分区表（V3.1+）
-hologres table create -n public.logs \
-  -c "a TEXT, b INT, ds DATE NOT NULL" \
-  --primary-key "b,ds" --partition-by ds \
-  --partition-mode logical --orientation column \
-  --partition-expiration-time "30 day" --dry-run
+# 使用指定 Profile
+hologres --profile prod status
 
 # 创建 Dynamic Table
 hologres dt create -t my_dt --freshness "10 minutes" \
@@ -161,12 +162,24 @@ uvx hologres-agent-skills
 
 ## 安装
 
-```bash
-git clone <repo-url>
-cd hologres-ai-plugins/hologres-cli
-pip install -e .
+### Hologres CLI
 
-# 开发安装（包含测试依赖）
+```bash
+# 从 PyPI 安装
+pip install hologres-cli
+
+# 或安装指定版本
+pip install hologres-cli==0.1.0
+
+# 初始化配置
+hologres config
+```
+
+### 开发安装（从源码）
+
+```bash
+git clone https://github.com/aliyun/hologres-ai-plugins.git
+cd hologres-ai-plugins/hologres-cli
 pip install -e ".[dev]"
 ```
 
@@ -184,29 +197,37 @@ uv run hologres-agent-skills
 
 ## 配置
 
-CLI 按以下优先级解析数据库连接 DSN：
+CLI 使用基于 **Profile** 的配置方式，配置文件存储在 `~/.hologres/config.json`：
 
-1. **命令行参数**：`--dsn "hologres://user:pass@host:port/db"`
-2. **环境变量**：`export HOLOGRES_DSN="hologres://..."`
-3. **配置文件**：`~/.hologres/config.env`
+```bash
+# 交互式配置向导
+hologres config
+
+# 或直接设置配置项
+hologres config set region_id cn-hangzhou
+hologres config set instance_id hgprecn-cn-xxx
+hologres config set database mydb
+```
+
+连接解析优先级：
+1. **命令行参数**：`hologres --profile <name> status`
+2. **当前 Profile**：`config.json` 中的活跃 Profile
+3. **报错提示**：引导运行 `hologres config`
 
 ## 测试
 
 ```bash
 cd hologres-cli
 
-# 单元测试（无需数据库）
-pytest -m unit
+# 单元测试（无需数据库连接）
+pytest tests/ --ignore=tests/integration
 
-# 集成测试（需要配置好的 profile）
-export TEST_PROFILE_NAME="default"
-pytest -m integration
+# 集成测试（需要已配置的 Profile）
+pytest tests/integration/
 
 # 全部测试并生成覆盖率报告
 pytest --cov=src/hologres_cli --cov-report=term-missing
 ```
-
-当前测试覆盖率：**95%+**。
 
 ## 许可证
 

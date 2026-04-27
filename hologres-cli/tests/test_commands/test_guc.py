@@ -168,50 +168,6 @@ class TestGucSetCmd:
         assert output["data"]["database"] == "testdb"
         mock_get_connection.close.assert_called_once()
 
-    def test_set_cmd_success_session_scope(self, mock_get_connection):
-        """Test successful GUC parameter set at session level."""
-        mock_get_connection.execute.return_value = []
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["guc", "set", "optimizer_join_order", "query",
-                                     "--scope", "session"])
-
-        assert result.exit_code == 0
-        output = json.loads(result.output)
-        assert output["ok"] is True
-        assert output["data"]["param"] == "optimizer_join_order"
-        assert output["data"]["value"] == "query"
-        assert output["data"]["scope"] == "session"
-        assert "database" not in output["data"]
-        mock_get_connection.close.assert_called_once()
-
-    def test_set_cmd_session_scope_uses_set(self, mock_get_connection):
-        """Test that session scope uses SET instead of ALTER DATABASE."""
-        mock_get_connection.execute.return_value = []
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["guc", "set", "statement_timeout", "5min",
-                                     "--scope", "session"])
-
-        assert result.exit_code == 0
-        call_args = mock_get_connection.execute.call_args
-        executed_sql = call_args[0][0]
-        assert executed_sql.startswith("SET")
-        assert "ALTER DATABASE" not in executed_sql
-        assert '"statement_timeout"' in executed_sql
-
-    def test_set_cmd_session_scope_table_format(self, mock_get_connection):
-        """Test session scope table format output."""
-        mock_get_connection.execute.return_value = []
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--format", "table", "guc", "set",
-                                     "optimizer_join_order", "query",
-                                     "--scope", "session"])
-
-        assert result.exit_code == 0
-        assert "session level" in result.output
-
     def test_set_cmd_table_format(self, mock_get_connection):
         """Test table format output."""
         mock_get_connection.execute.return_value = []
@@ -416,27 +372,6 @@ class TestGucResetCmd:
         assert '"statement_timeout"' in executed_sql
         mock_get_connection.close.assert_called_once()
 
-    def test_reset_cmd_session_scope(self, mock_get_connection):
-        """Test reset at session level."""
-        mock_get_connection.execute.return_value = []
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["guc", "reset", "optimizer_join_order",
-                                     "--scope", "session"])
-
-        assert result.exit_code == 0
-        output = json.loads(result.output)
-        assert output["ok"] is True
-        assert output["data"]["param"] == "optimizer_join_order"
-        assert output["data"]["reset"] is True
-        assert output["data"]["scope"] == "session"
-        assert "database" not in output["data"]
-
-        call_args = mock_get_connection.execute.call_args
-        executed_sql = call_args[0][0]
-        assert executed_sql.startswith("RESET")
-        assert "ALTER DATABASE" not in executed_sql
-
     def test_reset_cmd_table_format_database(self, mock_get_connection):
         """Test table format output for database scope reset."""
         mock_get_connection.execute.return_value = []
@@ -449,18 +384,6 @@ class TestGucResetCmd:
         assert result.exit_code == 0
         assert "reset to default" in result.output
         assert "database level" in result.output
-
-    def test_reset_cmd_table_format_session(self, mock_get_connection):
-        """Test table format output for session scope reset."""
-        mock_get_connection.execute.return_value = []
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--format", "table", "guc", "reset",
-                                     "statement_timeout", "--scope", "session"])
-
-        assert result.exit_code == 0
-        assert "reset to default" in result.output
-        assert "session level" in result.output
 
     def test_reset_cmd_connection_error(self, mocker):
         """Test connection error handling."""

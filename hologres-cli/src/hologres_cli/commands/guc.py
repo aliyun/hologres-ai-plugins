@@ -239,20 +239,17 @@ def show_cmd(ctx: click.Context, param_name: str) -> None:
 @guc_cmd.command("set")
 @click.argument("param_name")
 @click.argument("value")
-@click.option("--scope", type=click.Choice(["database", "session"]),
-              default="database", help="Scope: 'database' (persistent) or 'session' (current only)")
 @click.pass_context
-def set_cmd(ctx: click.Context, param_name: str, value: str, scope: str) -> None:
-    """Set a GUC parameter at database or session level.
+def set_cmd(ctx: click.Context, param_name: str, value: str) -> None:
+    """Set a GUC parameter at database level (persistent via ALTER DATABASE).
 
-    Default scope is 'database' (persistent via ALTER DATABASE).
-    Use --scope session for current session only (via SET).
+    The change takes effect for new sessions.
 
     \b
     Examples:
       hologres guc set optimizer_join_order query
       hologres guc set statement_timeout '5min'
-      hologres guc set hg_foreign_table_executor_max_dop 32 --scope session
+      hologres guc set hg_foreign_table_executor_max_dop 32
 
     \b
     PARAM_NAME: GUC parameter name (e.g., optimizer_join_order).
@@ -275,56 +272,32 @@ def set_cmd(ctx: click.Context, param_name: str, value: str, scope: str) -> None
         return
 
     try:
-        if scope == "session":
-            set_sql = psql.SQL("SET {} = {}").format(
-                psql.Identifier(param_name),
-                psql.Literal(value),
-            )
-            final_sql = set_sql.as_string(conn.conn)
-            conn.execute(final_sql)
+        dbname = conn.database
+        alter_sql = psql.SQL("ALTER DATABASE {} SET {} = {}").format(
+            psql.Identifier(dbname),
+            psql.Identifier(param_name),
+            psql.Literal(value),
+        )
+        final_sql = alter_sql.as_string(conn.conn)
+        conn.execute(final_sql)
 
-            duration_ms = (time.time() - start_time) * 1000
-            log_operation("guc.set", sql=final_sql, dsn_masked=conn.masked_dsn,
-                          success=True, duration_ms=duration_ms)
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation("guc.set", sql=final_sql, dsn_masked=conn.masked_dsn,
+                      success=True, duration_ms=duration_ms)
 
-            if fmt == FORMAT_JSON:
-                print_output(success({
-                    "param": param_name,
-                    "value": value,
-                    "scope": "session",
-                }))
-            else:
-                print_output(
-                    f"GUC parameter '{param_name}' set to '{value}' "
-                    f"at session level (current connection only)."
-                )
+        if fmt == FORMAT_JSON:
+            print_output(success({
+                "param": param_name,
+                "value": value,
+                "scope": "database",
+                "database": dbname,
+            }))
         else:
-            dbname = conn.database
-            alter_sql = psql.SQL("ALTER DATABASE {} SET {} = {}").format(
-                psql.Identifier(dbname),
-                psql.Identifier(param_name),
-                psql.Literal(value),
+            print_output(
+                f"GUC parameter '{param_name}' set to '{value}' "
+                f"at database level (database: {dbname}). "
+                f"Change takes effect for new sessions."
             )
-            final_sql = alter_sql.as_string(conn.conn)
-            conn.execute(final_sql)
-
-            duration_ms = (time.time() - start_time) * 1000
-            log_operation("guc.set", sql=final_sql, dsn_masked=conn.masked_dsn,
-                          success=True, duration_ms=duration_ms)
-
-            if fmt == FORMAT_JSON:
-                print_output(success({
-                    "param": param_name,
-                    "value": value,
-                    "scope": "database",
-                    "database": dbname,
-                }))
-            else:
-                print_output(
-                    f"GUC parameter '{param_name}' set to '{value}' "
-                    f"at database level (database: {dbname}). "
-                    f"Change takes effect for new sessions."
-                )
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
         log_operation("guc.set", dsn_masked=conn.masked_dsn, success=False,
@@ -337,19 +310,16 @@ def set_cmd(ctx: click.Context, param_name: str, value: str, scope: str) -> None
 
 @guc_cmd.command("reset")
 @click.argument("param_name")
-@click.option("--scope", type=click.Choice(["database", "session"]),
-              default="database", help="Scope: 'database' (persistent) or 'session' (current only)")
 @click.pass_context
-def reset_cmd(ctx: click.Context, param_name: str, scope: str) -> None:
-    """Reset a GUC parameter to its default value.
+def reset_cmd(ctx: click.Context, param_name: str) -> None:
+    """Reset a GUC parameter to its default value (via ALTER DATABASE RESET).
 
-    Default scope is 'database' (persistent via ALTER DATABASE RESET).
-    Use --scope session for current session only (via RESET).
+    The change takes effect for new sessions.
 
     \b
     Examples:
       hologres guc reset statement_timeout
-      hologres guc reset optimizer_join_order --scope session
+      hologres guc reset optimizer_join_order
     """
     profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
@@ -368,54 +338,31 @@ def reset_cmd(ctx: click.Context, param_name: str, scope: str) -> None:
         return
 
     try:
-        if scope == "session":
-            reset_sql = psql.SQL("RESET {}").format(
-                psql.Identifier(param_name),
-            )
-            final_sql = reset_sql.as_string(conn.conn)
-            conn.execute(final_sql)
+        dbname = conn.database
+        alter_sql = psql.SQL("ALTER DATABASE {} RESET {}").format(
+            psql.Identifier(dbname),
+            psql.Identifier(param_name),
+        )
+        final_sql = alter_sql.as_string(conn.conn)
+        conn.execute(final_sql)
 
-            duration_ms = (time.time() - start_time) * 1000
-            log_operation("guc.reset", sql=final_sql, dsn_masked=conn.masked_dsn,
-                          success=True, duration_ms=duration_ms)
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation("guc.reset", sql=final_sql, dsn_masked=conn.masked_dsn,
+                      success=True, duration_ms=duration_ms)
 
-            if fmt == FORMAT_JSON:
-                print_output(success({
-                    "param": param_name,
-                    "reset": True,
-                    "scope": "session",
-                }))
-            else:
-                print_output(
-                    f"GUC parameter '{param_name}' reset to default "
-                    f"at session level."
-                )
+        if fmt == FORMAT_JSON:
+            print_output(success({
+                "param": param_name,
+                "reset": True,
+                "scope": "database",
+                "database": dbname,
+            }))
         else:
-            dbname = conn.database
-            alter_sql = psql.SQL("ALTER DATABASE {} RESET {}").format(
-                psql.Identifier(dbname),
-                psql.Identifier(param_name),
+            print_output(
+                f"GUC parameter '{param_name}' reset to default "
+                f"at database level (database: {dbname}). "
+                f"Change takes effect for new sessions."
             )
-            final_sql = alter_sql.as_string(conn.conn)
-            conn.execute(final_sql)
-
-            duration_ms = (time.time() - start_time) * 1000
-            log_operation("guc.reset", sql=final_sql, dsn_masked=conn.masked_dsn,
-                          success=True, duration_ms=duration_ms)
-
-            if fmt == FORMAT_JSON:
-                print_output(success({
-                    "param": param_name,
-                    "reset": True,
-                    "scope": "database",
-                    "database": dbname,
-                }))
-            else:
-                print_output(
-                    f"GUC parameter '{param_name}' reset to default "
-                    f"at database level (database: {dbname}). "
-                    f"Change takes effect for new sessions."
-                )
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
         log_operation("guc.reset", dsn_masked=conn.masked_dsn, success=False,
