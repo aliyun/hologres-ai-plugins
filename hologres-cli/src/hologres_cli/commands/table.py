@@ -21,10 +21,216 @@ from ..output import (
 from .schema import _dump_table_ddl, _get_table_size, _list_tables, _validate_identifier, fetch_table_structure
 
 
+def _build_table_create_sql(
+    name: str,
+    columns: str,
+    primary_key: Optional[str] = None,
+    orientation: Optional[str] = None,
+    distribution_key: Optional[str] = None,
+    clustering_key: Optional[str] = None,
+    event_time_column: Optional[str] = None,
+    bitmap_columns: Optional[str] = None,
+    dictionary_encoding_columns: Optional[str] = None,
+    ttl: Optional[int] = None,
+    storage_mode: Optional[str] = None,
+    table_group: Optional[str] = None,
+    partition_by: Optional[str] = None,
+    partition_mode: Optional[str] = None,
+    binlog: Optional[str] = None,
+    if_not_exists: bool = False,
+) -> str:
+    """Build CREATE TABLE SQL with CALL set_table_property (compatible syntax)."""
+
+    # Parse schema.table
+    if "." in name:
+        schema_name, table_name = name.rsplit(".", 1)
+    else:
+        schema_name, table_name = "public", name
+
+    full_name = f"{schema_name}.{table_name}"
+    exists_clause = " IF NOT EXISTS" if if_not_exists else ""
+
+    col_defs = columns.strip()
+
+    # Primary key constraint
+    pk_clause = ""
+    if primary_key:
+        pk_clause = f",\n    PRIMARY KEY ({primary_key})"
+
+    # Partition clause
+    partition_clause = ""
+    if partition_by:
+        if partition_mode == "logical":
+            partition_clause = f"\nLOGICAL PARTITION BY LIST ({partition_by})"
+        else:
+            partition_clause = f"\nPARTITION BY LIST ({partition_by})"
+
+    # BUILD SQL lines
+    lines = ["BEGIN;"]
+    lines.append("")
+    lines.append(
+        f"CREATE TABLE{exists_clause} {full_name} (\n"
+        f"    {col_defs}{pk_clause}\n"
+        f"){partition_clause};"
+    )
+
+    # CALL set_table_property statements
+    props: list[tuple[str, str]] = []
+    if orientation:
+        props.append(("orientation", orientation))
+    if distribution_key:
+        props.append(("distribution_key", distribution_key))
+    if clustering_key:
+        props.append(("clustering_key", clustering_key))
+    if event_time_column:
+        props.append(("event_time_column", event_time_column))
+    if bitmap_columns:
+        props.append(("bitmap_columns", bitmap_columns))
+    if dictionary_encoding_columns:
+        props.append(("dictionary_encoding_columns", dictionary_encoding_columns))
+    if ttl is not None:
+        props.append(("time_to_live_in_seconds", str(ttl)))
+    if storage_mode:
+        props.append(("storage_mode", storage_mode))
+    if table_group:
+        props.append(("table_group", table_group))
+    if binlog and binlog != "none":
+        props.append(("binlog_level", binlog))
+
+    if props:
+        lines.append("")
+    for key, value in props:
+        lines.append(
+            f"CALL set_table_property('{full_name}', '{key}', '{value}');"
+        )
+
+    lines.append("")
+    lines.append("COMMIT;")
+
+    return "\n".join(lines)
+
+
 @click.group("table")
 def table_cmd() -> None:
     """Table management commands."""
     pass
+
+
+@table_cmd.command("create")
+@click.option("--name", "-n", required=True,
+              help="Table name [schema.]table_name (required)")
+@click.option("--columns", "-c", required=True,
+              help='Column definitions. Example: "col1 INT, col2 TEXT NOT NULL"')
+@click.option("--primary-key", default=None,
+              help="Primary key columns (comma-separated). Example: 'id' or 'id,ds'")
+@click.option("--orientation", type=click.Choice(["column", "row", "row,column"]),
+              default=None, help="Storage orientation (default: column)")
+@click.option("--distribution-key", default=None,
+              help="Distribution key columns (comma-separated)")
+@click.option("--clustering-key", default=None,
+              help="Clustering key with sort order. Example: 'created_at:asc'")
+@click.option("--event-time-column", default=None,
+              help="Event time column (Segment Key)")
+@click.option("--bitmap-columns", default=None,
+              help="Bitmap index columns (comma-separated)")
+@click.option("--dictionary-encoding-columns", default=None,
+              help="Dictionary encoding columns (comma-separated)")
+@click.option("--ttl", type=int, default=None,
+              help="Data TTL in seconds. Example: 2592000 (30 days)")
+@click.option("--storage-mode", type=click.Choice(["hot", "cold"]),
+              default=None, help="Storage tier: hot (SSD) / cold (HDD/OSS)")
+@click.option("--table-group", default=None, help="Table Group name")
+@click.option("--partition-by", default=None,
+              help="Enable LIST partition on this column")
+@click.option("--partition-mode", type=click.Choice(["physical", "logical"]),
+              default=None, help="Partition mode: physical (default) / logical (V3.1+)")
+@click.option("--binlog", type=click.Choice(["none", "hg_binlog"]),
+              default=None, help="Binlog level")
+@click.option("--if-not-exists", is_flag=True, default=False,
+              help="Add IF NOT EXISTS clause")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Only display the SQL without executing")
+@click.pass_context
+def create_cmd(ctx: click.Context, name: str, columns: str,
+               primary_key: Optional[str], orientation: Optional[str],
+               distribution_key: Optional[str], clustering_key: Optional[str],
+               event_time_column: Optional[str], bitmap_columns: Optional[str],
+               dictionary_encoding_columns: Optional[str], ttl: Optional[int],
+               storage_mode: Optional[str], table_group: Optional[str],
+               partition_by: Optional[str], partition_mode: Optional[str],
+               binlog: Optional[str], if_not_exists: bool, dry_run: bool) -> None:
+    """Create a new table.
+
+    \b
+    Examples:
+      hologres table create --name public.orders \\
+        --columns "order_id BIGINT NOT NULL, user_id INT, amount DECIMAL(10,2)" \\
+        --primary-key order_id --orientation column \\
+        --distribution-key user_id --dry-run
+
+    \b
+      hologres table create -n public.events \\
+        -c "event_id BIGINT NOT NULL, ds TEXT NOT NULL, payload JSONB" \\
+        --primary-key "event_id,ds" --partition-by ds \\
+        --orientation column --dry-run
+    """
+    profile = ctx.obj.get("profile")
+    fmt = ctx.obj.get("format", FORMAT_JSON)
+
+    # Validate table name
+    if "." in name:
+        schema_name, table_name = name.rsplit(".", 1)
+    else:
+        schema_name, table_name = "public", name
+
+    try:
+        _validate_identifier(schema_name, "schema name")
+        _validate_identifier(table_name, "table name")
+    except ValueError as e:
+        print_output(error("INVALID_INPUT", str(e), fmt))
+        return
+
+    # Build SQL
+    sql = _build_table_create_sql(
+        name=name, columns=columns, primary_key=primary_key,
+        orientation=orientation, distribution_key=distribution_key,
+        clustering_key=clustering_key, event_time_column=event_time_column,
+        bitmap_columns=bitmap_columns,
+        dictionary_encoding_columns=dictionary_encoding_columns,
+        ttl=ttl, storage_mode=storage_mode, table_group=table_group,
+        partition_by=partition_by, partition_mode=partition_mode,
+        binlog=binlog, if_not_exists=if_not_exists,
+    )
+
+    # Dry-run mode
+    if dry_run:
+        print_output(success({"sql": sql, "dry_run": True}, fmt,
+                             message="SQL generated (dry-run mode)"))
+        return
+
+    # Execute mode
+    try:
+        conn = get_connection(profile=profile)
+    except DSNError as e:
+        print_output(connection_error(str(e), fmt))
+        return
+
+    start_time = time.time()
+    try:
+        conn.execute(sql)
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation("table.create", sql=sql, dsn_masked=conn.masked_dsn,
+                      success=True, duration_ms=duration_ms)
+        print_output(success({"sql": sql, "executed": True}, fmt,
+                             message="Table created successfully"))
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation("table.create", sql=sql, dsn_masked=conn.masked_dsn,
+                      success=False, error_code="QUERY_ERROR",
+                      error_message=str(e), duration_ms=duration_ms)
+        print_output(query_error(str(e), fmt))
+    finally:
+        conn.close()
 
 
 @table_cmd.command("dump")

@@ -155,6 +155,19 @@ hologres table list
 hologres table list --schema public
 hologres table list -s myschema
 
+# Create a table (uses compatible syntax with CALL set_table_property)
+hologres table create --name public.orders \
+  --columns "order_id BIGINT NOT NULL, user_id INT, amount DECIMAL(10,2), created_at TIMESTAMPTZ" \
+  --primary-key order_id --orientation column \
+  --distribution-key user_id --clustering-key "created_at:asc" \
+  --ttl 7776000 --dry-run
+
+# Create a partition table
+hologres table create --name public.events \
+  --columns "event_id BIGINT NOT NULL, ds TEXT NOT NULL, payload JSONB" \
+  --primary-key "event_id,ds" --partition-by ds \
+  --orientation column --dry-run
+
 # Export DDL using hg_dump_script()
 hologres table dump <schema.table>
 hologres table dump public.my_table

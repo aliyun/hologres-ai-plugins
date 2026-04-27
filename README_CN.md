@@ -45,6 +45,7 @@ hologres-ai-plugins/
 | `hologres schema dump <schema.table>` | 导出 DDL |
 | `hologres schema size <schema.table>` | 查看表存储大小 |
 | `hologres table list [--schema S]` | 列出所有表 |
+| `hologres table create --name TABLE --columns COLS [选项] [--dry-run]` | 创建表 |
 | `hologres table dump <schema.table>` | 导出表 DDL |
 | `hologres table show <table>` | 查看表结构（列、类型、主键、注释等） |
 | `hologres table size <schema.table>` | 查看表存储大小 |

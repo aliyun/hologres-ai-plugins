@@ -252,6 +252,80 @@ hologres data count my_table --where "status='active'"
 
 Table management commands.
 
+### table create
+
+Create a new table using the compatible syntax (`CALL set_table_property`).
+
+```bash
+# Minimal creation
+hologres table create --name public.my_table \
+  --columns "id BIGINT NOT NULL, name TEXT"
+
+# Full example with properties
+hologres table create --name public.orders \
+  --columns "order_id BIGINT NOT NULL, user_id INT, amount DECIMAL(10,2), created_at TIMESTAMPTZ" \
+  --primary-key order_id --orientation column \
+  --distribution-key user_id --clustering-key "created_at:asc" \
+  --ttl 7776000 --dry-run
+
+# Partition table
+hologres table create --name public.events \
+  --columns "event_id BIGINT NOT NULL, ds TEXT NOT NULL, payload JSONB" \
+  --primary-key "event_id,ds" --partition-by ds \
+  --orientation column
+
+# Row-store table (point lookup)
+hologres table create --name public.dim_user \
+  --columns "user_id TEXT NOT NULL, user_level INT, data JSONB" \
+  --primary-key user_id --orientation row
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--name, -n TABLE` | Table name `[schema.]table_name` (required) |
+| `--columns, -c COLS` | Column definitions (required) |
+| `--primary-key PK` | Primary key columns (comma-separated) |
+| `--orientation` | `column` (default) / `row` / `row,column` |
+| `--distribution-key` | Distribution key columns |
+| `--clustering-key` | Clustering key with sort order, e.g. `created_at:asc` |
+| `--event-time-column` | Event time column (Segment Key) |
+| `--bitmap-columns` | Bitmap index columns (comma-separated) |
+| `--dictionary-encoding-columns` | Dictionary encoding columns |
+| `--ttl SECONDS` | Data TTL in seconds |
+| `--storage-mode` | `hot` (SSD) / `cold` (HDD/OSS) |
+| `--table-group` | Table Group name |
+| `--partition-by COL` | Enable LIST partition on this column |
+| `--partition-mode` | `physical` (default) / `logical` (V3.1+) |
+| `--binlog` | Binlog level: `none` / `hg_binlog` |
+| `--if-not-exists` | Add IF NOT EXISTS clause |
+| `--dry-run` | Only display the SQL without executing |
+
+**Dry-run output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "BEGIN;\n\nCREATE TABLE public.orders (\n    ...\n);\n\nCALL set_table_property(...);\n\nCOMMIT;",
+    "dry_run": true
+  },
+  "message": "SQL generated (dry-run mode)"
+}
+```
+
+**Executed output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "BEGIN;\n...\nCOMMIT;",
+    "executed": true
+  },
+  "message": "Table created successfully"
+}
+```
+
 ### table list
 
 List all tables in the database (excluding system schemas).

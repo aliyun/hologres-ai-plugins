@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
+from hologres_cli.commands.table import _build_table_create_sql
 from hologres_cli.connection import DSNError
 from hologres_cli.main import cli
 
@@ -875,3 +876,436 @@ class TestTableTruncateCmd:
         assert output["ok"] is False
         assert output["error"]["code"] == "QUERY_ERROR"
         mock_get_connection.close.assert_called_once()
+
+
+class TestBuildTableCreateSql:
+    """Tests for _build_table_create_sql helper function."""
+
+    def test_build_sql_minimal(self):
+        """Test minimal SQL generation with only name and columns."""
+        sql = _build_table_create_sql(name="my_table", columns="id INT")
+        assert "BEGIN;" in sql
+        assert "CREATE TABLE public.my_table" in sql
+        assert "id INT" in sql
+        assert "COMMIT;" in sql
+
+    def test_build_sql_with_schema(self):
+        """Test SQL with schema-qualified name."""
+        sql = _build_table_create_sql(name="myschema.orders", columns="id INT")
+        assert "CREATE TABLE myschema.orders" in sql
+
+    def test_build_sql_with_primary_key(self):
+        """Test SQL includes PRIMARY KEY clause."""
+        sql = _build_table_create_sql(name="t", columns="id INT NOT NULL", primary_key="id")
+        assert "PRIMARY KEY (id)" in sql
+
+    def test_build_sql_composite_primary_key(self):
+        """Test SQL with composite primary key."""
+        sql = _build_table_create_sql(name="t", columns="id INT, ds TEXT", primary_key="id,ds")
+        assert "PRIMARY KEY (id,ds)" in sql
+
+    def test_build_sql_orientation(self):
+        """Test orientation property."""
+        sql = _build_table_create_sql(name="t", columns="id INT", orientation="column")
+        assert "set_table_property('public.t', 'orientation', 'column')" in sql
+
+    def test_build_sql_distribution_key(self):
+        """Test distribution_key property."""
+        sql = _build_table_create_sql(name="t", columns="id INT", distribution_key="id")
+        assert "set_table_property('public.t', 'distribution_key', 'id')" in sql
+
+    def test_build_sql_clustering_key(self):
+        """Test clustering_key property."""
+        sql = _build_table_create_sql(name="t", columns="id INT", clustering_key="created_at:asc")
+        assert "set_table_property('public.t', 'clustering_key', 'created_at:asc')" in sql
+
+    def test_build_sql_event_time_column(self):
+        """Test event_time_column property."""
+        sql = _build_table_create_sql(name="t", columns="id INT", event_time_column="created_at")
+        assert "set_table_property('public.t', 'event_time_column', 'created_at')" in sql
+
+    def test_build_sql_bitmap_columns(self):
+        """Test bitmap_columns property."""
+        sql = _build_table_create_sql(name="t", columns="id INT", bitmap_columns="status,type")
+        assert "set_table_property('public.t', 'bitmap_columns', 'status,type')" in sql
+
+    def test_build_sql_dictionary_encoding_columns(self):
+        """Test dictionary_encoding_columns property."""
+        sql = _build_table_create_sql(name="t", columns="id INT",
+                                      dictionary_encoding_columns="user_id:auto")
+        assert "set_table_property('public.t', 'dictionary_encoding_columns', 'user_id:auto')" in sql
+
+    def test_build_sql_ttl(self):
+        """Test time_to_live_in_seconds property."""
+        sql = _build_table_create_sql(name="t", columns="id INT", ttl=2592000)
+        assert "set_table_property('public.t', 'time_to_live_in_seconds', '2592000')" in sql
+
+    def test_build_sql_storage_mode(self):
+        """Test storage_mode property."""
+        sql = _build_table_create_sql(name="t", columns="id INT", storage_mode="hot")
+        assert "set_table_property('public.t', 'storage_mode', 'hot')" in sql
+
+    def test_build_sql_table_group(self):
+        """Test table_group property."""
+        sql = _build_table_create_sql(name="t", columns="id INT", table_group="my_tg")
+        assert "set_table_property('public.t', 'table_group', 'my_tg')" in sql
+
+    def test_build_sql_partition_physical(self):
+        """Test physical partition clause."""
+        sql = _build_table_create_sql(name="t", columns="id INT, ds TEXT",
+                                      partition_by="ds")
+        assert "PARTITION BY LIST (ds)" in sql
+        assert "LOGICAL" not in sql
+
+    def test_build_sql_partition_logical(self):
+        """Test logical partition clause."""
+        sql = _build_table_create_sql(name="t", columns="id INT, ds TEXT",
+                                      partition_by="ds", partition_mode="logical")
+        assert "LOGICAL PARTITION BY LIST (ds)" in sql
+
+    def test_build_sql_binlog_hg_binlog(self):
+        """Test binlog=hg_binlog generates property."""
+        sql = _build_table_create_sql(name="t", columns="id INT", binlog="hg_binlog")
+        assert "set_table_property('public.t', 'binlog_level', 'hg_binlog')" in sql
+
+    def test_build_sql_binlog_none_no_property(self):
+        """Test binlog=none does NOT generate property."""
+        sql = _build_table_create_sql(name="t", columns="id INT", binlog="none")
+        assert "binlog_level" not in sql
+
+    def test_build_sql_if_not_exists(self):
+        """Test IF NOT EXISTS clause."""
+        sql = _build_table_create_sql(name="t", columns="id INT", if_not_exists=True)
+        assert "CREATE TABLE IF NOT EXISTS public.t" in sql
+
+    def test_build_sql_complex_columns(self):
+        """Test complex column types like NUMERIC(10,2)."""
+        cols = "order_id BIGINT NOT NULL, amount DECIMAL(10,2), ts TIMESTAMPTZ"
+        sql = _build_table_create_sql(name="t", columns=cols)
+        assert "DECIMAL(10,2)" in sql
+        assert "TIMESTAMPTZ" in sql
+
+    def test_build_sql_multiple_properties(self):
+        """Test multiple properties are all generated."""
+        sql = _build_table_create_sql(
+            name="public.orders",
+            columns="id BIGINT NOT NULL",
+            primary_key="id",
+            orientation="column",
+            distribution_key="id",
+            clustering_key="created_at:asc",
+            event_time_column="created_at",
+            ttl=7776000,
+        )
+        assert "orientation" in sql
+        assert "distribution_key" in sql
+        assert "clustering_key" in sql
+        assert "event_time_column" in sql
+        assert "time_to_live_in_seconds" in sql
+        assert "PRIMARY KEY (id)" in sql
+
+    def test_build_sql_full_example(self):
+        """Test full example from requirement."""
+        sql = _build_table_create_sql(
+            name="public.orders",
+            columns="order_id BIGINT NOT NULL, user_id INT, amount DECIMAL(10,2), created_at TIMESTAMPTZ",
+            primary_key="order_id",
+            orientation="column",
+            distribution_key="user_id",
+            clustering_key="created_at:asc",
+            ttl=7776000,
+        )
+        assert "BEGIN;" in sql
+        assert "CREATE TABLE public.orders" in sql
+        assert "order_id BIGINT NOT NULL" in sql
+        assert "PRIMARY KEY (order_id)" in sql
+        assert "set_table_property('public.orders', 'orientation', 'column')" in sql
+        assert "set_table_property('public.orders', 'distribution_key', 'user_id')" in sql
+        assert "set_table_property('public.orders', 'clustering_key', 'created_at:asc')" in sql
+        assert "set_table_property('public.orders', 'time_to_live_in_seconds', '7776000')" in sql
+        assert "COMMIT;" in sql
+
+    def test_build_sql_no_properties_no_call(self):
+        """Test that no CALL statements when no properties."""
+        sql = _build_table_create_sql(name="t", columns="id INT")
+        assert "CALL" not in sql
+
+
+class TestTableCreateCmd:
+    """Tests for table create command."""
+
+    def test_create_dry_run_minimal(self):
+        """Test dry-run with minimal options."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "my_table",
+            "--columns", "id INT",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["dry_run"] is True
+        assert "CREATE TABLE" in output["data"]["sql"]
+        assert "public.my_table" in output["data"]["sql"]
+        assert "BEGIN;" in output["data"]["sql"]
+        assert "COMMIT;" in output["data"]["sql"]
+
+    def test_create_dry_run_with_all_options(self):
+        """Test dry-run with all options specified."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "public.orders",
+            "--columns", "order_id BIGINT NOT NULL, user_id INT",
+            "--primary-key", "order_id",
+            "--orientation", "column",
+            "--distribution-key", "user_id",
+            "--clustering-key", "order_id:asc",
+            "--event-time-column", "created_at",
+            "--bitmap-columns", "status",
+            "--dictionary-encoding-columns", "user_id",
+            "--ttl", "2592000",
+            "--storage-mode", "hot",
+            "--table-group", "my_tg",
+            "--binlog", "hg_binlog",
+            "--if-not-exists",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["dry_run"] is True
+        sql = output["data"]["sql"]
+        assert "IF NOT EXISTS" in sql
+        assert "PRIMARY KEY (order_id)" in sql
+        assert "orientation" in sql
+        assert "distribution_key" in sql
+        assert "clustering_key" in sql
+        assert "event_time_column" in sql
+        assert "bitmap_columns" in sql
+        assert "dictionary_encoding_columns" in sql
+        assert "time_to_live_in_seconds" in sql
+        assert "storage_mode" in sql
+        assert "table_group" in sql
+        assert "binlog_level" in sql
+
+    def test_create_dry_run_with_partition(self):
+        """Test dry-run with partition options."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+            "--columns", "id INT, ds TEXT",
+            "--partition-by", "ds",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "PARTITION BY LIST (ds)" in output["data"]["sql"]
+
+    def test_create_dry_run_with_logical_partition(self):
+        """Test dry-run with logical partition mode."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+            "--columns", "id INT, ds TEXT",
+            "--partition-by", "ds",
+            "--partition-mode", "logical",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "LOGICAL PARTITION BY LIST (ds)" in output["data"]["sql"]
+
+    def test_create_executes_without_dry_run(self, mock_get_connection):
+        """Test that create without --dry-run actually executes."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "my_table",
+            "--columns", "id INT",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["executed"] is True
+        mock_get_connection.execute.assert_called_once()
+        sql = mock_get_connection.execute.call_args[0][0]
+        assert "CREATE TABLE" in sql
+        mock_get_connection.close.assert_called_once()
+
+    def test_create_schema_qualified_name(self):
+        """Test schema.table format is correctly parsed."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "myschema.orders",
+            "--columns", "id INT",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "myschema.orders" in output["data"]["sql"]
+
+    def test_create_default_schema_public(self):
+        """Test that name without schema defaults to public."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "orders",
+            "--columns", "id INT",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "public.orders" in output["data"]["sql"]
+
+    def test_create_invalid_table_name(self):
+        """Test invalid table name returns INVALID_INPUT error."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "bad;name",
+            "--columns", "id INT",
+            "--dry-run",
+        ])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_INPUT"
+
+    def test_create_connection_error(self, mocker):
+        """Test connection error handling."""
+        mocker.patch("hologres_cli.commands.table.get_connection",
+                     side_effect=DSNError("No DSN configured"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "my_table",
+            "--columns", "id INT",
+        ])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_create_query_error(self, mock_get_connection):
+        """Test query error returns QUERY_ERROR."""
+        mock_get_connection.execute.side_effect = Exception("syntax error")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "my_table",
+            "--columns", "id INT",
+        ])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+        mock_get_connection.close.assert_called_once()
+
+    def test_create_conn_closed_after_success(self, mock_get_connection):
+        """Test connection is closed after successful create."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+            "--columns", "id INT",
+        ])
+
+        assert result.exit_code == 0
+        mock_get_connection.close.assert_called_once()
+
+    def test_create_conn_closed_on_error(self, mock_get_connection):
+        """Test connection is closed even on error."""
+        mock_get_connection.execute.side_effect = Exception("fail")
+
+        runner = CliRunner()
+        runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+            "--columns", "id INT",
+        ])
+
+        mock_get_connection.close.assert_called_once()
+
+    def test_create_missing_required_name(self):
+        """Test missing --name returns error."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--columns", "id INT",
+        ])
+
+        assert result.exit_code != 0
+
+    def test_create_missing_required_columns(self):
+        """Test missing --columns returns error."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+        ])
+
+        assert result.exit_code != 0
+
+    def test_create_binlog_none_no_property(self):
+        """Test --binlog none does not generate binlog_level property."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+            "--columns", "id INT",
+            "--binlog", "none",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "binlog_level" not in output["data"]["sql"]
+
+    def test_create_logs_operation_on_success(self, mock_get_connection, mocker):
+        """Test successful create logs operation."""
+        mock_log = mocker.patch("hologres_cli.commands.table.log_operation")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+            "--columns", "id INT",
+        ])
+
+        assert result.exit_code == 0
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args
+        assert call_kwargs[1]["success"] is True
+        assert call_kwargs[0][0] == "table.create"
+
+    def test_create_logs_operation_on_failure(self, mock_get_connection, mocker):
+        """Test failed create logs operation with error."""
+        mock_log = mocker.patch("hologres_cli.commands.table.log_operation")
+        mock_get_connection.execute.side_effect = Exception("fail")
+
+        runner = CliRunner()
+        runner.invoke(cli, [
+            "table", "create",
+            "--name", "t",
+            "--columns", "id INT",
+        ])
+
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args
+        assert call_kwargs[1]["success"] is False
+        assert call_kwargs[1]["error_code"] == "QUERY_ERROR"
