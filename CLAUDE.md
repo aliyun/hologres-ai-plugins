@@ -24,8 +24,8 @@ pytest -m unit
 # Run single test file
 pytest tests/test_commands/test_sql.py
 
-# Run integration tests (requires HOLOGRES_TEST_DSN)
-export HOLOGRES_TEST_DSN="hologres://user:password@host:port/database"
+# Run integration tests (requires TEST_PROFILE_NAME)
+export TEST_PROFILE_NAME="default"
 pytest -m integration
 
 # Run with coverage

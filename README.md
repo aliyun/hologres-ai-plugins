@@ -51,13 +51,14 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres schema dump <schema.table>` | Export DDL |
 | `hologres schema size <schema.table>` | Get table storage size |
 | `hologres table list [--schema S]` | List all tables |
-| `hologres table create --name TABLE --columns COLS [options] [--dry-run]` | Create a table |
+| `hologres table create --name TABLE --columns COLS [options] [--dry-run]` | Create a table (supports logical partition V3.1+) |
 | `hologres table dump <schema.table>` | Export DDL for a table |
 | `hologres table show <table>` | Show table structure |
 | `hologres table size <schema.table>` | Get table storage size |
 | `hologres table properties <table>` | Show table properties (orientation, distribution_key, TTL, etc.) |
 | `hologres table drop <table> [--if-exists] [--cascade] --confirm` | Drop a table (dry-run by default) |
 | `hologres table truncate <table> --confirm` | Truncate (empty) a table (dry-run by default) |
+| `hologres partition list <table>` | List partitions of a logical partition table |
 | `hologres view list [--schema S]` | List all views |
 | `hologres view show <view>` | Show view definition and structure |
 | `hologres sql run "<query>"` | Execute read-only SQL |

@@ -46,13 +46,14 @@ hologres dt list
 | `hologres schema dump <schema.table>` | Export DDL |
 | `hologres schema size <schema.table>` | Get table storage size |
 | `hologres table list [--schema S]` | List all tables |
-| `hologres table create -n TABLE -c COLS [options] [--dry-run]` | Create a table (compatible syntax) |
+| `hologres table create -n TABLE -c COLS [options] [--dry-run]` | Create a table (supports logical partition V3.1+) |
 | `hologres table dump <schema.table>` | Export DDL for a table |
 | `hologres table show <table>` | Show table structure (columns, types, nullable, defaults, primary key, comments) |
 | `hologres table size <schema.table>` | Get table storage size |
 | `hologres table properties <table>` | Show Hologres-specific table properties (orientation, distribution_key, clustering_key, TTL, etc.) |
 | `hologres table drop <table> [--if-exists] [--cascade] --confirm` | Drop a table (dry-run by default) |
 | `hologres table truncate <table> --confirm` | Truncate (empty) a table (dry-run by default) |
+| `hologres partition list <table>` | List partitions of a logical partition table |
 | `hologres view list [--schema S]` | List all views |
 | `hologres view show <view>` | Show view definition and structure |
 | `hologres extension list` | List installed extensions |

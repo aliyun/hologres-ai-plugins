@@ -29,7 +29,7 @@ def cli(ctx: click.Context, profile: Optional[str], format: str) -> None:
 
 
 
-from .commands import schema, sql, data, status, instance, warehouse, dt, config, table, view, extension, guc  # noqa: E402
+from .commands import schema, sql, data, status, instance, warehouse, dt, config, table, view, extension, guc, partition  # noqa: E402
 cli.add_command(schema.schema_cmd)
 cli.add_command(sql.sql_cmd)
 cli.add_command(data.data_cmd)
@@ -42,6 +42,7 @@ cli.add_command(table.table_cmd)
 cli.add_command(view.view_cmd)
 cli.add_command(extension.extension_cmd)
 cli.add_command(guc.guc_cmd)
+cli.add_command(partition.partition_cmd)
 
 
 @cli.command("ai-guide")

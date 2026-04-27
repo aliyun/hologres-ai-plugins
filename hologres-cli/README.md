@@ -166,14 +166,31 @@ hologres table list -s myschema
 hologres table create --name public.orders \
   --columns "order_id BIGINT NOT NULL, user_id INT, amount DECIMAL(10,2), created_at TIMESTAMPTZ" \
   --primary-key order_id --orientation column \
-  --distribution-key user_id --clustering-key "created_at:asc" \
+  --distribution-key order_id --clustering-key "created_at:asc" \
   --ttl 7776000 --dry-run
 
-# Create a partition table
+# Create a physical partition table
 hologres table create --name public.events \
   --columns "event_id BIGINT NOT NULL, ds TEXT NOT NULL, payload JSONB" \
   --primary-key "event_id,ds" --partition-by ds \
   --orientation column --dry-run
+
+# Create a logical partition table (V3.1+, uses WITH syntax)
+hologres table create --name public.logs \
+  --columns "a TEXT, b INT, ds DATE NOT NULL" \
+  --primary-key "b,ds" --partition-by ds \
+  --partition-mode logical --orientation column \
+  --distribution-key b \
+  --partition-expiration-time "30 day" \
+  --partition-keep-hot-window "15 day" \
+  --partition-require-filter true \
+  --binlog replica --binlog-ttl 86400 --dry-run
+
+# Create a logical partition table with two partition keys
+hologres table create --name public.events_2pk \
+  --columns "a TEXT, b INT, yy TEXT NOT NULL, mm TEXT NOT NULL" \
+  --partition-by "yy, mm" --partition-mode logical \
+  --orientation column --partition-require-filter true --dry-run
 
 # Export DDL using hg_dump_script()
 hologres table dump <schema.table>
@@ -216,6 +233,19 @@ hologres view list -s myschema
 hologres view show <view_name>
 hologres view show analytics.daily_stats
 ```
+
+### Partition Management
+
+```bash
+# List partitions of a logical partition table
+hologres partition list my_table
+hologres partition list public.logs
+
+# With table format output
+hologres partition list public.logs -f table
+```
+
+> **Note:** Currently only logical partition tables are supported. Non-logical partition tables will return a `NOT_LOGICAL_PARTITION` error.
 
 ### Extension Management
 
@@ -479,6 +509,7 @@ hologres sql run --write "DELETE FROM users WHERE id = 1"
 | `EXPORT_ERROR` | Data export failed |
 | `IMPORT_ERROR` | Data import failed |
 | `VIEW_NOT_FOUND` | View not found |
+| `NOT_LOGICAL_PARTITION` | Table is not a logical partition table |
 
 ## Sensitive Data Masking
 
@@ -511,6 +542,10 @@ pytest tests/test_config_store.py                    # Config store unit tests
 
 # With coverage
 pytest --cov=src/hologres_cli --cov-report=term-missing
+
+# Integration tests (requires configured profile)
+export TEST_PROFILE_NAME="default"
+pytest -m integration
 ```
 
 Integration tests (in `tests/integration/`) require a configured profile and are skipped by default.

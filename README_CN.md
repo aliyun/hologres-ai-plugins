@@ -45,13 +45,14 @@ hologres-ai-plugins/
 | `hologres schema dump <schema.table>` | 导出 DDL |
 | `hologres schema size <schema.table>` | 查看表存储大小 |
 | `hologres table list [--schema S]` | 列出所有表 |
-| `hologres table create --name TABLE --columns COLS [选项] [--dry-run]` | 创建表 |
+| `hologres table create --name TABLE --columns COLS [选项] [--dry-run]` | 创建表（支持逻辑分区表 V3.1+） |
 | `hologres table dump <schema.table>` | 导出表 DDL |
 | `hologres table show <table>` | 查看表结构（列、类型、主键、注释等） |
 | `hologres table size <schema.table>` | 查看表存储大小 |
 | `hologres table properties <table>` | 查看表属性（存储格式、分布键、TTL 等） |
 | `hologres table drop <table> [--if-exists] [--cascade] --confirm` | 删除表（默认安全模式） |
 | `hologres table truncate <table> --confirm` | 清空表数据（默认安全模式） |
+| `hologres partition list <table>` | 列出逻辑分区表的分区列表 |
 | `hologres view list [--schema S]` | 列出所有视图 |
 | `hologres view show <view>` | 查看视图定义和结构 |
 | `hologres sql run "<query>"` | 执行只读 SQL 查询 |
@@ -95,6 +96,13 @@ hologres -f table schema tables
 
 # 查询数据
 hologres sql "SELECT * FROM orders LIMIT 10"
+
+# 创建逻辑分区表（V3.1+）
+hologres table create -n public.logs \
+  -c "a TEXT, b INT, ds DATE NOT NULL" \
+  --primary-key "b,ds" --partition-by ds \
+  --partition-mode logical --orientation column \
+  --partition-expiration-time "30 day" --dry-run
 
 # 创建 Dynamic Table
 hologres dt create -t my_dt --freshness "10 minutes" \
@@ -186,8 +194,8 @@ cd hologres-cli
 # 单元测试（无需数据库）
 pytest -m unit
 
-# 集成测试（需要数据库连接）
-export HOLOGRES_TEST_DSN="hologres://user:password@host:port/database"
+# 集成测试（需要配置好的 profile）
+export TEST_PROFILE_NAME="default"
 pytest -m integration
 
 # 全部测试并生成覆盖率报告
