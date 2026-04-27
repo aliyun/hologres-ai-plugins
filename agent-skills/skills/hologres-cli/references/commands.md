@@ -681,6 +681,85 @@ hologres partition list my_table        # defaults to public schema
 }
 ```
 
+### partition create
+
+Create a partition for a logical partition table. Since logical partition tables create partitions automatically when data is inserted, this command is a no-op and returns a notice.
+
+```bash
+hologres partition create my_table
+hologres partition create public.logs
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "notice": "Logical partition tables create partitions automatically when data is inserted. No explicit CREATE PARTITION is needed."
+  },
+  "message": "No action required"
+}
+```
+
+### partition drop
+
+Drop a partition from a logical partition table by deleting all rows matching the partition value. The partition disappears automatically after data is removed. **Defaults to dry-run for safety.**
+
+```bash
+# Single partition column
+hologres partition drop my_table --partition "2025-04-01"              # dry-run
+hologres partition drop my_table --partition "2025-04-01" --confirm    # execute
+
+# Key=value format (also works for single column)
+hologres partition drop my_table --partition "ds=2025-04-01" --confirm
+
+# Multiple partition columns
+hologres partition drop public.events --partition "yy=2025,mm=04" --confirm
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--partition VALUE` | Partition value to drop. Single column: `"2025-04-01"`. Multiple columns: `"yy=2025,mm=04"` (required) |
+| `--confirm` | [REQUIRED to execute] Confirm the drop operation. Without --confirm, only dry-run SQL is shown |
+
+**Dry-run output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "DELETE FROM public.logs WHERE ds = '2025-04-01'",
+    "dry_run": true
+  },
+  "message": "SQL generated (dry-run mode)"
+}
+```
+
+**Executed output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "DELETE FROM public.logs WHERE ds = '2025-04-01'",
+    "executed": true
+  },
+  "message": "Partition dropped successfully"
+}
+```
+
+**Dry-run output (multiple partition columns):**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "DELETE FROM public.events WHERE yy = '2025' AND mm = '04'",
+    "dry_run": true
+  },
+  "message": "SQL generated (dry-run mode)"
+}
+```
+
 ## extension
 
 Extension management commands.

@@ -243,9 +243,23 @@ hologres partition list public.logs
 
 # With table format output
 hologres partition list public.logs -f table
+
+# Create a partition (no-op for logical partition tables, returns notice)
+hologres partition create my_table
+
+# Drop a partition (dry-run by default)
+hologres partition drop my_table --partition "2025-04-01"
+
+# Drop a partition (actually execute)
+hologres partition drop my_table --partition "2025-04-01" --confirm
+
+# Drop a partition with multiple partition columns
+hologres partition drop public.events --partition "yy=2025,mm=04" --confirm
 ```
 
 > **Note:** Currently only logical partition tables are supported. Non-logical partition tables will return a `NOT_LOGICAL_PARTITION` error.
+> For logical partition tables, partitions are created automatically on INSERT. The `partition create` command returns a notice.
+> The `partition drop` command deletes all rows matching the partition value. The partition disappears automatically after data is removed.
 
 ### Extension Management
 
