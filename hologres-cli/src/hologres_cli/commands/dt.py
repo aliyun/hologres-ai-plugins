@@ -28,13 +28,13 @@ from ..output import (
 # Helper functions
 # ---------------------------------------------------------------------------
 
-def _get_conn(ctx: click.Context):
+def _get_conn(ctx: click.Context, read_only: bool = True):
     """Get connection from context."""
     profile = ctx.obj.get("profile")
-    return get_connection(profile=profile)
+    return get_connection(profile=profile, read_only=read_only)
 
 
-def _execute_sql(ctx: click.Context, sql: str, dry_run: bool = False) -> Optional[str]:
+def _execute_sql(ctx: click.Context, sql: str, dry_run: bool = False, read_only: bool = True) -> Optional[str]:
     """Execute SQL or print it if dry_run. Returns error string on failure, None on success."""
     fmt = ctx.obj.get("format", FORMAT_JSON)
 
@@ -43,7 +43,7 @@ def _execute_sql(ctx: click.Context, sql: str, dry_run: bool = False) -> Optiona
         return None
 
     try:
-        conn = _get_conn(ctx)
+        conn = _get_conn(ctx, read_only=read_only)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return str(e)
@@ -353,7 +353,7 @@ def dt_create(ctx: click.Context, table: str, query: str, freshness: str,
         ttl=ttl, storage_mode=storage_mode, columns=columns,
         refresh_gucs=refresh_guc,
     )
-    _execute_sql(ctx, sql, dry_run=dry_run)
+    _execute_sql(ctx, sql, dry_run=dry_run, read_only=False)
 
 
 # ---------------------------------------------------------------------------
@@ -524,7 +524,7 @@ def dt_refresh(ctx: click.Context, table: str, partition: Optional[str],
     if with_parts:
         sql += f"\nWITH (\n  {', '.join(with_parts)}\n)"
 
-    _execute_sql(ctx, sql, dry_run=dry_run)
+    _execute_sql(ctx, sql, dry_run=dry_run, read_only=False)
 
 
 # ---------------------------------------------------------------------------
@@ -598,7 +598,7 @@ def dt_alter(ctx: click.Context, table: str, freshness: Optional[str],
 
     joined = ",\n  ".join(props)
     sql = f"ALTER DYNAMIC TABLE {table} SET (\n  {joined}\n)"
-    _execute_sql(ctx, sql, dry_run=dry_run)
+    _execute_sql(ctx, sql, dry_run=dry_run, read_only=False)
 
 
 # ---------------------------------------------------------------------------
@@ -631,7 +631,7 @@ def dt_drop(ctx: click.Context, table: str, if_exists: bool, confirm: bool) -> N
     """
     exists_clause = " IF EXISTS" if if_exists else ""
     sql = f"DROP DYNAMIC TABLE{exists_clause} {table}"
-    _execute_sql(ctx, sql, dry_run=not confirm)
+    _execute_sql(ctx, sql, dry_run=not confirm, read_only=False)
 
 
 # ---------------------------------------------------------------------------
@@ -684,7 +684,7 @@ def dt_convert(ctx: click.Context, table: Optional[str], convert_all: bool,
                            "Example: hologres dt convert my_table", fmt))
         return
 
-    _execute_sql(ctx, sql, dry_run=dry_run)
+    _execute_sql(ctx, sql, dry_run=dry_run, read_only=False)
 
 
 # ---------------------------------------------------------------------------

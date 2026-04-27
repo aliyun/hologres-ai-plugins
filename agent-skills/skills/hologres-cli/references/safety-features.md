@@ -33,6 +33,57 @@ hologres sql run --no-limit-check "SELECT * FROM large_table"
 - Aggregation queries (COUNT, SUM, etc.)
 - When you explicitly need all rows
 
+## Connection-Level Read-Only Protection
+
+### Purpose
+Provides database-level protection against accidental writes by setting all CLI connections to read-only mode by default.
+
+### Behavior
+- All connections execute `SET default_transaction_read_only = ON` upon creation
+- Any write SQL (INSERT, UPDATE, DELETE, DDL) on a read-only connection is **rejected by the database engine**, not just the CLI
+- Write commands (sql --write, guc set/reset, dt create/alter/drop/refresh, data import, table create/drop/truncate/alter, partition drop/alter, extension create) explicitly use `read_only=False`
+- This is the **first layer** of write protection, enforced at the PostgreSQL protocol level
+
+### Architecture
+```
+User Request
+    │
+    ▼
+┌─────────────────────────┐
+│ Connection Layer         │  ← read_only=True (default)
+│ SET default_transaction  │     Database rejects writes
+│ _read_only = ON          │
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ CLI Write Guard          │  ← --write flag check
+│ WRITE_GUARD_ERROR        │     CLI rejects writes
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Dangerous Write Block    │  ← WHERE clause check
+│ DANGEROUS_WRITE_BLOCKED  │     CLI rejects DELETE/UPDATE
+└─────────────────────────┘     without WHERE
+```
+
+### Examples
+
+```bash
+# Read-only connection (default) - SELECT works fine
+hologres sql run "SELECT * FROM users LIMIT 10"
+
+# Read-only connection blocks writes at database level,
+# even before the CLI --write guard kicks in
+hologres sql run "INSERT INTO logs VALUES (1, 'test')"
+# Error: WRITE_GUARD_ERROR (CLI-level guard is checked first)
+
+# With --write, connection uses read_only=False
+hologres sql run --write "INSERT INTO logs VALUES (1, 'test')"
+# Success: connection created with read_only=False
+```
+
 ## Write Protection
 
 ### Purpose

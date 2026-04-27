@@ -177,7 +177,7 @@ def drop_cmd(ctx: click.Context, table: str,
         return
 
     try:
-        conn = get_connection(profile=profile)
+        conn = get_connection(profile=profile, read_only=False)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return
@@ -440,7 +440,7 @@ def alter_cmd(ctx: click.Context, table: str,
         return
 
     try:
-        conn = get_connection(profile=profile)
+        conn = get_connection(profile=profile, read_only=False)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return

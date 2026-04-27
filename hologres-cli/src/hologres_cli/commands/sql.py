@@ -99,7 +99,7 @@ def _execute_single(query: str, profile, fmt, with_schema, no_limit_check, no_ma
                      print_result=False, write_allowed=False) -> dict[str, Any]:
     start_time = time.time()
     try:
-        conn = get_connection(profile=profile)
+        conn = get_connection(profile=profile, read_only=not write_allowed)
     except DSNError as e:
         if print_result:
             print_output(connection_error(str(e), fmt))

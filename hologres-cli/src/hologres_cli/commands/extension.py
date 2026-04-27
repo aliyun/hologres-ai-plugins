@@ -102,7 +102,7 @@ def create_cmd(ctx: click.Context, name: str, if_not_exists: bool) -> None:
     # Execute the CREATE EXTENSION
     start_time = time.time()
     try:
-        conn = get_connection(dsn)
+        conn = get_connection(dsn, read_only=False)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return

@@ -266,7 +266,7 @@ def set_cmd(ctx: click.Context, param_name: str, value: str) -> None:
         return
 
     try:
-        conn = get_connection(profile=profile)
+        conn = get_connection(profile=profile, read_only=False)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return
@@ -332,7 +332,7 @@ def reset_cmd(ctx: click.Context, param_name: str) -> None:
         return
 
     try:
-        conn = get_connection(profile=profile)
+        conn = get_connection(profile=profile, read_only=False)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return

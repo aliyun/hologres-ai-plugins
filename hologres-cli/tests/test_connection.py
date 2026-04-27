@@ -205,12 +205,18 @@ class TestHologresConnection:
         conn = HologresConnection("hologres://user:pass@host/db")
         assert conn.raw_dsn == "hologres://user:pass@host/db"
         assert conn.autocommit is True
+        assert conn.read_only is True
         assert conn._conn is None
 
     def test_connection_init_autocommit_false(self):
         """Test connection with autocommit=False."""
         conn = HologresConnection("hologres://user:pass@host/db", autocommit=False)
         assert conn.autocommit is False
+
+    def test_connection_init_read_only_false(self):
+        """Test connection with read_only=False."""
+        conn = HologresConnection("hologres://user:pass@host/db", read_only=False)
+        assert conn.read_only is False
 
     def test_connection_masked_dsn(self):
         """Test masked_dsn property."""
@@ -224,6 +230,20 @@ class TestHologresConnection:
         _ = conn.conn
         assert conn._conn is not None
         mock_psycopg["connect"].assert_called_once()
+
+    def test_connection_read_only_default(self, mock_psycopg):
+        """Test default connection sets read-only mode."""
+        conn = HologresConnection("hologres://user:pass@host:80/db")
+        _ = conn.conn
+        mock_psycopg["conn"].execute.assert_called_once_with(
+            "SET default_transaction_read_only = ON"
+        )
+
+    def test_connection_read_only_false_no_set(self, mock_psycopg):
+        """Test read_only=False does NOT set read-only mode."""
+        conn = HologresConnection("hologres://user:pass@host:80/db", read_only=False)
+        _ = conn.conn
+        mock_psycopg["conn"].execute.assert_not_called()
 
     def test_connection_reconnect(self, mock_psycopg):
         """Test reconnection when connection is closed."""
@@ -309,6 +329,16 @@ class TestGetConnection:
         """Test get_connection with autocommit parameter."""
         conn = get_connection(autocommit=False)
         assert conn.autocommit is False
+
+    def test_get_connection_read_only_default(self, mock_config, mock_psycopg):
+        """Test get_connection defaults to read_only=True."""
+        conn = get_connection()
+        assert conn.read_only is True
+
+    def test_get_connection_read_only_false(self, mock_config, mock_psycopg):
+        """Test get_connection with read_only=False."""
+        conn = get_connection(read_only=False)
+        assert conn.read_only is False
 
     def test_get_connection_no_config(self, mock_home):
         """Test get_connection with no config raises DSNError."""

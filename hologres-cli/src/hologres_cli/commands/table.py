@@ -360,7 +360,7 @@ def create_cmd(ctx: click.Context, name: str, columns: str,
 
     # Execute mode
     try:
-        conn = get_connection(profile=profile)
+        conn = get_connection(profile=profile, read_only=False)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return
@@ -530,7 +530,7 @@ def drop_cmd(ctx: click.Context, table: str, if_exists: bool, cascade: bool, con
 
     # Execute mode
     try:
-        conn = get_connection(profile=profile)
+        conn = get_connection(profile=profile, read_only=False)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return
@@ -600,7 +600,7 @@ def truncate_cmd(ctx: click.Context, table: str, confirm: bool) -> None:
 
     # Execute mode
     try:
-        conn = get_connection(profile=profile)
+        conn = get_connection(profile=profile, read_only=False)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return
@@ -940,7 +940,7 @@ def alter_cmd(ctx: click.Context, table: str, add_column: Tuple[str, ...],
 
     # Execute mode
     try:
-        conn = get_connection(profile=profile)
+        conn = get_connection(profile=profile, read_only=False)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return

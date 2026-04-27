@@ -122,18 +122,26 @@ def mask_dsn_password(dsn: str) -> str:
 class HologresConnection:
     """Connection wrapper for Hologres using psycopg3."""
 
-    def __init__(self, dsn: str, autocommit: bool = True):
+    def __init__(self, dsn: str, autocommit: bool = True, read_only: bool = True):
         self.raw_dsn = dsn
         self.masked_dsn = mask_dsn_password(dsn)
         self.autocommit = autocommit
+        self.read_only = read_only
         self._conn: Optional[psycopg.Connection] = None
         self._params = parse_dsn(dsn)
 
     @property
     def conn(self) -> psycopg.Connection:
-        """Get or create the connection."""
+        """Get or create the connection.
+
+        When read_only=True (default), the session is set to read-only mode
+        via ``SET default_transaction_read_only = ON``.  This provides
+        database-level protection against accidental writes.
+        """
         if self._conn is None or self._conn.closed:
             self._conn = psycopg.connect(**self._params, autocommit=self.autocommit)
+            if self.read_only:
+                self._conn.execute("SET default_transaction_read_only = ON")
         return self._conn
 
     @property
@@ -171,12 +179,22 @@ class HologresConnection:
         self.close()
 
 
-def get_connection(profile: Optional[str] = None, autocommit: bool = True) -> HologresConnection:
+def get_connection(
+    profile: Optional[str] = None,
+    autocommit: bool = True,
+    read_only: bool = True,
+) -> HologresConnection:
     """Get a Hologres connection from config profile.
 
     Args:
         profile: Profile name to use. If None, uses current profile.
         autocommit: Whether to use autocommit mode.
+        read_only: Whether to set the connection to read-only mode.
+                   Default True — the session executes
+                   ``SET default_transaction_read_only = ON`` upon creation,
+                   so any write statement (INSERT / UPDATE / DELETE / DDL)
+                   will be rejected by the database engine.
+                   Pass ``read_only=False`` for commands that need write access.
     """
     resolved_dsn = resolve_dsn(profile)
-    return HologresConnection(resolved_dsn, autocommit=autocommit)
+    return HologresConnection(resolved_dsn, autocommit=autocommit, read_only=read_only)
