@@ -194,8 +194,8 @@ cd hologres-cli
 # 单元测试（无需数据库）
 pytest -m unit
 
-# 集成测试（需要数据库连接）
-export HOLOGRES_TEST_DSN="hologres://user:password@host:port/database"
+# 集成测试（需要配置好的 profile）
+export TEST_PROFILE_NAME="default"
 pytest -m integration
 
 # 全部测试并生成覆盖率报告

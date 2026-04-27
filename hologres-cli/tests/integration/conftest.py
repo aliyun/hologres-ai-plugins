@@ -1,9 +1,11 @@
 """Integration test fixtures for hologres-cli.
 
 These fixtures create real database connections for integration testing.
-Set HOLOGRES_TEST_DSN environment variable to enable tests.
+Set TEST_PROFILE_NAME environment variable (preferred) or HOLOGRES_TEST_DSN (legacy).
 
 Example:
+    export TEST_PROFILE_NAME="default"
+    # or legacy:
     export HOLOGRES_TEST_DSN="hologres://user:password@host:port/database"
 """
 
@@ -11,7 +13,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Generator
+from typing import Generator, Optional
 
 import pytest
 
@@ -19,14 +21,27 @@ from hologres_cli.connection import HologresConnection
 
 
 @pytest.fixture(scope="session")
-def integration_dsn() -> str:
-    """Get DSN for integration tests from environment variable.
+def test_profile() -> Optional[str]:
+    """Get profile name from TEST_PROFILE_NAME env var, or None."""
+    return os.environ.get("TEST_PROFILE_NAME")
 
-    Reads HOLOGRES_TEST_DSN. Skips tests if not set.
+
+@pytest.fixture(scope="session")
+def integration_dsn(test_profile) -> str:
+    """Get DSN for integration tests.
+
+    Priority:
+    1. TEST_PROFILE_NAME -> resolve DSN from profile
+    2. HOLOGRES_TEST_DSN env var (legacy)
+    3. Skip test
     """
+    if test_profile:
+        from hologres_cli.connection import resolve_dsn
+        return resolve_dsn(test_profile)
+
     dsn = os.environ.get("HOLOGRES_TEST_DSN")
     if not dsn:
-        pytest.skip("HOLOGRES_TEST_DSN not set, skipping integration test")
+        pytest.skip("TEST_PROFILE_NAME or HOLOGRES_TEST_DSN not set, skipping integration test")
     return dsn
 
 

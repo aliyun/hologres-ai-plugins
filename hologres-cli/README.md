@@ -537,7 +537,7 @@ pytest tests/test_config_store.py                    # Config store unit tests
 pytest --cov=src/hologres_cli --cov-report=term-missing
 
 # Integration tests (requires configured profile)
-export HOLOGRES_DSN="hologres://user:pass@endpoint:port/database"
+export TEST_PROFILE_NAME="default"
 pytest -m integration
 ```
 
