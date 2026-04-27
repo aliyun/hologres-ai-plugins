@@ -373,7 +373,7 @@ class TestSqlCmd:
 
         output = json.loads(result.output)
         assert output["ok"] is False
-        assert output["error"]["code"] == "WRITE_BLOCKED"
+        assert output["error"]["code"] == "WRITE_GUARD_ERROR"
 
     def test_sql_cmd_delete_blocked(self, mock_get_connection):
         """Test DELETE operation is blocked."""
@@ -382,7 +382,7 @@ class TestSqlCmd:
 
         output = json.loads(result.output)
         assert output["ok"] is False
-        assert output["error"]["code"] == "WRITE_BLOCKED"
+        assert output["error"]["code"] == "WRITE_GUARD_ERROR"
 
     def test_sql_cmd_update_blocked(self, mock_get_connection):
         """Test UPDATE operation is blocked."""
@@ -391,7 +391,7 @@ class TestSqlCmd:
 
         output = json.loads(result.output)
         assert output["ok"] is False
-        assert output["error"]["code"] == "WRITE_BLOCKED"
+        assert output["error"]["code"] == "WRITE_GUARD_ERROR"
 
     def test_sql_cmd_limit_required(self, mock_get_connection):
         """Test query without LIMIT that returns too many rows."""
@@ -482,7 +482,7 @@ class TestSqlCmd:
 
         output = json.loads(result.output)
         assert output["ok"] is False
-        assert output["error"]["code"] == "WRITE_BLOCKED"
+        assert output["error"]["code"] == "WRITE_GUARD_ERROR"
 
     def test_sql_cmd_table_format(self, mock_get_connection):
         """Test table format output."""

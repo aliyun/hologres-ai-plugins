@@ -39,12 +39,10 @@ def schema_cmd() -> None:
     pass
 
 
-def _list_tables(dsn: str, schema_name: Optional[str], fmt: str, operation: str = "schema.tables") -> None:
+def _list_tables(profile: Optional[str], schema_name: Optional[str], fmt: str, operation: str = "schema.tables") -> None:
     """Core logic for listing tables in the database.
     Shared by ``schema tables`` and ``table list`` commands.
     """
-    profile = ctx.obj.get("profile")
-    fmt = ctx.obj.get("format", FORMAT_JSON)
     start_time = time.time()
 
     try:
@@ -84,7 +82,7 @@ def _list_tables(dsn: str, schema_name: Optional[str], fmt: str, operation: str 
 @click.pass_context
 def tables_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
     """List all tables in the database."""
-    _list_tables(ctx.obj.get("dsn"), schema_name,
+    _list_tables(ctx.obj.get("profile"), schema_name,
                  ctx.obj.get("format", FORMAT_JSON))
 
 
@@ -179,13 +177,11 @@ def describe_cmd(ctx: click.Context, table: str) -> None:
         conn.close()
 
 
-def _dump_table_ddl(dsn: str, table: str, fmt: str, operation: str = "schema.dump") -> None:
+def _dump_table_ddl(profile: Optional[str], table: str, fmt: str, operation: str = "schema.dump") -> None:
     """Core logic for dumping table DDL using hg_dump_script().
 
     Shared by ``schema dump`` and ``table dump`` commands.
     """
-    profile = ctx.obj.get("profile")
-    fmt = ctx.obj.get("format", FORMAT_JSON)
     start_time = time.time()
 
     try:
@@ -255,17 +251,15 @@ def dump_cmd(ctx: click.Context, table: str) -> None:
       hologres schema dump public.my_table
       hologres schema dump myschema.orders
     """
-    _dump_table_ddl(ctx.obj.get("dsn"), table,
+    _dump_table_ddl(ctx.obj.get("profile"), table,
                     ctx.obj.get("format", FORMAT_JSON))
 
 
-def _get_table_size(dsn: str, table: str, fmt: str, operation: str = "schema.size") -> None:
+def _get_table_size(profile: Optional[str], table: str, fmt: str, operation: str = "schema.size") -> None:
     """Core logic for getting table storage size using pg_relation_size().
 
     Shared by ``schema size`` and ``table size`` commands.
     """
-    profile = ctx.obj.get("profile")
-    fmt = ctx.obj.get("format", FORMAT_JSON)
     start_time = time.time()
 
     try:
@@ -342,5 +336,5 @@ def size_cmd(ctx: click.Context, table: str) -> None:
       hologres schema size public.my_table
       hologres schema size myschema.orders
     """
-    _get_table_size(ctx.obj.get("dsn"), table,
+    _get_table_size(ctx.obj.get("profile"), table,
                     ctx.obj.get("format", FORMAT_JSON))

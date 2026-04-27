@@ -180,7 +180,7 @@ class TestSubcommands:
         runner = CliRunner()
         result = runner.invoke(cli, ["sql", "--help"])
         assert result.exit_code == 0
-        assert "QUERY" in result.output
+        assert "run" in result.output
 
     def test_data_command_registered(self):
         """Test data command is registered."""

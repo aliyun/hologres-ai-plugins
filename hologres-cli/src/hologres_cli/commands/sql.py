@@ -87,16 +87,16 @@ def run_cmd(ctx: click.Context, query: str, with_schema: bool,
     if len(statements) > 1:
         results = []
         for stmt in statements:
-            r = _execute_single(stmt, profile, fmt, with_schema, no_limit_check, no_mask)
+            r = _execute_single(stmt, profile, fmt, with_schema, no_limit_check, no_mask, write_allowed=write_allowed)
             results.append(r)
         if fmt == FORMAT_JSON:
             print_output(success({"statements": results, "count": len(results)}))
     else:
-        _execute_single(query, profile, fmt, with_schema, no_limit_check, no_mask, print_result=True)
+        _execute_single(query, profile, fmt, with_schema, no_limit_check, no_mask, print_result=True, write_allowed=write_allowed)
 
 
 def _execute_single(query: str, profile, fmt, with_schema, no_limit_check, no_mask,
-                     print_result=False) -> dict[str, Any]:
+                     print_result=False, write_allowed=False) -> dict[str, Any]:
     start_time = time.time()
     try:
         conn = get_connection(profile=profile)

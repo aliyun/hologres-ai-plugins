@@ -40,7 +40,7 @@ def dump_cmd(ctx: click.Context, table: str) -> None:
       hologres table dump public.my_table
       hologres table dump myschema.orders
     """
-    _dump_table_ddl(ctx.obj.get("dsn"), table, ctx.obj.get("format", FORMAT_JSON),
+    _dump_table_ddl(ctx.obj.get("profile"), table, ctx.obj.get("format", FORMAT_JSON),
                     operation="table.dump")
 
 
@@ -49,7 +49,7 @@ def dump_cmd(ctx: click.Context, table: str) -> None:
 @click.pass_context
 def list_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
     """List all tables in the database (excluding system schemas)."""
-    _list_tables(ctx.obj.get("dsn"), schema_name, ctx.obj.get("format", FORMAT_JSON),
+    _list_tables(ctx.obj.get("profile"), schema_name, ctx.obj.get("format", FORMAT_JSON),
                  operation="table.list")
 
 
@@ -61,7 +61,7 @@ def show_cmd(ctx: click.Context, table: str) -> None:
 
     TABLE: 'table_name' or 'schema.table_name'.
     """
-    dsn = ctx.obj.get("dsn")
+    profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
 
     if "." in table:
@@ -72,7 +72,7 @@ def show_cmd(ctx: click.Context, table: str) -> None:
     start_time = time.time()
 
     try:
-        conn = get_connection(dsn)
+        conn = get_connection(profile=profile)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return
@@ -115,7 +115,7 @@ def size_cmd(ctx: click.Context, table: str) -> None:
       hologres table size public.my_table
       hologres table size myschema.orders
     """
-    _get_table_size(ctx.obj.get("dsn"), table, ctx.obj.get("format", FORMAT_JSON),
+    _get_table_size(ctx.obj.get("profile"), table, ctx.obj.get("format", FORMAT_JSON),
                     operation="table.size")
 
 
@@ -132,12 +132,12 @@ def properties_cmd(ctx: click.Context, table: str) -> None:
       hologres table properties public.my_table
       hologres table properties myschema.orders
     """
-    dsn = ctx.obj.get("dsn")
+    profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
     start_time = time.time()
 
     try:
-        conn = get_connection(dsn)
+        conn = get_connection(profile=profile)
     except DSNError as e:
         print_output(connection_error(str(e), fmt))
         return
