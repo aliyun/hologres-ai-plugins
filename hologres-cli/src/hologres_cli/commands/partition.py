@@ -96,7 +96,8 @@ def _parse_partition_value(
 
 
 @partition_cmd.command("create")
-@click.argument("table")
+@click.option("--table", "-t", required=True,
+              help="Table name [schema.]table_name.")
 @click.option("--partition", "partition_value", required=False,
               help="Partition value (ignored for logical partition tables).")
 @click.option("--dry-run", is_flag=True, default=False,
@@ -106,15 +107,13 @@ def create_cmd(ctx: click.Context, table: str,
                partition_value: Optional[str], dry_run: bool) -> None:
     """Create a partition (logical partition tables only).
 
-    TABLE: 'table_name' or 'schema.table_name'.
-
     NOTE: Logical partition tables create partitions automatically on INSERT.
     This command is a no-op and returns a notice.
 
     \b
     Examples:
-      hologres partition create my_table
-      hologres partition create public.logs
+      hologres partition create --table my_table
+      hologres partition create -t public.logs
     """
     fmt = ctx.obj.get("format", FORMAT_JSON)
 
@@ -127,7 +126,8 @@ def create_cmd(ctx: click.Context, table: str,
 
 
 @partition_cmd.command("drop")
-@click.argument("table")
+@click.option("--table", "-t", required=True,
+              help="Table name [schema.]table_name.")
 @click.option("--partition", "partition_value", required=True,
               help="Partition value. Single column: '2025-04-01'. "
                    "Multiple columns: 'yy=2025,mm=04'.")
@@ -139,8 +139,6 @@ def drop_cmd(ctx: click.Context, table: str,
              partition_value: str, confirm: bool) -> None:
     """Drop a partition from a logical partition table.
 
-    TABLE: Table name in format [schema.]table_name.
-
     Deletes all rows matching the partition value.
     The partition disappears automatically after data is removed.
 
@@ -149,9 +147,9 @@ def drop_cmd(ctx: click.Context, table: str,
 
     \b
     Examples:
-      hologres partition drop my_table --partition "2025-04-01"
-      hologres partition drop my_table --partition "2025-04-01" --confirm
-      hologres partition drop public.events --partition "yy=2025,mm=04" --confirm
+      hologres partition drop --table my_table --partition "2025-04-01"
+      hologres partition drop -t my_table --partition "2025-04-01" --confirm
+      hologres partition drop -t public.events --partition "yy=2025,mm=04" --confirm
     """
     profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
@@ -261,17 +259,16 @@ def drop_cmd(ctx: click.Context, table: str,
 
 
 @partition_cmd.command("list")
-@click.argument("table")
+@click.option("--table", "-t", required=True,
+              help="Table name [schema.]table_name.")
 @click.pass_context
 def list_cmd(ctx: click.Context, table: str) -> None:
     """List partitions of a logical partition table.
 
-    TABLE: 'table_name' or 'schema.table_name'.
-
     \b
     Examples:
-      hologres partition list my_table
-      hologres partition list public.logs
+      hologres partition list --table my_table
+      hologres partition list -t public.logs
     """
     profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)

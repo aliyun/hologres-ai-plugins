@@ -719,9 +719,9 @@ Partition management commands. Currently supports logical partition tables only.
 List partitions of a logical partition table.
 
 ```bash
-hologres partition list <table>
-hologres partition list public.logs
-hologres partition list my_table        # defaults to public schema
+hologres partition list --table <table>
+hologres partition list -t public.logs
+hologres partition list -t my_table        # defaults to public schema
 ```
 
 **Output:**
@@ -760,8 +760,8 @@ hologres partition list my_table        # defaults to public schema
 Create a partition for a logical partition table. Since logical partition tables create partitions automatically when data is inserted, this command is a no-op and returns a notice.
 
 ```bash
-hologres partition create my_table
-hologres partition create public.logs
+hologres partition create --table my_table
+hologres partition create -t public.logs
 ```
 
 **Output:**
@@ -781,20 +781,21 @@ Drop a partition from a logical partition table by deleting all rows matching th
 
 ```bash
 # Single partition column
-hologres partition drop my_table --partition "2025-04-01"              # dry-run
-hologres partition drop my_table --partition "2025-04-01" --confirm    # execute
+hologres partition drop --table my_table --partition "2025-04-01"              # dry-run
+hologres partition drop -t my_table --partition "2025-04-01" --confirm    # execute
 
 # Key=value format (also works for single column)
-hologres partition drop my_table --partition "ds=2025-04-01" --confirm
+hologres partition drop -t my_table --partition "ds=2025-04-01" --confirm
 
 # Multiple partition columns
-hologres partition drop public.events --partition "yy=2025,mm=04" --confirm
+hologres partition drop -t public.events --partition "yy=2025,mm=04" --confirm
 ```
 
 **Options:**
 
 | Option | Description |
 |--------|-------------|
+| `--table, -t TABLE` | Table name `[schema.]table_name` (required) |
 | `--partition VALUE` | Partition value to drop. Single column: `"2025-04-01"`. Multiple columns: `"yy=2025,mm=04"` (required) |
 | `--confirm` | [REQUIRED to execute] Confirm the drop operation. Without --confirm, only dry-run SQL is shown |
 

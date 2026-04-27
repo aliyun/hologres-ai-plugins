@@ -588,7 +588,8 @@ class TestPartitionLifecycleLive:
             assert output["ok"] is True
 
             result2 = runner.invoke(cli, [
-                "--profile", test_profile, "partition", "list", unique_table_name
+                "--profile", test_profile, "partition", "list",
+                "--table", unique_table_name,
             ])
             assert result2.exit_code == 0
             output2 = json.loads(result2.output)
@@ -615,7 +616,8 @@ class TestPartitionLifecycleLive:
             ])
 
             result = runner.invoke(cli, [
-                "--profile", test_profile, "partition", "create", unique_table_name
+                "--profile", test_profile, "partition", "create",
+                "--table", unique_table_name,
             ])
             assert result.exit_code == 0
             output = json.loads(result.output)
@@ -649,7 +651,8 @@ class TestPartitionLifecycleLive:
             )
 
             result = runner.invoke(cli, [
-                "--profile", test_profile, "partition", "list", unique_table_name
+                "--profile", test_profile, "partition", "list",
+                "--table", unique_table_name,
             ])
             assert result.exit_code == 0
             output = json.loads(result.output)
@@ -679,7 +682,8 @@ class TestPartitionLifecycleLive:
             )
 
             result = runner.invoke(cli, [
-                "--profile", test_profile, "partition", "drop", unique_table_name,
+                "--profile", test_profile, "partition", "drop",
+                "--table", unique_table_name,
                 "--partition", "2025-04-01",
             ])
             assert result.exit_code == 0
@@ -718,7 +722,8 @@ class TestPartitionLifecycleLive:
             )
 
             result = runner.invoke(cli, [
-                "--profile", test_profile, "partition", "drop", unique_table_name,
+                "--profile", test_profile, "partition", "drop",
+                "--table", unique_table_name,
                 "--partition", "2025-04-01", "--confirm",
             ])
             assert result.exit_code == 0
@@ -732,7 +737,8 @@ class TestPartitionLifecycleLive:
             assert rows[0]["cnt"] == 1
 
             result2 = runner.invoke(cli, [
-                "--profile", test_profile, "partition", "list", unique_table_name
+                "--profile", test_profile, "partition", "list",
+                "--table", unique_table_name,
             ])
             output2 = json.loads(result2.output)
             assert output2["ok"] is True
@@ -871,7 +877,8 @@ class TestMultiColumnPartitionLive:
             )
 
             result = runner.invoke(cli, [
-                "--profile", test_profile, "partition", "list", unique_table_name,
+                "--profile", test_profile, "partition", "list",
+                "--table", unique_table_name,
             ])
             assert result.exit_code == 0
             output = json.loads(result.output)
@@ -901,7 +908,8 @@ class TestMultiColumnPartitionLive:
             )
 
             result = runner.invoke(cli, [
-                "--profile", test_profile, "partition", "drop", unique_table_name,
+                "--profile", test_profile, "partition", "drop",
+                "--table", unique_table_name,
                 "--partition", "yy=2025,mm=04",
             ])
             assert result.exit_code == 0
@@ -941,7 +949,8 @@ class TestMultiColumnPartitionLive:
             )
 
             result = runner.invoke(cli, [
-                "--profile", test_profile, "partition", "drop", unique_table_name,
+                "--profile", test_profile, "partition", "drop",
+                "--table", unique_table_name,
                 "--partition", "yy=2025,mm=04", "--confirm",
             ])
             assert result.exit_code == 0

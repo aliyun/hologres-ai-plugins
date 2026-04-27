@@ -238,23 +238,23 @@ hologres view show analytics.daily_stats
 
 ```bash
 # List partitions of a logical partition table
-hologres partition list my_table
-hologres partition list public.logs
+hologres partition list --table my_table
+hologres partition list -t public.logs
 
 # With table format output
-hologres partition list public.logs -f table
+hologres partition list -t public.logs -f table
 
 # Create a partition (no-op for logical partition tables, returns notice)
-hologres partition create my_table
+hologres partition create --table my_table
 
 # Drop a partition (dry-run by default)
-hologres partition drop my_table --partition "2025-04-01"
+hologres partition drop --table my_table --partition "2025-04-01"
 
 # Drop a partition (actually execute)
-hologres partition drop my_table --partition "2025-04-01" --confirm
+hologres partition drop -t my_table --partition "2025-04-01" --confirm
 
 # Drop a partition with multiple partition columns
-hologres partition drop public.events --partition "yy=2025,mm=04" --confirm
+hologres partition drop -t public.events --partition "yy=2025,mm=04" --confirm
 ```
 
 > **Note:** Currently only logical partition tables are supported. Non-logical partition tables will return a `NOT_LOGICAL_PARTITION` error.

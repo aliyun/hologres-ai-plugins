@@ -18,7 +18,7 @@ class TestPartitionCreateCmd:
     def test_create_returns_notice(self):
         """Test partition create returns notice without DB connection."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "create", "my_table"])
+        result = runner.invoke(cli, ["partition", "create", "--table", "my_table"])
 
         assert result.exit_code == 0
         output = json.loads(result.output)
@@ -30,7 +30,7 @@ class TestPartitionCreateCmd:
     def test_create_with_partition_value(self):
         """Test partition create with --partition value (ignored)."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "create", "my_table",
+        result = runner.invoke(cli, ["partition", "create", "--table", "my_table",
                                      "--partition", "2025-04-01"])
 
         assert result.exit_code == 0
@@ -41,7 +41,8 @@ class TestPartitionCreateCmd:
     def test_create_with_dry_run(self):
         """Test partition create with --dry-run (same behavior)."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "create", "my_table", "--dry-run"])
+        result = runner.invoke(cli, ["partition", "create", "--table", "my_table",
+                                     "--dry-run"])
 
         assert result.exit_code == 0
         output = json.loads(result.output)
@@ -51,10 +52,29 @@ class TestPartitionCreateCmd:
     def test_create_table_format(self):
         """Test partition create with table output format."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["-f", "table", "partition", "create", "my_table"])
+        result = runner.invoke(cli, ["-f", "table", "partition", "create",
+                                     "--table", "my_table"])
 
         assert result.exit_code == 0
         assert "notice" in result.output
+
+    def test_create_table_option_required(self):
+        """Test partition create without --table fails."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["partition", "create"])
+
+        assert result.exit_code != 0
+        assert "Missing option" in result.output or "--table" in result.output
+
+    def test_create_short_option(self):
+        """Test partition create with -t short option."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["partition", "create", "-t", "my_table"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert "notice" in output["data"]
 
 
 class TestPartitionDropCmd:
@@ -69,7 +89,7 @@ class TestPartitionDropCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "public.logs",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "public.logs",
                                      "--partition", "2025-04-01"])
 
         assert result.exit_code == 0
@@ -91,7 +111,7 @@ class TestPartitionDropCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "public.logs",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "public.logs",
                                      "--partition", "2025-04-01", "--confirm"])
 
         assert result.exit_code == 0
@@ -116,7 +136,7 @@ class TestPartitionDropCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "my_table",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "my_table",
                                      "--partition", "2025-04-01"])
 
         assert result.exit_code == 0
@@ -136,7 +156,7 @@ class TestPartitionDropCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "myschema.my_table",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "myschema.my_table",
                                      "--partition", "2025-04-01"])
 
         assert result.exit_code == 0
@@ -153,7 +173,7 @@ class TestPartitionDropCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "public.nonexistent",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "public.nonexistent",
                                      "--partition", "2025-04-01"])
 
         assert result.exit_code == 0
@@ -169,7 +189,7 @@ class TestPartitionDropCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "public.regular_table",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "public.regular_table",
                                      "--partition", "2025-04-01"])
 
         assert result.exit_code == 0
@@ -180,7 +200,7 @@ class TestPartitionDropCmd:
     def test_drop_invalid_identifier(self, mock_get_connection):
         """Test drop with invalid table name."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "public.my;table",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "public.my;table",
                                      "--partition", "2025-04-01"])
 
         assert result.exit_code == 0
@@ -196,7 +216,7 @@ class TestPartitionDropCmd:
         )
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "public.logs",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "public.logs",
                                      "--partition", "2025-04-01", "--confirm"])
 
         assert result.exit_code == 0
@@ -214,7 +234,7 @@ class TestPartitionDropCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "public.logs",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "public.logs",
                                      "--partition", "2025-04-01", "--confirm"])
 
         assert result.exit_code == 0
@@ -225,10 +245,35 @@ class TestPartitionDropCmd:
     def test_drop_partition_required(self):
         """Test drop without --partition fails."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "public.logs"])
+        result = runner.invoke(cli, ["partition", "drop", "--table", "public.logs"])
 
         assert result.exit_code != 0
         assert "Missing option" in result.output or "--partition" in result.output
+
+    def test_drop_table_option_required(self):
+        """Test drop without --table fails."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["partition", "drop", "--partition", "2025-04-01"])
+
+        assert result.exit_code != 0
+        assert "Missing option" in result.output or "--table" in result.output
+
+    def test_drop_short_option(self, mock_get_connection):
+        """Test drop with -t short option."""
+        mock_get_connection.execute.side_effect = [
+            [{"?column?": 1}],
+            [{"property_value": "true"}],
+            [{"property_value": "ds"}],
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["partition", "drop", "-t", "public.logs",
+                                     "--partition", "2025-04-01"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["dry_run"] is True
 
     def test_drop_verify_delete_sql(self, mock_get_connection):
         """Test that generated DELETE SQL is correct."""
@@ -239,7 +284,7 @@ class TestPartitionDropCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "public.logs",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "public.logs",
                                      "--partition", "2025-04-01"])
 
         assert result.exit_code == 0
@@ -255,7 +300,7 @@ class TestPartitionDropCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "public.events",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "public.events",
                                      "--partition", "yy=2025,mm=04"])
 
         assert result.exit_code == 0
@@ -275,7 +320,7 @@ class TestPartitionDropCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "public.events",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "public.events",
                                      "--partition", "xx=2025,zz=04"])
 
         assert result.exit_code == 0
@@ -293,7 +338,7 @@ class TestPartitionDropCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "public.events",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "public.events",
                                      "--partition", "2025"])
 
         assert result.exit_code == 0
@@ -310,7 +355,7 @@ class TestPartitionDropCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "drop", "public.logs",
+        result = runner.invoke(cli, ["partition", "drop", "--table", "public.logs",
                                      "--partition", "ds=2025-04-01"])
 
         assert result.exit_code == 0
@@ -328,7 +373,8 @@ class TestPartitionDropCmd:
 
         runner = CliRunner()
         result = runner.invoke(cli, ["-f", "table", "partition", "drop",
-                                     "public.logs", "--partition", "2025-04-01"])
+                                     "--table", "public.logs",
+                                     "--partition", "2025-04-01"])
 
         assert result.exit_code == 0
         assert "dry_run" in result.output or "sql" in result.output
@@ -353,7 +399,7 @@ class TestPartitionListCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "list", "public.logs"])
+        result = runner.invoke(cli, ["partition", "list", "--table", "public.logs"])
 
         assert result.exit_code == 0
         output = json.loads(result.output)
@@ -372,7 +418,7 @@ class TestPartitionListCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "list", "public.logs"])
+        result = runner.invoke(cli, ["partition", "list", "--table", "public.logs"])
 
         assert result.exit_code == 0
         output = json.loads(result.output)
@@ -387,7 +433,7 @@ class TestPartitionListCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "list", "public.nonexistent"])
+        result = runner.invoke(cli, ["partition", "list", "--table", "public.nonexistent"])
 
         assert result.exit_code == 0
         output = json.loads(result.output)
@@ -403,7 +449,8 @@ class TestPartitionListCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "list", "public.regular_table"])
+        result = runner.invoke(cli, ["partition", "list", "--table",
+                                     "public.regular_table"])
 
         assert result.exit_code == 0
         output = json.loads(result.output)
@@ -420,7 +467,7 @@ class TestPartitionListCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "list", "my_table"])
+        result = runner.invoke(cli, ["partition", "list", "--table", "my_table"])
 
         assert result.exit_code == 0
         output = json.loads(result.output)
@@ -439,7 +486,8 @@ class TestPartitionListCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "list", "myschema.my_table"])
+        result = runner.invoke(cli, ["partition", "list", "--table",
+                                     "myschema.my_table"])
 
         assert result.exit_code == 0
         output = json.loads(result.output)
@@ -457,7 +505,7 @@ class TestPartitionListCmd:
     def test_invalid_identifier(self, mock_get_connection):
         """Test partition list with invalid table name."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "list", "public.my;table"])
+        result = runner.invoke(cli, ["partition", "list", "--table", "public.my;table"])
 
         assert result.exit_code == 0
         output = json.loads(result.output)
@@ -472,7 +520,7 @@ class TestPartitionListCmd:
         )
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "list", "public.logs"])
+        result = runner.invoke(cli, ["partition", "list", "--table", "public.logs"])
 
         assert result.exit_code == 0
         output = json.loads(result.output)
@@ -488,7 +536,7 @@ class TestPartitionListCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["partition", "list", "public.logs"])
+        result = runner.invoke(cli, ["partition", "list", "--table", "public.logs"])
 
         assert result.exit_code == 0
         output = json.loads(result.output)
@@ -507,7 +555,8 @@ class TestPartitionListCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["-f", "table", "partition", "list", "public.logs"])
+        result = runner.invoke(cli, ["-f", "table", "partition", "list",
+                                     "--table", "public.logs"])
 
         assert result.exit_code == 0
         assert "partition" in result.output
@@ -525,8 +574,32 @@ class TestPartitionListCmd:
         ]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["-f", "csv", "partition", "list", "public.logs"])
+        result = runner.invoke(cli, ["-f", "csv", "partition", "list",
+                                     "--table", "public.logs"])
 
         assert result.exit_code == 0
         assert "partition" in result.output
         assert "2025-04-01" in result.output
+
+    def test_list_table_option_required(self):
+        """Test partition list without --table fails."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["partition", "list"])
+
+        assert result.exit_code != 0
+        assert "Missing option" in result.output or "--table" in result.output
+
+    def test_list_short_option(self, mock_get_connection):
+        """Test partition list with -t short option."""
+        mock_get_connection.execute.side_effect = [
+            [{"?column?": 1}],
+            [{"property_value": "true"}],
+            [{"partition": "2025-01-01"}],
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["partition", "list", "-t", "public.logs"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True

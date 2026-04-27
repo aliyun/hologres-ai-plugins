@@ -67,9 +67,9 @@ hologres dt list                                   # List Dynamic Tables
 | `hologres table properties <table>` | Show Hologres-specific table properties (orientation, distribution_key, clustering_key, TTL, etc.) |
 | `hologres table drop <table> [--if-exists] [--cascade] --confirm` | Drop a table (dry-run by default) |
 | `hologres table truncate <table> --confirm` | Truncate (empty) a table (dry-run by default) |
-| `hologres partition list <table>` | List partitions of a logical partition table |
-| `hologres partition create <table>` | Create partition (no-op for logical tables, returns notice) |
-| `hologres partition drop <table> --partition VALUE --confirm` | Drop partition (deletes partition data) |
+| `hologres partition list --table <table>` | List partitions of a logical partition table |
+| `hologres partition create --table <table>` | Create partition (no-op for logical tables, returns notice) |
+| `hologres partition drop --table <table> --partition VALUE --confirm` | Drop partition (deletes partition data) |
 | `hologres view list [--schema S]` | List all views |
 | `hologres view show <view>` | Show view definition and structure |
 | `hologres extension list` | List installed extensions |
