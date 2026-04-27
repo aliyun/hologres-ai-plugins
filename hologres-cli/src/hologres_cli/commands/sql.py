@@ -14,12 +14,14 @@ from ..masking import mask_rows
 from ..output import (
     FORMAT_JSON,
     connection_error,
+    dangerous_write_error,
     error,
     limit_required_error,
     print_output,
     query_error,
     success,
     success_rows,
+    write_guard_error,
 )
 
 DEFAULT_ROW_LIMIT = 100
@@ -31,22 +33,52 @@ LIMIT_PATTERN = re.compile(r"\bLIMIT\s+\d+", re.IGNORECASE)
 SELECT_PATTERN = re.compile(r"^\s*SELECT\b", re.IGNORECASE)
 
 
-@click.command("sql")
+class SqlGroup(click.Group):
+    """Custom group that defaults to 'run' subcommand for backward compatibility.
+
+    Allows both:
+      hologres sql run "SELECT * FROM users"   (new recommended form)
+      hologres sql "SELECT * FROM users"        (backward compatible)
+    """
+
+    def parse_args(self, ctx, args):
+        if args and args[0] not in self.commands and args[0] not in ('--help', '-h'):
+            args = ['run'] + args
+        return super().parse_args(ctx, args)
+
+
+@click.group("sql", cls=SqlGroup)
+@click.pass_context
+def sql_cmd(ctx: click.Context) -> None:
+    """Execute SQL queries with safety guardrails.
+
+    \b
+    Examples:
+      hologres sql run "SELECT * FROM users LIMIT 10"
+      hologres sql run --write "INSERT INTO logs VALUES (1, 'test')"
+      hologres sql run --no-limit-check "SELECT * FROM large_table"
+    """
+    pass
+
+
+@sql_cmd.command("run")
 @click.argument("query")
 @click.option("--with-schema", "with_schema", is_flag=True, help="Include schema context")
 @click.option("--no-limit-check", "no_limit_check", is_flag=True, help="Disable row limit check")
 @click.option("--no-mask", "no_mask", is_flag=True, help="Disable sensitive field masking")
+@click.option("--write", "write_allowed", is_flag=True, help="Enable write operations")
 @click.pass_context
-def sql_cmd(ctx: click.Context, query: str, with_schema: bool,
-            no_limit_check: bool, no_mask: bool) -> None:
-    """Execute a read-only SQL query with safety guardrails.
+def run_cmd(ctx: click.Context, query: str, with_schema: bool,
+            no_limit_check: bool, no_mask: bool, write_allowed: bool) -> None:
+    """Execute a SQL query with safety guardrails.
 
-    Write operations (INSERT, UPDATE, DELETE, DROP, etc.) are blocked.
+    Write operations (INSERT, UPDATE, DELETE, DROP, etc.) require the --write flag.
 
     \b
     Examples:
-      hologres sql "SELECT * FROM users LIMIT 10"
-      hologres sql --no-limit-check "SELECT * FROM large_table"
+      hologres sql run "SELECT * FROM users LIMIT 10"
+      hologres sql run --write "INSERT INTO logs VALUES (1, 'test')"
+      hologres sql run --no-limit-check "SELECT * FROM large_table"
     """
     profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
@@ -75,15 +107,47 @@ def _execute_single(query: str, profile, fmt, with_schema, no_limit_check, no_ma
 
     query = query.strip()
 
-    # Block all write operations
+    # Write operation guard: require --write flag
     if _is_write_operation(query):
-        log_operation("sql", sql=query, dsn_masked=conn.masked_dsn, success=False,
-                      error_code="WRITE_BLOCKED")
-        msg = "Write operations (INSERT, UPDATE, DELETE, DROP, etc.) are not allowed"
-        if print_result:
-            print_output(error("WRITE_BLOCKED", msg, fmt))
-        conn.close()
-        return {"error": {"code": "WRITE_BLOCKED", "message": msg}}
+        if not write_allowed:
+            log_operation("sql", sql=query, dsn_masked=conn.masked_dsn, success=False,
+                          error_code="WRITE_GUARD_ERROR")
+            msg = "Write operations require the --write flag."
+            if print_result:
+                print_output(write_guard_error(fmt))
+            conn.close()
+            return {"error": {"code": "WRITE_GUARD_ERROR", "message": msg}}
+
+        # Dangerous write check: DELETE/UPDATE without WHERE
+        dangerous = _check_dangerous_write(query)
+        if dangerous:
+            log_operation("sql", sql=query, dsn_masked=conn.masked_dsn, success=False,
+                          error_code="DANGEROUS_WRITE_BLOCKED")
+            msg = f"{dangerous} without WHERE clause is blocked."
+            if print_result:
+                print_output(dangerous_write_error(dangerous, fmt))
+            conn.close()
+            return {"error": {"code": "DANGEROUS_WRITE_BLOCKED", "message": msg}}
+
+        # Execute write operation
+        try:
+            rows = conn.execute(query)
+            duration_ms = (time.time() - start_time) * 1000
+            log_operation("sql", sql=query, dsn_masked=conn.masked_dsn, success=True,
+                          row_count=len(rows) if rows else 0, duration_ms=duration_ms)
+            result = {"operation": "write", "rows": rows, "count": len(rows) if rows else 0}
+            if print_result:
+                print_output(success(result, fmt))
+            return result
+        except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+            log_operation("sql", sql=query, dsn_masked=conn.masked_dsn, success=False,
+                          error_code="QUERY_ERROR", error_message=str(e), duration_ms=duration_ms)
+            if print_result:
+                print_output(query_error(str(e), fmt))
+            return {"error": {"code": "QUERY_ERROR", "message": str(e)}}
+        finally:
+            conn.close()
 
     try:
         is_select = _is_select(query)
@@ -134,6 +198,52 @@ def _execute_single(query: str, profile, fmt, with_schema, no_limit_check, no_ma
         conn.close()
 
 
+@sql_cmd.command("explain")
+@click.argument("query")
+@click.pass_context
+def explain_cmd(ctx: click.Context, query: str) -> None:
+    """Show execution plan for a SQL query.
+
+    \b
+    Examples:
+      hologres sql explain "SELECT * FROM orders"
+      hologres sql explain "SELECT * FROM orders WHERE status = 'active'"
+    """
+    dsn = ctx.obj.get("dsn")
+    fmt = ctx.obj.get("format", FORMAT_JSON)
+
+    start_time = time.time()
+    try:
+        conn = get_connection(dsn)
+    except DSNError as e:
+        print_output(connection_error(str(e), fmt))
+        return
+
+    explain_sql = f"EXPLAIN {query}"
+
+    try:
+        rows = conn.execute(explain_sql)
+        duration_ms = (time.time() - start_time) * 1000
+
+        # EXPLAIN returns [{"QUERY PLAN": "..."}] format
+        plan_lines = [row.get("QUERY PLAN", str(row)) for row in rows] if rows else []
+
+        log_operation("sql.explain", sql=explain_sql, dsn_masked=conn.masked_dsn,
+                      success=True, duration_ms=duration_ms)
+
+        result = {"plan": plan_lines, "query": query}
+        print_output(success(result, fmt))
+
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation("sql.explain", sql=explain_sql, dsn_masked=conn.masked_dsn,
+                      success=False, error_code="QUERY_ERROR",
+                      error_message=str(e), duration_ms=duration_ms)
+        print_output(query_error(str(e), fmt))
+    finally:
+        conn.close()
+
+
 def _split_statements(query: str) -> list[str]:
     statements = []
     current = []
@@ -171,6 +281,21 @@ def _is_write_operation(query: str) -> bool:
 def _is_select(query: str) -> bool:
     return bool(SELECT_PATTERN.match(query))
 
+
+def _check_dangerous_write(query: str) -> str | None:
+    """Check if a write operation is dangerous (DELETE/UPDATE without WHERE).
+
+    Returns the operation type string (e.g. "DELETE", "UPDATE") if dangerous,
+    None otherwise.
+    """
+    match = re.match(r"^\s*(\w+)", query, re.IGNORECASE)
+    if not match:
+        return None
+    operation = match.group(1).upper()
+    if operation in ("DELETE", "UPDATE"):
+        if not re.search(r"\bWHERE\b", query, re.IGNORECASE):
+            return operation
+    return None
 
 
 def _has_limit(query: str) -> bool:

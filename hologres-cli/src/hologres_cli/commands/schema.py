@@ -68,16 +68,69 @@ def tables_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
     try:
         rows = conn.execute(sql, tuple(params) if params else None)
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.tables", sql=sql, dsn_masked=conn.masked_dsn, success=True,
+        log_operation(operation, sql=sql, dsn_masked=conn.masked_dsn, success=True,
                       row_count=len(rows), duration_ms=duration_ms)
         print_output(success_rows(rows, fmt))
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.tables", sql=sql, dsn_masked=conn.masked_dsn, success=False,
+        log_operation(operation, sql=sql, dsn_masked=conn.masked_dsn, success=False,
                       error_code="QUERY_ERROR", error_message=str(e), duration_ms=duration_ms)
         print_output(query_error(str(e), fmt))
     finally:
         conn.close()
+
+
+@schema_cmd.command("tables")
+@click.option("--schema", "-s", "schema_name", default=None, help="Filter by schema name")
+@click.pass_context
+def tables_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
+    """List all tables in the database."""
+    _list_tables(ctx.obj.get("dsn"), schema_name,
+                 ctx.obj.get("format", FORMAT_JSON))
+
+
+def fetch_table_structure(conn, schema_name: str, table_name: str) -> dict | None:
+    """Fetch table structure (columns and primary key).
+
+    Shared by ``schema describe`` and ``table show``.
+
+    Returns:
+        dict with keys: schema, table, primary_key, columns; or None if table not found.
+    """
+    columns_sql = """
+        SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
+               c.ordinal_position, COALESCE(pd.description, '') AS comment
+        FROM information_schema.columns c
+        LEFT JOIN pg_catalog.pg_statio_all_tables st
+            ON c.table_schema = st.schemaname AND c.table_name = st.relname
+        LEFT JOIN pg_catalog.pg_description pd
+            ON st.relid = pd.objoid AND c.ordinal_position = pd.objsubid
+        WHERE c.table_schema = %s AND c.table_name = %s
+        ORDER BY c.ordinal_position
+    """
+    columns = conn.execute(columns_sql, (schema_name, table_name))
+
+    if not columns:
+        return None
+
+    pk_sql = """
+        SELECT kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+            ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+        WHERE tc.constraint_type = 'PRIMARY KEY'
+            AND tc.table_schema = %s AND tc.table_name = %s
+        ORDER BY kcu.ordinal_position
+    """
+    pk_columns = [r["column_name"]
+                  for r in conn.execute(pk_sql, (schema_name, table_name))]
+
+    return {
+        "schema": schema_name,
+        "table": table_name,
+        "primary_key": pk_columns,
+        "columns": columns,
+    }
 
 
 @schema_cmd.command("describe")
@@ -102,47 +155,22 @@ def describe_cmd(ctx: click.Context, table: str) -> None:
         return
 
     try:
-        columns_sql = """
-            SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
-                   c.ordinal_position, COALESCE(pd.description, '') AS comment
-            FROM information_schema.columns c
-            LEFT JOIN pg_catalog.pg_statio_all_tables st
-                ON c.table_schema = st.schemaname AND c.table_name = st.relname
-            LEFT JOIN pg_catalog.pg_description pd
-                ON st.relid = pd.objoid AND c.ordinal_position = pd.objsubid
-            WHERE c.table_schema = %s AND c.table_name = %s
-            ORDER BY c.ordinal_position
-        """
-        columns = conn.execute(columns_sql, (schema_name, table_name))
+        result = fetch_table_structure(conn, schema_name, table_name)
 
-        if not columns:
-            print_output(error("TABLE_NOT_FOUND", f"Table '{schema_name}.{table_name}' not found", fmt))
+        if result is None:
+            print_output(
+                error("TABLE_NOT_FOUND", f"Table '{schema_name}.{table_name}' not found", fmt))
             return
-
-        pk_sql = """
-            SELECT kcu.column_name
-            FROM information_schema.table_constraints tc
-            JOIN information_schema.key_column_usage kcu
-                ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-            WHERE tc.constraint_type = 'PRIMARY KEY'
-                AND tc.table_schema = %s AND tc.table_name = %s
-            ORDER BY kcu.ordinal_position
-        """
-        pk_columns = [r["column_name"] for r in conn.execute(pk_sql, (schema_name, table_name))]
 
         duration_ms = (time.time() - start_time) * 1000
         log_operation("schema.describe", sql=f"DESCRIBE {schema_name}.{table_name}",
-                      dsn_masked=conn.masked_dsn, success=True, row_count=len(columns), duration_ms=duration_ms)
-
-        result = {
-            "schema": schema_name, "table": table_name,
-            "primary_key": pk_columns, "columns": columns,
-        }
+                      dsn_masked=conn.masked_dsn, success=True, row_count=len(result["columns"]),
+                      duration_ms=duration_ms)
 
         if fmt == FORMAT_JSON:
             print_output(success(result))
         else:
-            print_output(success_rows(columns, fmt))
+            print_output(success_rows(result["columns"], fmt))
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
         log_operation("schema.describe", dsn_masked=conn.masked_dsn, success=False,
@@ -152,21 +180,16 @@ def describe_cmd(ctx: click.Context, table: str) -> None:
         conn.close()
 
 
-@schema_cmd.command("dump")
-@click.argument("table")
-@click.pass_context
-def dump_cmd(ctx: click.Context, table: str) -> None:
-    """Export DDL for a table using hg_dump_script().
+def _dump_table_ddl(dsn: str, table: str, fmt: str, operation: str = "schema.dump") -> None:
+    """Core logic for dumping table DDL using hg_dump_script().
 
-    TABLE should be in format 'schema_name.table_name'.
-
-    \b
-    Examples:
-      hologres schema dump public.my_table
-      hologres schema dump myschema.orders
+    Shared by ``schema dump`` and ``table dump`` commands.
     """
+<<<<<<< HEAD
     profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
+=======
+>>>>>>> origin/master
     start_time = time.time()
 
     try:
@@ -187,54 +210,69 @@ def dump_cmd(ctx: click.Context, table: str) -> None:
         _validate_identifier(table_name, "table name")
 
         # Use psycopg.sql.Identifier for safe identifier escaping
-        query = sql.SQL("SELECT hg_dump_script({})").format(
+        query = sql.SQL("SELECT hg_dump_script('{}')").format(
             sql.Identifier(schema_name, table_name)
         )
-        result = conn.execute(query.as_string(conn.conn))
+        dump_sql = query.as_string(conn.conn)
+        result = conn.execute(dump_sql)
 
         if not result or not result[0]:
-            print_output(error("TABLE_NOT_FOUND", f"Table '{schema_name}.{table_name}' not found", fmt))
+            print_output(
+                error("TABLE_NOT_FOUND", f"Table '{schema_name}.{table_name}' not found", fmt))
             return
 
         ddl = result[0]["hg_dump_script"]
 
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.dump", sql=query.as_string(conn.conn), dsn_masked=conn.masked_dsn, success=True,
+        log_operation(operation, sql=dump_sql, dsn_masked=conn.masked_dsn, success=True,
                       duration_ms=duration_ms, extra={"table": table})
 
         if fmt == FORMAT_JSON:
-            print_output(success({"schema": schema_name, "table": table_name, "ddl": ddl}))
+            print_output(
+                success({"schema": schema_name, "table": table_name, "ddl": ddl}))
         else:
             print_output(ddl)
     except ValueError as e:
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.dump", dsn_masked=conn.masked_dsn, success=False,
+        log_operation(operation, dsn_masked=conn.masked_dsn, success=False,
                       error_code="INVALID_INPUT", error_message=str(e), duration_ms=duration_ms)
         print_output(error("INVALID_INPUT", str(e), fmt))
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.dump", dsn_masked=conn.masked_dsn, success=False,
+        log_operation(operation, dsn_masked=conn.masked_dsn, success=False,
                       error_code="QUERY_ERROR", error_message=str(e), duration_ms=duration_ms)
         print_output(query_error(str(e), fmt))
     finally:
         conn.close()
 
 
-@schema_cmd.command("size")
+@schema_cmd.command("dump")
 @click.argument("table")
 @click.pass_context
-def size_cmd(ctx: click.Context, table: str) -> None:
-    """Get storage size of a table.
+def dump_cmd(ctx: click.Context, table: str) -> None:
+    """Export DDL for a table using hg_dump_script().
 
     TABLE should be in format 'schema_name.table_name'.
 
     \b
     Examples:
-      hologres schema size public.my_table
-      hologres schema size myschema.orders
+      hologres schema dump public.my_table
+      hologres schema dump myschema.orders
     """
+    _dump_table_ddl(ctx.obj.get("dsn"), table,
+                    ctx.obj.get("format", FORMAT_JSON))
+
+
+def _get_table_size(dsn: str, table: str, fmt: str, operation: str = "schema.size") -> None:
+    """Core logic for getting table storage size using pg_relation_size().
+
+    Shared by ``schema size`` and ``table size`` commands.
+    """
+<<<<<<< HEAD
     profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
+=======
+>>>>>>> origin/master
     start_time = time.time()
 
     try:
@@ -256,25 +294,23 @@ def size_cmd(ctx: click.Context, table: str) -> None:
 
         full_table_name = f"{schema_name}.{table_name}"
 
-        # Use psycopg.sql.Identifier for safe identifier escaping
-        query = sql.SQL(
-            "SELECT pg_size_pretty(pg_relation_size({})) AS size, "
-            "pg_relation_size({}) AS size_bytes"
-        ).format(
-            sql.Identifier(schema_name, table_name),
-            sql.Identifier(schema_name, table_name),
+        # pg_relation_size accepts regclass (string), not SQL identifier
+        size_sql = (
+            "SELECT pg_size_pretty(pg_relation_size(%s)) AS size, "
+            "pg_relation_size(%s) AS size_bytes"
         )
-        result = conn.execute(query.as_string(conn.conn))
+        result = conn.execute(size_sql, (full_table_name, full_table_name))
 
         if not result or not result[0]:
-            print_output(error("TABLE_NOT_FOUND", f"Table '{full_table_name}' not found", fmt))
+            print_output(
+                error("TABLE_NOT_FOUND", f"Table '{full_table_name}' not found", fmt))
             return
 
         size_pretty = result[0]["size"]
         size_bytes = result[0]["size_bytes"]
 
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.size", sql=query.as_string(conn.conn), dsn_masked=conn.masked_dsn, success=True,
+        log_operation(operation, sql=size_sql, dsn_masked=conn.masked_dsn, success=True,
                       duration_ms=duration_ms, extra={"table": table})
 
         if fmt == FORMAT_JSON:
@@ -288,13 +324,30 @@ def size_cmd(ctx: click.Context, table: str) -> None:
             print_output(f"{full_table_name}: {size_pretty}")
     except ValueError as e:
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.size", dsn_masked=conn.masked_dsn, success=False,
+        log_operation(operation, dsn_masked=conn.masked_dsn, success=False,
                       error_code="INVALID_INPUT", error_message=str(e), duration_ms=duration_ms)
         print_output(error("INVALID_INPUT", str(e), fmt))
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
-        log_operation("schema.size", dsn_masked=conn.masked_dsn, success=False,
+        log_operation(operation, dsn_masked=conn.masked_dsn, success=False,
                       error_code="QUERY_ERROR", error_message=str(e), duration_ms=duration_ms)
         print_output(query_error(str(e), fmt))
     finally:
         conn.close()
+
+
+@schema_cmd.command("size")
+@click.argument("table")
+@click.pass_context
+def size_cmd(ctx: click.Context, table: str) -> None:
+    """Get storage size of a table.
+
+    TABLE should be in format 'schema_name.table_name'.
+
+    \b
+    Examples:
+      hologres schema size public.my_table
+      hologres schema size myschema.orders
+    """
+    _get_table_size(ctx.obj.get("dsn"), table,
+                    ctx.obj.get("format", FORMAT_JSON))

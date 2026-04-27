@@ -236,6 +236,52 @@ class TestSensitiveDataMaskingLive:
 
 
 @pytest.mark.integration
+class TestSqlExplainLive:
+    """Integration tests for SQL EXPLAIN command."""
+
+    def test_explain_select(self, integration_dsn):
+        """Test EXPLAIN on a simple SELECT query."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--dsn", integration_dsn, "sql", "explain", "SELECT 1 AS id"]
+        )
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert "plan" in output["data"]
+        assert len(output["data"]["plan"]) > 0
+
+    def test_explain_nonexistent_table(self, integration_dsn):
+        """Test EXPLAIN on a nonexistent table returns error."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--dsn", integration_dsn, "sql", "explain",
+             "SELECT * FROM nonexistent_table_xyz_12345"]
+        )
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+
+    def test_explain_complex_join(self, test_table_with_data, integration_dsn):
+        """Test EXPLAIN with a JOIN query returns multi-line plan."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--dsn", integration_dsn, "sql", "explain",
+             f"SELECT a.id, b.id FROM {test_table_with_data} a JOIN {test_table_with_data} b ON a.id = b.id"]
+        )
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert len(output["data"]["plan"]) > 1
+
+
+@pytest.mark.integration
 class TestSqlSafetyLive:
     """Integration tests for SQL safety guardrails."""
 

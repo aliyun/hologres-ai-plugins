@@ -493,3 +493,202 @@ class TestSqlCmd:
 
         assert result.exit_code == 0
         assert "Alice" in result.output
+
+
+class TestExplainCmd:
+    """Tests for sql explain subcommand."""
+
+    def test_explain_basic(self, mock_get_connection):
+        """Test basic EXPLAIN query."""
+        mock_get_connection.execute.return_value = [
+            {"QUERY PLAN": "Seq Scan on orders  (cost=0.00..35.50 rows=2550 width=36)"}
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "explain", "SELECT * FROM orders"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert "plan" in output["data"]
+        assert len(output["data"]["plan"]) == 1
+        assert output["data"]["query"] == "SELECT * FROM orders"
+
+    def test_explain_builds_correct_sql(self, mock_get_connection):
+        """Test that EXPLAIN SQL is correctly constructed."""
+        mock_get_connection.execute.return_value = [{"QUERY PLAN": "..."}]
+
+        runner = CliRunner()
+        runner.invoke(cli, ["sql", "explain", "SELECT 1"])
+
+        mock_get_connection.execute.assert_called_once_with("EXPLAIN SELECT 1")
+
+    def test_explain_complex_query(self, mock_get_connection):
+        """Test EXPLAIN with complex query."""
+        mock_get_connection.execute.return_value = [
+            {"QUERY PLAN": "Hash Join  (cost=1.00..2.00 rows=10 width=100)"},
+            {"QUERY PLAN": "  -> Seq Scan on orders"},
+            {"QUERY PLAN": "  -> Hash"},
+            {"QUERY PLAN": "       -> Seq Scan on users"},
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "explain", "SELECT * FROM orders JOIN users ON orders.uid = users.id"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert len(output["data"]["plan"]) == 4
+
+    def test_explain_empty_plan(self, mock_get_connection):
+        """Test EXPLAIN with empty result."""
+        mock_get_connection.execute.return_value = []
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "explain", "SELECT 1"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["plan"] == []
+
+    def test_explain_connection_error(self, mocker):
+        """Test EXPLAIN with connection error."""
+        mocker.patch("hologres_cli.commands.sql.get_connection",
+                     side_effect=DSNError("No DSN configured"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "explain", "SELECT 1"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_explain_query_error(self, mock_get_connection):
+        """Test EXPLAIN with invalid SQL."""
+        mock_get_connection.execute.side_effect = Exception("syntax error at or near \"SELEC\"")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "explain", "SELEC TYPO"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+
+    def test_explain_logs_operation(self, mock_get_connection, mocker):
+        """Test that EXPLAIN logs operation."""
+        mock_get_connection.execute.return_value = [{"QUERY PLAN": "..."}]
+        mock_log = mocker.patch("hologres_cli.commands.sql.log_operation")
+
+        runner = CliRunner()
+        runner.invoke(cli, ["sql", "explain", "SELECT 1"])
+
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args
+        assert call_kwargs[0][0] == "sql.explain"
+        assert call_kwargs[1]["success"] is True
+
+    def test_explain_error_logs(self, mock_get_connection, mocker):
+        """Test that EXPLAIN error is logged."""
+        mock_get_connection.execute.side_effect = Exception("some error")
+        mock_log = mocker.patch("hologres_cli.commands.sql.log_operation")
+
+        runner = CliRunner()
+        runner.invoke(cli, ["sql", "explain", "INVALID"])
+
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args
+        assert call_kwargs[0][0] == "sql.explain"
+        assert call_kwargs[1]["success"] is False
+        assert call_kwargs[1]["error_code"] == "QUERY_ERROR"
+
+    def test_explain_output_structure(self, mock_get_connection):
+        """Test EXPLAIN output JSON structure."""
+        mock_get_connection.execute.return_value = [
+            {"QUERY PLAN": "Seq Scan on t  (cost=0.00..1.00 rows=1 width=4)"}
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "explain", "SELECT * FROM t"])
+
+        output = json.loads(result.output)
+        assert "ok" in output
+        assert "data" in output
+        assert "plan" in output["data"]
+        assert "query" in output["data"]
+        assert isinstance(output["data"]["plan"], list)
+        assert isinstance(output["data"]["query"], str)
+
+
+class TestSqlGroupCompatibility:
+    """Tests for backward compatibility of sql group with 'run' subcommand."""
+
+    def test_sql_run_explicit(self, mock_get_connection):
+        """Test explicit 'sql run' subcommand."""
+        mock_get_connection.execute.return_value = [{"id": 1}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "run", "SELECT 1"])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+
+    def test_sql_backward_compat(self, mock_get_connection):
+        """Test backward compatible 'sql <query>' form."""
+        mock_get_connection.execute.return_value = [{"id": 1}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "SELECT 1"])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+
+    def test_sql_run_with_options(self, mock_get_connection):
+        """Test 'sql run' with options."""
+        mock_get_connection.execute.return_value = [{"id": 1}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "run", "--no-limit-check", "SELECT * FROM t"])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+
+    def test_sql_backward_compat_with_options(self, mock_get_connection):
+        """Test backward compat with options."""
+        mock_get_connection.execute.return_value = [{"id": 1}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "--no-limit-check", "SELECT * FROM t"])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+
+    def test_sql_help_shows_subcommands(self):
+        """Test 'sql --help' shows available subcommands including 'run' and 'explain'."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "--help"])
+        assert "run" in result.output
+        assert "explain" in result.output
+
+    def test_sql_run_help(self):
+        """Test 'sql run --help' shows run command help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "run", "--help"])
+        assert "QUERY" in result.output
+
+    def test_sql_explain_recognized(self, mock_get_connection):
+        """Test 'sql explain' is recognized as a subcommand, not routed to run."""
+        mock_get_connection.execute.return_value = [{"QUERY PLAN": "..."}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "explain", "SELECT 1"])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert "plan" in output["data"]
+
+    def test_sql_backward_compat_not_broken_by_explain(self, mock_get_connection):
+        """Test 'sql <query>' still routes to run after adding explain."""
+        mock_get_connection.execute.return_value = [{"id": 1}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "SELECT 1"])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        # Should be run output, not explain output
+        assert "plan" not in output.get("data", {})

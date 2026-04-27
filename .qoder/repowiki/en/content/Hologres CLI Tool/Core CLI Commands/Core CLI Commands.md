@@ -202,30 +202,34 @@ Close(["Exit"])
 
 ### SQL Command (Read-only with Safety Guardrails)
 Group: sql
-- Purpose: Execute read-only SQL queries with safety guardrails.
-- Guardrails:
+- Purpose: Execute SQL queries and view execution plans with safety guardrails.
+- Subcommands:
+  - sql run: Execute SQL queries (default subcommand)
+  - sql explain: Show execution plan for a SQL query
+- Guardrails (sql run):
   - Blocks all write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE).
   - Enforces row limit checks for SELECT queries without explicit LIMIT.
   - Masks sensitive fields by default; can be disabled.
   - Supports multiple statements separated by semicolons.
 
 Syntax and parameters:
-- hologres sql QUERY [--with-schema] [--no-limit-check] [--no-mask]
+- hologres sql run QUERY [--with-schema] [--no-limit-check] [--no-mask]
+- hologres sql explain QUERY
 
-Options:
+Options (sql run):
 - --with-schema: Include schema metadata alongside rows.
 - --no-limit-check: Disable automatic row limit probing.
 - --no-mask: Disable sensitive field masking.
 
 Behavior:
-- Splits multi-statement queries safely, respecting quoted strings.
-- Probes with a small LIMIT to detect oversized queries; fails with LIMIT_REQUIRED if exceeds threshold.
-- Applies truncation for large fields and optional masking.
+- sql run: Splits multi-statement queries safely, respecting quoted strings. Probes with a small LIMIT to detect oversized queries; fails with LIMIT_REQUIRED if exceeds threshold. Applies truncation for large fields and optional masking.
+- sql explain: Prepends EXPLAIN to the query and returns the execution plan as a list of text lines. No safety guardrails needed (read-only operation).
 - Returns structured JSON with ok/data or formatted table/csv/jsonl.
 
 Usage examples:
 - Read-only query with limit: hologres sql "SELECT * FROM users LIMIT 10"
 - Disable limit check for large queries: hologres sql --no-limit-check "SELECT * FROM large_table"
+- View execution plan: hologres sql explain "SELECT * FROM orders"
 
 Expected output formats:
 - Default JSON with ok/data; supports table/csv/jsonl.

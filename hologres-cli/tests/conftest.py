@@ -97,6 +97,8 @@ def mock_psycopg_connection():
     mock_conn.close.return_value = None
     mock_conn.commit.return_value = None
     mock_conn.rollback.return_value = None
+    # Allow psycopg.sql.Composable.as_string() to use fallback encoding path
+    mock_conn.connection = None
     return mock_conn
 
 
@@ -213,4 +215,8 @@ def mock_get_connection(mocker, mock_connection_class):
     mocker.patch("hologres_cli.commands.warehouse.get_connection", return_value=mock_conn)
     mocker.patch("hologres_cli.commands.dt.get_connection", return_value=mock_conn)
     mocker.patch("hologres_cli.commands.instance.get_connection", return_value=mock_conn)
+    mocker.patch("hologres_cli.commands.table.get_connection", return_value=mock_conn)
+    mocker.patch("hologres_cli.commands.view.get_connection", return_value=mock_conn)
+    mocker.patch("hologres_cli.commands.extension.get_connection", return_value=mock_conn)
+    mocker.patch("hologres_cli.commands.guc.get_connection", return_value=mock_conn)
     return mock_conn

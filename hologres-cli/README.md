@@ -12,6 +12,9 @@ AI-agent-friendly command-line interface for Hologres database with safety guard
 - **Sensitive Data Masking**: Auto-masks phone, email, password fields
 - **Audit Logging**: All operations logged to `~/.hologres/sql-history.jsonl`
 
+## Notes
+- schema.py是老的实现无需继续更新，新的实现迁移到 table.py 中
+
 ## Installation
 
 Requires Python 3.11+
@@ -142,24 +145,129 @@ hologres schema dump <schema.table>         # Export DDL
 hologres schema size <schema.table>         # Get table storage size
 ```
 
+### Table Management
+
+```bash
+# List all tables
+hologres table list
+
+# List tables in a specific schema
+hologres table list --schema public
+hologres table list -s myschema
+
+# Export DDL using hg_dump_script()
+hologres table dump <schema.table>
+hologres table dump public.my_table
+
+# Show table structure (columns, types, nullable, defaults, primary key, comments)
+hologres table show <table_name>
+hologres table show public.my_table
+
+# Get table storage size
+hologres table size <schema.table>
+hologres table size public.my_table
+
+# Show table properties (orientation, distribution_key, clustering_key, TTL, etc.)
+hologres table properties <table_name>
+hologres table properties public.my_table
+```
+
+### View Management
+
+```bash
+# List all views
+hologres view list
+
+# List views in a specific schema
+hologres view list --schema public
+hologres view list -s myschema
+
+# Show view definition and structure
+hologres view show <view_name>
+hologres view show analytics.daily_stats
+```
+
+### Extension Management
+
+```bash
+# List installed extensions
+hologres extension list
+
+# Create (install) an extension
+hologres extension create roaring_bitmap
+
+# Create with IF NOT EXISTS
+hologres extension create postgis --if-not-exists
+```
+
+### GUC Parameter Management
+
+```bash
+# Show current value of a GUC parameter
+hologres guc show optimizer_join_order
+
+# Set a GUC parameter at database level (persistent)
+hologres guc set optimizer_join_order query
+hologres guc set statement_timeout '5min'
+```
+
+> **Note:** `guc set` sets parameters at the database level using `ALTER DATABASE`, which persists across sessions and applies to all new connections.
+
 ### SQL Execution
 
 ```bash
-hologres sql "SELECT * FROM users LIMIT 10"                 # Read-only query
-hologres sql --no-limit-check "SELECT * FROM large_table"   # Disable row limit
+# Read-only query (LIMIT required for >100 rows)
+hologres sql run "SELECT * FROM users LIMIT 10"
+
+# Include column schema in output
+hologres sql run --with-schema "SELECT * FROM users LIMIT 10"
+
+# Disable row limit check
+hologres sql run --no-limit-check "SELECT * FROM large_table"
 ```
 
 > **Note:** Write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, etc.) are blocked for safety.
 
+### SQL Explain
+
+```bash
+# Show execution plan
+hologres sql explain "SELECT * FROM orders WHERE status = 'active'"
+```
+
 ### Data Import/Export
 
 ```bash
+<<<<<<< HEAD
 hologres data export my_table -f output.csv                           # Export to CSV
 hologres data export -q "SELECT * FROM users WHERE active" -f out.csv # Export with query
 hologres data import my_table -f input.csv                            # Import CSV
 hologres data import my_table -f input.csv --truncate                 # Import with truncate
 hologres data count my_table                                          # Count rows
 hologres data count my_table --where "status='active'"                # Count with filter
+=======
+# Export table to CSV
+hologres data export my_table -f output.csv
+
+# Export with custom query
+hologres data export -q "SELECT * FROM users WHERE active=true" -f users.csv
+
+# Export with custom delimiter
+hologres data export my_table -f output.csv --delimiter '|'
+
+# Import CSV to table
+hologres data import my_table -f input.csv
+
+# Import with truncate
+hologres data import my_table -f input.csv --truncate
+
+# Import with custom delimiter
+hologres data import my_table -f input.csv --delimiter '|'
+
+# Count rows
+hologres data count my_table
+hologres data count my_table --where "status='active'"
+>>>>>>> origin/master
 ```
 
 ### Dynamic Table (V3.1+)
@@ -298,17 +406,47 @@ hologres -f jsonl schema tables   # JSON Lines
 Queries without `LIMIT` that return more than 100 rows will fail with `LIMIT_REQUIRED` error.
 
 ```bash
+<<<<<<< HEAD
 hologres sql "SELECT * FROM large_table LIMIT 50"           # OK
 hologres sql --no-limit-check "SELECT * FROM large_table"   # Bypass limit check
+=======
+# This will fail if table has >100 rows
+hologres sql run "SELECT * FROM large_table"
+
+# Add LIMIT to fix
+hologres sql run "SELECT * FROM large_table LIMIT 50"
+
+# Or disable check (use with caution)
+hologres sql run --no-limit-check "SELECT * FROM large_table"
+>>>>>>> origin/master
 ```
 
 ### Write Protection
 
+<<<<<<< HEAD
 All write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) are blocked via `hologres sql`.
 
 ### Drop Safety
 
 `hologres dt drop` defaults to dry-run mode. Use `--confirm` to actually execute.
+=======
+Write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) require the `--write` flag:
+
+```bash
+# This will return WRITE_GUARD_ERROR
+hologres sql run "INSERT INTO logs VALUES (1, 'test')"
+
+# Use --write flag to allow write operations
+hologres sql run --write "INSERT INTO logs VALUES (1, 'test')"
+
+# DELETE/UPDATE without WHERE clause is blocked even with --write
+hologres sql run --write "DELETE FROM users"
+# Error: DANGEROUS_WRITE_BLOCKED - DELETE without WHERE clause is blocked
+
+# DELETE/UPDATE with WHERE clause is allowed
+hologres sql run --write "DELETE FROM users WHERE id = 1"
+```
+>>>>>>> origin/master
 
 ## Error Codes
 
@@ -317,10 +455,18 @@ All write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRA
 | `CONNECTION_ERROR` | Failed to connect to database |
 | `QUERY_ERROR` | SQL execution error |
 | `LIMIT_REQUIRED` | Query needs LIMIT clause |
+| `WRITE_GUARD_ERROR` | Write operation attempted without `--write` flag |
+| `DANGEROUS_WRITE_BLOCKED` | DELETE/UPDATE without WHERE clause |
 | `WRITE_BLOCKED` | Write operation not allowed |
+<<<<<<< HEAD
 | `NOT_FOUND` | Table or resource not found |
 | `INVALID_ARGS` | Invalid or missing arguments |
 | `NO_CHANGES` | No properties specified to alter |
+=======
+| `EXPORT_ERROR` | Data export failed |
+| `IMPORT_ERROR` | Data import failed |
+| `VIEW_NOT_FOUND` | View not found |
+>>>>>>> origin/master
 
 ## Sensitive Data Masking
 
@@ -337,17 +483,37 @@ The CLI automatically masks sensitive fields based on column names:
 Disable with `--no-mask`:
 
 ```bash
-hologres sql --no-mask "SELECT * FROM users LIMIT 10"
+hologres sql run --no-mask "SELECT * FROM users LIMIT 10"
 ```
 
 ## Testing
 
 ```bash
+<<<<<<< HEAD
 pytest tests/ --ignore=tests/integration             # Unit tests only (fast, no DB)
 pytest tests/test_commands/test_dt.py                # DT command tests
 pytest tests/test_commands/test_config.py            # Config command tests
 pytest tests/test_config_store.py                    # Config store unit tests
 pytest --cov=src/hologres_cli --cov-report=term-missing  # With coverage
+=======
+# Set DSN
+export HOLOGRES_DSN="hologres://user:pass@endpoint:port/database"
+
+# Check connection
+hologres status
+
+# List tables in table format
+hologres -f table schema tables
+
+# Query with JSON output
+hologres sql run "SELECT * FROM orders WHERE status='pending' LIMIT 20"
+
+# Check warehouse info
+hologres warehouse
+
+# View command history
+hologres history
+>>>>>>> origin/master
 ```
 
 Integration tests (in `tests/integration/`) require a configured profile and are skipped by default.

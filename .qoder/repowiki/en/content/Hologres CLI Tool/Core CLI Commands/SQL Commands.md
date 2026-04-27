@@ -115,15 +115,18 @@ Out-->>User : Formatted output
 
 ### SQL Command Definition and Options
 - Command: sql
+- Subcommands:
+  - sql run: Execute SQL queries with safety guardrails
+  - sql explain: Show execution plan for a SQL query
 - Arguments:
   - query: SQL statement string
-- Options:
+- Options (sql run):
   - --with-schema: Include column schema in output
   - --no-limit-check: Disable row limit probing for SELECT
   - --no-mask: Disable sensitive data masking
 - Behavior:
-  - Supports multiple statements separated by semicolon
-  - Executes each statement individually and aggregates results when multiple statements are provided
+  - sql run: Supports multiple statements separated by semicolon; executes each statement individually and aggregates results when multiple statements are provided
+  - sql explain: Prepends EXPLAIN to the query and returns the execution plan as a list of text lines
 
 **Section sources**
 - [sql.py:34-64](file://hologres-cli/src/hologres_cli/commands/sql.py#L34-L64)

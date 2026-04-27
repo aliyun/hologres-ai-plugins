@@ -8,10 +8,14 @@ A collection of AI-agent-friendly tools and skills for [Alibaba Cloud Hologres](
 hologres-ai-plugins/
 ├── hologres-cli/          # Python CLI tool for Hologres database operations
 └── agent-skills/          # AI agent skills for IDE / Copilot integration
-    └── skills/
-        ├── hologres-cli/                  # CLI usage skill
-        ├── hologres-query-optimizer/      # Query execution plan analysis skill
-        └── hologres-slow-query-analysis/  # Slow query diagnosis skill
+    ├── src/
+    │   └── holo_plugin_installer/     # Interactive skills installer
+    ├── skills/
+    │   ├── hologres-cli/                  # CLI usage skill
+    │   ├── hologres-query-optimizer/      # Query execution plan analysis skill
+    │   └── hologres-slow-query-analysis/  # Slow query diagnosis skill
+    ├── pyproject.toml
+    └── upload_to_pypi.py
 ```
 
 ## Components
@@ -46,7 +50,19 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres schema describe <table>` | Show table structure |
 | `hologres schema dump <schema.table>` | Export DDL |
 | `hologres schema size <schema.table>` | Get table storage size |
-| `hologres sql "<query>"` | Execute read-only SQL |
+| `hologres table list [--schema S]` | List all tables |
+| `hologres table dump <schema.table>` | Export DDL for a table |
+| `hologres table show <table>` | Show table structure |
+| `hologres table size <schema.table>` | Get table storage size |
+| `hologres table properties <table>` | Show table properties (orientation, distribution_key, TTL, etc.) |
+| `hologres view list [--schema S]` | List all views |
+| `hologres view show <view>` | Show view definition and structure |
+| `hologres sql run "<query>"` | Execute read-only SQL |
+| `hologres sql explain "<query>"` | Show query execution plan |
+| `hologres extension list` | List installed extensions |
+| `hologres extension create <name>` | Create (install) an extension |
+| `hologres guc show <param>` | Show GUC parameter value |
+| `hologres guc set <param> <value>` | Set GUC parameter at database level |
 | `hologres data export <table> -f out.csv` | Export table to CSV |
 | `hologres data import <table> -f in.csv` | Import CSV to table |
 | `hologres data count <table>` | Count rows |
@@ -103,6 +119,13 @@ For full documentation, see [hologres-cli/README.md](hologres-cli/README.md).
 
 Pre-built skills that can be loaded by AI coding assistants (IDE copilots) to provide domain-specific knowledge about Hologres.
 
+**Quick Install:**
+
+```bash
+# Install skills to your AI tool (Claude Code, Cursor, Codex, etc.)
+uvx hologres-agent-skills
+```
+
 #### hologres-cli
 
 Teaches the AI agent how to use the Hologres CLI tool effectively, including command usage, safety features, output format handling, and best practices.
@@ -139,6 +162,18 @@ pip install -e .
 
 # For development (includes test dependencies)
 pip install -e ".[dev]"
+```
+
+### Install Agent Skills
+
+```bash
+# Option 1: One-command install (recommended)
+uvx hologres-agent-skills
+
+# Option 2: Install from source
+cd hologres-ai-plugins/agent-skills
+uv sync
+uv run hologres-agent-skills
 ```
 
 ## Configuration

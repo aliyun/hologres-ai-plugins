@@ -18,14 +18,14 @@ Prevents accidental retrieval of large result sets that could:
 
 ```bash
 # Will fail if table has >100 rows
-hologres sql "SELECT * FROM large_table"
+hologres sql run "SELECT * FROM large_table"
 # Error: {"ok": false, "error": {"code": "LIMIT_REQUIRED", "message": "Query returns >100 rows, add LIMIT clause"}}
 
 # Solution 1: Add LIMIT
-hologres sql "SELECT * FROM large_table LIMIT 50"
+hologres sql run "SELECT * FROM large_table LIMIT 50"
 
 # Solution 2: Disable check (use with caution)
-hologres sql --no-limit-check "SELECT * FROM large_table"
+hologres sql run --no-limit-check "SELECT * FROM large_table"
 ```
 
 ### When to disable
@@ -46,11 +46,11 @@ Prevents accidental write operations by requiring explicit intent.
 
 ```bash
 # Will fail
-hologres sql "INSERT INTO logs VALUES (1, 'test')"
+hologres sql run "INSERT INTO logs VALUES (1, 'test')"
 # Error: {"ok": false, "error": {"code": "WRITE_GUARD_ERROR", "message": "Write operation requires --write flag"}}
 
 # Correct usage
-hologres sql --write "INSERT INTO logs VALUES (1, 'test')"
+hologres sql run --write "INSERT INTO logs VALUES (1, 'test')"
 ```
 
 ## Dangerous Write Blocking
@@ -67,26 +67,26 @@ Prevents mass data modifications that could cause data loss.
 
 ```bash
 # Blocked - would delete all rows
-hologres sql --write "DELETE FROM users"
+hologres sql run --write "DELETE FROM users"
 # Error: {"ok": false, "error": {"code": "DANGEROUS_WRITE_BLOCKED", "message": "DELETE without WHERE clause is blocked"}}
 
 # Blocked - would update all rows
-hologres sql --write "UPDATE users SET status='inactive'"
+hologres sql run --write "UPDATE users SET status='inactive'"
 # Error: {"ok": false, "error": {"code": "DANGEROUS_WRITE_BLOCKED", "message": "UPDATE without WHERE clause is blocked"}}
 
 # Correct usage - specific rows
-hologres sql --write "DELETE FROM users WHERE status='deleted'"
-hologres sql --write "UPDATE users SET status='inactive' WHERE last_login < '2023-01-01'"
+hologres sql run --write "DELETE FROM users WHERE status='deleted'"
+hologres sql run --write "UPDATE users SET status='inactive' WHERE last_login < '2023-01-01'"
 ```
 
 ### Intentional full-table operations
 If you intentionally want to affect all rows:
 ```bash
 # Use WHERE true
-hologres sql --write "DELETE FROM temp_table WHERE true"
+hologres sql run --write "DELETE FROM temp_table WHERE true"
 
 # Or use TRUNCATE (faster for clearing tables)
-hologres sql --write "TRUNCATE TABLE temp_table"
+hologres sql run --write "TRUNCATE TABLE temp_table"
 ```
 
 ## Sensitive Data Masking
@@ -109,7 +109,7 @@ Auto-detects sensitive columns by name pattern and masks values:
 
 ```bash
 # Disable for specific query
-hologres sql --no-mask "SELECT * FROM users LIMIT 10"
+hologres sql run --no-mask "SELECT * FROM users LIMIT 10"
 ```
 
 ## Dynamic Table Drop Safety

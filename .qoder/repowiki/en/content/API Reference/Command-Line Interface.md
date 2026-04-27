@@ -209,17 +209,20 @@ S-->>U : success_rows(JSON/table/csv/jsonl)
 - [schema.py:223-301](file://hologres-cli/src/hologres_cli/commands/schema.py#L223-L301)
 
 ### sql Command
-- Purpose: Execute read-only SQL with safety guardrails
-- Flags:
+- Purpose: Execute SQL queries and view execution plans
+- Subcommands:
+  - sql run: Execute read-only SQL with safety guardrails
+  - sql explain: Show execution plan for a SQL query
+- Flags (sql run):
   - --no-limit-check: Bypass row limit probe
   - --no-mask: Disable sensitive data masking
   - --with-schema: Include schema metadata in output
-- Safety features:
+- Safety features (sql run):
   - Blocks write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE)
   - Enforces LIMIT requirement for SELECT returning >100 rows (probe with LIMIT 101)
 - Behavior:
-  - Supports multiple statements separated by ';'
-  - Truncates large fields and masks sensitive data by default
+  - sql run: Supports multiple statements separated by ';'; truncates large fields and masks sensitive data by default
+  - sql explain: Prepends EXPLAIN to the query, returns execution plan lines; no safety guardrails needed (read-only operation)
 
 ```mermaid
 flowchart TD

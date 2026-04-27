@@ -166,6 +166,12 @@ SET optimizer_join_order = 'greedy'; -- Greedy algorithm
 SET hg_experimental_enable_cross_join_rewrite = off;
 ```
 
+To persist these settings at database level, use the CLI:
+```bash
+hologres guc set optimizer_force_multistage_agg on
+hologres guc set optimizer_join_order query
+```
+
 ## Best Practices
 
 1. Always use `EXPLAIN ANALYZE` for production analysis

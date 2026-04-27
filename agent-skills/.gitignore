@@ -4,28 +4,21 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+# Build
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
+*.egg-info/
+*.egg
 sdist/
 var/
 wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
 
 # Virtual environments
 venv/
 env/
 ENV/
-.venv/
+
 # IDE
 .vscode/
 .idea/
@@ -38,7 +31,9 @@ ENV/
 .coverage
 htmlcov/
 
-## code agent 
-.qoder
+# OS
+.DS_Store
+Thumbs.db
 
-.worktrees/
+# Skills synced during build (not committed)
+src/holo_plugin_installer/skills/

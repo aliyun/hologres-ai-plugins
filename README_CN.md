@@ -8,10 +8,14 @@
 hologres-ai-plugins/
 ├── hologres-cli/          # Hologres 数据库操作的 Python CLI 工具
 └── agent-skills/          # 用于 IDE / Copilot 集成的 AI Agent 技能
-    └── skills/
-        ├── hologres-cli/                  # CLI 使用技能
-        ├── hologres-query-optimizer/      # 查询执行计划分析技能
-        └── hologres-slow-query-analysis/  # 慢查询诊断技能
+    ├── src/
+    │   └── holo_plugin_installer/     # 交互式技能安装器
+    ├── skills/
+    │   ├── hologres-cli/                  # CLI 使用技能
+    │   ├── hologres-query-optimizer/      # 查询执行计划分析技能
+    │   └── hologres-slow-query-analysis/  # 慢查询诊断技能
+    ├── pyproject.toml
+    └── upload_to_pypi.py
 ```
 
 ## 核心组件
@@ -40,7 +44,19 @@ hologres-ai-plugins/
 | `hologres schema describe <table>` | 查看表结构 |
 | `hologres schema dump <schema.table>` | 导出 DDL |
 | `hologres schema size <schema.table>` | 查看表存储大小 |
-| `hologres sql "<query>"` | 执行只读 SQL 查询 |
+| `hologres table list [--schema S]` | 列出所有表 |
+| `hologres table dump <schema.table>` | 导出表 DDL |
+| `hologres table show <table>` | 查看表结构（列、类型、主键、注释等） |
+| `hologres table size <schema.table>` | 查看表存储大小 |
+| `hologres table properties <table>` | 查看表属性（存储格式、分布键、TTL 等） |
+| `hologres view list [--schema S]` | 列出所有视图 |
+| `hologres view show <view>` | 查看视图定义和结构 |
+| `hologres sql run "<query>"` | 执行只读 SQL 查询 |
+| `hologres sql explain "<query>"` | 查看 SQL 执行计划 |
+| `hologres extension list` | 列出已安装扩展 |
+| `hologres extension create <name>` | 创建（安装）扩展 |
+| `hologres guc show <param>` | 查看 GUC 参数值 |
+| `hologres guc set <param> <value>` | 设置 GUC 参数（数据库级别，持久化） |
 | `hologres data export <table> -f out.csv` | 导出表数据到 CSV |
 | `hologres data import <table> -f in.csv` | 从 CSV 导入数据到表 |
 | `hologres data count <table>` | 统计行数 |
@@ -94,6 +110,13 @@ hologres dt lineage public.my_dt
 
 预置的 AI 技能，可被 AI 编程助手（IDE Copilot）加载，为其提供 Hologres 相关的领域知识。
 
+**快速安装：**
+
+```bash
+# 将技能安装到你的 AI 工具（Claude Code、Cursor、Codex 等）
+uvx hologres-agent-skills
+```
+
 #### hologres-cli
 
 教会 AI Agent 如何高效使用 Hologres CLI 工具，包括命令用法、安全特性、输出格式处理和最佳实践。
@@ -130,6 +153,18 @@ pip install -e .
 
 # 开发安装（包含测试依赖）
 pip install -e ".[dev]"
+```
+
+### 安装 Agent 技能
+
+```bash
+# 方式一：一键安装（推荐）
+uvx hologres-agent-skills
+
+# 方式二：从源码安装
+cd hologres-ai-plugins/agent-skills
+uv sync
+uv run hologres-agent-skills
 ```
 
 ## 配置

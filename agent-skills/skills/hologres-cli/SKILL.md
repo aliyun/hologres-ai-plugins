@@ -2,9 +2,8 @@
 name: hologres-cli
 description: |
   AI-agent-friendly Hologres CLI with safety guardrails and structured JSON output.
-  Use for database operations, schema inspection, SQL execution, data import/export,
-  and Dynamic Table lifecycle management (V3.1+ syntax).
-  Triggers: "hologres cli", "hologres command", "hologres database", "dynamic table", "hologres查询"
+  Use for database operations, schema inspection, SQL execution, data import/export,and Dynamic Table lifecycle management (V3.1+ syntax).and GUC parameter management.
+  Triggers: "hologres cli", "hologres command", "hologres database", "dynamic table", "hologres查询", "hologres guc", "GUC parameter"
 ---
 
 # Hologres CLI
@@ -46,11 +45,24 @@ hologres dt list
 | `hologres schema describe <table>` | Show table structure |
 | `hologres schema dump <schema.table>` | Export DDL |
 | `hologres schema size <schema.table>` | Get table storage size |
-| `hologres sql "<query>"` | Execute read-only SQL |
-| `hologres data export <table> -f out.csv` | Export to CSV |
-| `hologres data import <table> -f in.csv` | Import from CSV |
-| `hologres data count <table>` | Count rows |
-| `hologres history` | Show command history |
+| `hologres table list [--schema S]` | List all tables |
+| `hologres table dump <schema.table>` | Export DDL for a table |
+| `hologres table show <table>` | Show table structure (columns, types, nullable, defaults, primary key, comments) |
+| `hologres table size <schema.table>` | Get table storage size |
+| `hologres table properties <table>` | Show Hologres-specific table properties (orientation, distribution_key, clustering_key, TTL, etc.) |
+| `hologres view list [--schema S]` | List all views |
+| `hologres view show <view>` | Show view definition and structure |
+| `hologres extension list` | List installed extensions |
+| `hologres extension create <name> [--if-not-exists]` | Create (install) a database extension |
+| `hologres guc show <param>` | Show current value of a GUC parameter |
+| `hologres guc set <param> <value>` | Set GUC parameter at database level (persistent) |
+| `hologres sql run "<query>"` | Execute read-only SQL |
+| `hologres sql run --write "<dml>"` | Execute write SQL |
+| `hologres sql explain "<query>"` | Show SQL execution plan |
+| `hologres data export <table> -f out.csv [-q <query>] [-d <delimiter>]` | Export to CSV |
+| `hologres data import <table> -f in.csv [-d <delimiter>] [--truncate]` | Import from CSV |
+| `hologres data count <table> [-w <where>]` | Count rows |
+| `hologres history [-n <count>]` | Show command history |
 | `hologres ai-guide` | Generate AI agent guide |
 
 ## Dynamic Table Commands (V3.1+)
@@ -197,10 +209,37 @@ hologres -f jsonl schema tables   # JSON Lines
 
 ## Safety Features
 
-1. **Row Limit**: Queries without `LIMIT` returning >100 rows fail. Fix: add `LIMIT` or `--no-limit-check`.
-2. **Write Protection**: Write SQL blocked by default in `hologres sql`.
-3. **Dangerous Write Blocking**: DELETE/UPDATE without WHERE blocked.
-4. **Drop Safety**: `hologres dt drop` defaults to dry-run, requires `--confirm`.
+### 1. Row Limit Protection
+Queries without `LIMIT` returning >100 rows fail with `LIMIT_REQUIRED`.
+
+```bash
+# Will fail if >100 rows
+hologres sql run "SELECT * FROM large_table"
+
+# Fix: add LIMIT
+hologres sql run "SELECT * FROM large_table LIMIT 50"
+
+# Or disable check
+hologres sql run --no-limit-check "SELECT * FROM large_table"
+```
+
+### 2. Write Protection
+Write operations (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) require `--write` flag.
+
+```bash
+hologres sql run --write "INSERT INTO logs VALUES (1, 'test')"
+```
+
+### 3. Dangerous Write Blocking
+DELETE/UPDATE without WHERE clause are blocked.
+
+```bash
+# Blocked
+hologres sql run --write "DELETE FROM users"
+
+# Must have WHERE
+hologres sql run --write "DELETE FROM users WHERE status='inactive'"
+```
 
 ## Error Codes
 
@@ -215,6 +254,7 @@ hologres -f jsonl schema tables   # JSON Lines
 | `NO_CHANGES` | No properties specified to alter |
 | `EXPORT_ERROR` | Data export failed |
 | `IMPORT_ERROR` | Data import failed |
+| `VIEW_NOT_FOUND` | View not found |
 
 ## Sensitive Data Masking
 
@@ -223,7 +263,7 @@ Auto-masks by column name pattern:
 - email → `j***@example.com`
 - password/secret/token → `********`
 
-Disable: `hologres sql --no-mask "SELECT * FROM users LIMIT 10"`
+Disable: `hologres sql run --no-mask "SELECT * FROM users LIMIT 10"`
 
 ## References
 
