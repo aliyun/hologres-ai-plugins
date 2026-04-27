@@ -39,11 +39,10 @@ def schema_cmd() -> None:
     pass
 
 
-@schema_cmd.command("tables")
-@click.option("--schema", "-s", "schema_name", default=None, help="Filter by schema name")
-@click.pass_context
-def tables_cmd(ctx: click.Context, schema_name: Optional[str]) -> None:
-    """List all tables in the database."""
+def _list_tables(dsn: str, schema_name: Optional[str], fmt: str, operation: str = "schema.tables") -> None:
+    """Core logic for listing tables in the database.
+    Shared by ``schema tables`` and ``table list`` commands.
+    """
     profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
     start_time = time.time()
@@ -185,11 +184,8 @@ def _dump_table_ddl(dsn: str, table: str, fmt: str, operation: str = "schema.dum
 
     Shared by ``schema dump`` and ``table dump`` commands.
     """
-<<<<<<< HEAD
     profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
-=======
->>>>>>> origin/master
     start_time = time.time()
 
     try:
@@ -268,11 +264,8 @@ def _get_table_size(dsn: str, table: str, fmt: str, operation: str = "schema.siz
 
     Shared by ``schema size`` and ``table size`` commands.
     """
-<<<<<<< HEAD
     profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
-=======
->>>>>>> origin/master
     start_time = time.time()
 
     try:
