@@ -968,3 +968,364 @@ class TestMultiColumnPartitionLive:
                 "--profile", test_profile, "table", "drop",
                 unique_table_name, "--confirm",
             ])
+
+
+@pytest.mark.integration
+class TestTableAlterLive:
+    """Integration tests for table alter command."""
+
+    # --- dry-run ---
+
+    def test_alter_dry_run(self, test_profile, test_table):
+        """--dry-run should return SQL without executing, column not added."""
+        runner = CliRunner()
+
+        # Record columns before alter
+        result_before = runner.invoke(cli, [
+            "--profile", test_profile, "table", "show", test_table,
+        ])
+        output_before = json.loads(result_before.output)
+        col_count_before = len(output_before["data"]["columns"])
+
+        result = runner.invoke(cli, [
+            "--profile", test_profile, "table", "alter", test_table,
+            "--add-column", "age INT", "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["dry_run"] is True
+        assert "ALTER TABLE" in output["data"]["sql"]
+        assert "age" in output["data"]["sql"]
+
+        # Column should NOT have been added
+        result_after = runner.invoke(cli, [
+            "--profile", test_profile, "table", "show", test_table,
+        ])
+        output_after = json.loads(result_after.output)
+        col_names_after = [c["column_name"] for c in output_after["data"]["columns"]]
+        assert "age" not in col_names_after
+        assert len(output_after["data"]["columns"]) == col_count_before
+
+    # --- add-column ---
+
+    def test_alter_add_single_column(self, test_profile, test_table):
+        """Add a single column and verify via table show."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "--profile", test_profile, "table", "alter", test_table,
+            "--add-column", "age INT",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["executed"] is True
+
+        # Verify column exists via table show
+        result2 = runner.invoke(cli, [
+            "--profile", test_profile, "table", "show", test_table,
+        ])
+        assert result2.exit_code == 0
+        output2 = json.loads(result2.output)
+        col_names = [c["column_name"] for c in output2["data"]["columns"]]
+        assert "age" in col_names
+
+    def test_alter_add_multiple_columns(self, test_profile, test_table):
+        """Add multiple columns at once and verify all exist."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "--profile", test_profile, "table", "alter", test_table,
+            "--add-column", "col_a INT", "--add-column", "col_b TEXT",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["executed"] is True
+
+        # Verify both columns exist
+        result2 = runner.invoke(cli, [
+            "--profile", test_profile, "table", "show", test_table,
+        ])
+        assert result2.exit_code == 0
+        output2 = json.loads(result2.output)
+        col_names = [c["column_name"] for c in output2["data"]["columns"]]
+        assert "col_a" in col_names
+        assert "col_b" in col_names
+
+    # --- rename-column ---
+
+    def test_alter_rename_column(self, test_profile, unique_table_name, integration_conn):
+        """Rename a column and verify old name gone, new name present."""
+        runner = CliRunner()
+        try:
+            integration_conn.execute(
+                f"CREATE TABLE {unique_table_name} (id INT PRIMARY KEY, name TEXT)"
+            )
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "table", "alter", unique_table_name,
+                "--rename-column", "name:full_name",
+            ])
+
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["executed"] is True
+
+            # Verify via table show
+            result2 = runner.invoke(cli, [
+                "--profile", test_profile, "table", "show", unique_table_name,
+            ])
+            assert result2.exit_code == 0
+            output2 = json.loads(result2.output)
+            col_names = [c["column_name"] for c in output2["data"]["columns"]]
+            assert "name" not in col_names
+            assert "full_name" in col_names
+        finally:
+            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
+
+    # --- ttl ---
+
+    def test_alter_ttl(self, test_profile, unique_table_name, integration_conn):
+        """Set TTL and verify via table properties."""
+        runner = CliRunner()
+        try:
+            integration_conn.execute(
+                f"CREATE TABLE {unique_table_name} (id INT PRIMARY KEY, val TEXT)"
+            )
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "table", "alter", unique_table_name,
+                "--ttl", "3600",
+            ])
+
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["executed"] is True
+
+            # Verify via table properties
+            result2 = runner.invoke(cli, [
+                "--profile", test_profile, "table", "properties", unique_table_name,
+            ])
+            assert result2.exit_code == 0
+            output2 = json.loads(result2.output)
+            assert output2["ok"] is True
+            props = {r["property_key"]: r["property_value"] for r in output2["data"]["rows"]}
+            assert props.get("time_to_live_in_seconds") == "3600"
+        finally:
+            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
+
+    # --- dictionary-encoding-columns ---
+
+    def test_alter_dictionary_encoding_columns(self, test_profile, unique_table_name, integration_conn):
+        """Set dictionary encoding columns and verify via table properties."""
+        runner = CliRunner()
+        try:
+            integration_conn.execute(
+                f"CREATE TABLE {unique_table_name} (id INT PRIMARY KEY, val TEXT)"
+            )
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "table", "alter", unique_table_name,
+                "--dictionary-encoding-columns", "val:on",
+            ])
+
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["executed"] is True
+
+            # Verify via table properties
+            result2 = runner.invoke(cli, [
+                "--profile", test_profile, "table", "properties", unique_table_name,
+            ])
+            assert result2.exit_code == 0
+            output2 = json.loads(result2.output)
+            assert output2["ok"] is True
+            props = {r["property_key"]: r["property_value"] for r in output2["data"]["rows"]}
+            assert "val" in props.get("dictionary_encoding_columns", "")
+        finally:
+            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
+
+    # --- bitmap-columns ---
+
+    def test_alter_bitmap_columns(self, test_profile, unique_table_name, integration_conn):
+        """Set bitmap columns and verify via table properties."""
+        runner = CliRunner()
+        try:
+            integration_conn.execute(
+                f"CREATE TABLE {unique_table_name} (id INT PRIMARY KEY, val TEXT)"
+            )
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "table", "alter", unique_table_name,
+                "--bitmap-columns", "val:on",
+            ])
+
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["executed"] is True
+
+            # Verify via table properties
+            result2 = runner.invoke(cli, [
+                "--profile", test_profile, "table", "properties", unique_table_name,
+            ])
+            assert result2.exit_code == 0
+            output2 = json.loads(result2.output)
+            assert output2["ok"] is True
+            props = {r["property_key"]: r["property_value"] for r in output2["data"]["rows"]}
+            assert "val" in props.get("bitmap_columns", "")
+        finally:
+            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
+
+    # --- owner (dry-run only, actual execution depends on available users) ---
+
+    def test_alter_owner_dry_run(self, test_profile, test_table):
+        """Owner change dry-run should generate SQL with OWNER TO."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "--profile", test_profile, "table", "alter", test_table,
+            "--owner", "some_user", "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["dry_run"] is True
+        assert "OWNER TO" in output["data"]["sql"]
+
+    # --- rename ---
+
+    def test_alter_rename_table(self, test_profile, unique_table_name, integration_conn):
+        """Rename table and verify old name gone, new name exists."""
+        runner = CliRunner()
+        new_name = f"{unique_table_name}_renamed"
+        try:
+            integration_conn.execute(
+                f"CREATE TABLE {unique_table_name} (id INT PRIMARY KEY, val TEXT)"
+            )
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "table", "alter", unique_table_name,
+                "--rename", new_name,
+            ])
+
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["executed"] is True
+
+            # Verify new table exists via table show
+            result2 = runner.invoke(cli, [
+                "--profile", test_profile, "table", "show", new_name,
+            ])
+            assert result2.exit_code == 0
+            output2 = json.loads(result2.output)
+            assert output2["ok"] is True
+
+            # Old name should not be found
+            result3 = runner.invoke(cli, [
+                "--profile", test_profile, "table", "show", unique_table_name,
+            ])
+            output3 = json.loads(result3.output)
+            assert output3["ok"] is False
+        finally:
+            # Clean up both names since rename may or may not have succeeded
+            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
+            integration_conn.execute(f"DROP TABLE IF EXISTS {new_name}")
+
+    # --- no changes ---
+
+    def test_alter_no_changes(self, test_profile, test_table):
+        """No options specified should return NO_CHANGES error."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "--profile", test_profile, "table", "alter", test_table,
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "NO_CHANGES"
+
+    # --- combination (transaction) ---
+
+    def test_alter_multiple_options_transaction(self, test_profile, unique_table_name, integration_conn):
+        """Multiple options wrapped in transaction, all should take effect."""
+        runner = CliRunner()
+        try:
+            integration_conn.execute(
+                f"CREATE TABLE {unique_table_name} (id INT PRIMARY KEY, val TEXT)"
+            )
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "table", "alter", unique_table_name,
+                "--add-column", "age INT", "--ttl", "3600",
+            ])
+
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["executed"] is True
+
+            # Verify SQL contains transaction wrapping
+            sql = output["data"]["sql"]
+            assert "BEGIN;" in sql
+            assert "COMMIT;" in sql
+
+            # Verify column added via table show
+            result2 = runner.invoke(cli, [
+                "--profile", test_profile, "table", "show", unique_table_name,
+            ])
+            assert result2.exit_code == 0
+            output2 = json.loads(result2.output)
+            col_names = [c["column_name"] for c in output2["data"]["columns"]]
+            assert "age" in col_names
+
+            # Verify TTL via table properties
+            result3 = runner.invoke(cli, [
+                "--profile", test_profile, "table", "properties", unique_table_name,
+            ])
+            assert result3.exit_code == 0
+            output3 = json.loads(result3.output)
+            props = {r["property_key"]: r["property_value"] for r in output3["data"]["rows"]}
+            assert props.get("time_to_live_in_seconds") == "3600"
+        finally:
+            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
+
+    # --- schema.table format ---
+
+    def test_alter_with_schema_prefix(self, test_profile, unique_table_name, integration_conn):
+        """Alter using public.table_name format should work correctly."""
+        runner = CliRunner()
+        try:
+            integration_conn.execute(
+                f"CREATE TABLE {unique_table_name} (id INT PRIMARY KEY, val TEXT)"
+            )
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "table", "alter",
+                f"public.{unique_table_name}",
+                "--add-column", "x INT",
+            ])
+
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["executed"] is True
+
+            # Verify column added
+            result2 = runner.invoke(cli, [
+                "--profile", test_profile, "table", "show", unique_table_name,
+            ])
+            assert result2.exit_code == 0
+            output2 = json.loads(result2.output)
+            col_names = [c["column_name"] for c in output2["data"]["columns"]]
+            assert "x" in col_names
+        finally:
+            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
