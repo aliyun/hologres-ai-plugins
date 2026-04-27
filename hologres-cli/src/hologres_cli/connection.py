@@ -99,8 +99,17 @@ def parse_dsn(dsn: str) -> dict[str, Any]:
                     params[key] = int(value)
                 except ValueError:
                     raise DSNError(f"Invalid integer value for {key}: {value}")
-            elif key in ("connect_timeout", "options"):
+            elif key in ("connect_timeout", "options", "application_name"):
                 params[key] = value
+
+    # application_name: 始终以 "hologres-cli" 为前缀
+    # - DSN 未指定 -> "hologres-cli"
+    # - DSN 已指定 -> "hologres-cli/<user_defined>"
+    user_app_name = params.pop("application_name", None)
+    if user_app_name:
+        params["application_name"] = f"hologres-cli/{user_app_name}"
+    else:
+        params["application_name"] = "hologres-cli"
 
     return params
 

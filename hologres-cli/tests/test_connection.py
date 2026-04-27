@@ -116,6 +116,32 @@ class TestParseDsn:
         result = parse_dsn("hologres://user:pass@host/db?options=-c%20search_path=public")
         assert result["options"] == "-c search_path=public"
 
+    def test_parse_dsn_default_application_name(self):
+        """Test default application_name is hologres-cli."""
+        result = parse_dsn("hologres://user:pass@host:80/db")
+        assert result["application_name"] == "hologres-cli"
+
+    def test_parse_dsn_application_name_from_dsn(self):
+        """Test DSN with application_name is prefixed with hologres-cli/."""
+        result = parse_dsn("hologres://user:pass@host:80/db?application_name=my-app")
+        assert result["application_name"] == "hologres-cli/my-app"
+
+    def test_parse_dsn_empty_application_name(self):
+        """Test DSN with empty application_name falls back to default."""
+        result = parse_dsn("hologres://user:pass@host:80/db?application_name=")
+        assert result["application_name"] == "hologres-cli"
+
+    def test_parse_dsn_application_name_postgresql_scheme(self):
+        """Test application_name with postgresql:// scheme."""
+        result = parse_dsn("postgresql://user:pass@host:5432/db")
+        assert result["application_name"] == "hologres-cli"
+
+    def test_parse_dsn_application_name_with_other_params(self):
+        """Test application_name coexists with other query params."""
+        result = parse_dsn("hologres://user:pass@host:80/db?connect_timeout=30&application_name=custom")
+        assert result["application_name"] == "hologres-cli/custom"
+        assert result["connect_timeout"] == "30"
+
 
 class TestMaskDsnPassword:
     """Tests for mask_dsn_password function."""
