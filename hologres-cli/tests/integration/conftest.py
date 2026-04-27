@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Generator, Optional
+from typing import Generator
 
 import pytest
 
@@ -21,13 +21,16 @@ from hologres_cli.connection import HologresConnection
 
 
 @pytest.fixture(scope="session")
-def test_profile() -> Optional[str]:
-    """Get profile name from TEST_PROFILE_NAME env var, or None."""
-    return os.environ.get("TEST_PROFILE_NAME")
+def test_profile() -> str:
+    """Get profile name from TEST_PROFILE_NAME env var. Skips if not set."""
+    profile = os.environ.get("TEST_PROFILE_NAME")
+    if not profile:
+        pytest.skip("TEST_PROFILE_NAME not set, skipping integration test")
+    return profile
 
 
 @pytest.fixture(scope="session")
-def integration_dsn(test_profile) -> str:
+def integration_dsn() -> str:
     """Get DSN for integration tests.
 
     Priority:
@@ -35,9 +38,10 @@ def integration_dsn(test_profile) -> str:
     2. HOLOGRES_TEST_DSN env var (legacy)
     3. Skip test
     """
-    if test_profile:
+    profile_name = os.environ.get("TEST_PROFILE_NAME")
+    if profile_name:
         from hologres_cli.connection import resolve_dsn
-        return resolve_dsn(test_profile)
+        return resolve_dsn(profile_name)
 
     dsn = os.environ.get("HOLOGRES_TEST_DSN")
     if not dsn:
