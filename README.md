@@ -22,6 +22,7 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 
 **Key Features:**
 
+- **Profile-Based Configuration** — Multi-profile management via `~/.hologres/config.json` with interactive wizard
 - **Structured Output** — All commands return JSON by default for easy parsing by AI agents
 - **Safety Guardrails** — Row limit protection, write operation blocking, dangerous SQL detection
 - **Dynamic Table Management** — Full lifecycle management for Dynamic Tables (V3.1+ syntax)
@@ -33,6 +34,11 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 
 | Command | Description |
 |---------|-------------|
+| `hologres config` | Interactive configuration wizard |
+| `hologres config list` | List all profiles |
+| `hologres config show` | Show current profile details |
+| `hologres config switch <name>` | Switch active profile |
+| `hologres config set <key> <value>` | Set a configuration value |
 | `hologres status` | Check connection status |
 | `hologres instance <name>` | Query instance version and max connections |
 | `hologres warehouse [name]` | List or query warehouses |
@@ -65,8 +71,8 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 cd hologres-cli
 pip install -e .
 
-# Set connection DSN
-export HOLOGRES_DSN="hologres://user:password@endpoint:port/database"
+# Run interactive configuration wizard
+hologres config
 
 # Check connection
 hologres status
@@ -76,6 +82,9 @@ hologres -f table schema tables
 
 # Query data
 hologres sql "SELECT * FROM orders LIMIT 10"
+
+# Use a specific profile
+hologres --profile prod status
 
 # Create a Dynamic Table
 hologres dt create -t my_dt --freshness "10 minutes" \
@@ -134,11 +143,22 @@ pip install -e ".[dev]"
 
 ## Configuration
 
-The CLI resolves the database connection DSN in the following priority order:
+The CLI uses **profile-based** configuration stored in `~/.hologres/config.json`:
 
-1. **CLI flag**: `--dsn "hologres://user:pass@host:port/db"`
-2. **Environment variable**: `export HOLOGRES_DSN="hologres://..."`
-3. **Config file**: `~/.hologres/config.env`
+```bash
+# Interactive setup wizard
+hologres config
+
+# Or set values directly
+hologres config set region_id cn-hangzhou
+hologres config set instance_id hgprecn-cn-xxx
+hologres config set database mydb
+```
+
+Connection resolution priority:
+1. **CLI flag**: `hologres --profile <name> status`
+2. **Current profile**: The active profile in `config.json`
+3. **Error**: Prompted to run `hologres config`
 
 ## Testing
 
@@ -146,17 +166,14 @@ The CLI resolves the database connection DSN in the following priority order:
 cd hologres-cli
 
 # Unit tests (no database required)
-pytest -m unit
+pytest tests/ --ignore=tests/integration
 
-# Integration tests (requires database)
-export HOLOGRES_TEST_DSN="hologres://user:password@host:port/database"
-pytest -m integration
+# Integration tests (requires configured profile)
+pytest tests/integration/
 
 # All tests with coverage
 pytest --cov=src/hologres_cli --cov-report=term-missing
 ```
-
-Current test coverage: **95%+**.
 
 ## License
 
