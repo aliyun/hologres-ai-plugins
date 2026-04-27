@@ -685,3 +685,193 @@ class TestTablePropertiesCmd:
 
         assert result.exit_code == 0
         mock_get_connection.close.assert_called_once()
+
+
+class TestTableDropCmd:
+    """Tests for table drop command."""
+
+    def test_drop_without_confirm_is_dry_run(self):
+        """Test that drop without --confirm is dry-run mode."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "drop", "my_table"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["dry_run"] is True
+        assert "DROP TABLE" in output["data"]["sql"]
+        assert "public.my_table" in output["data"]["sql"]
+
+    def test_drop_with_confirm_executes(self, mock_get_connection):
+        """Test that drop with --confirm actually executes SQL."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "drop", "my_table", "--confirm"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["executed"] is True
+        mock_get_connection.execute.assert_called_once()
+        sql = mock_get_connection.execute.call_args[0][0]
+        assert "DROP TABLE" in sql
+        mock_get_connection.close.assert_called_once()
+
+    def test_drop_with_if_exists(self):
+        """Test --if-exists option adds IF EXISTS clause."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "drop", "my_table", "--if-exists"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "IF EXISTS" in output["data"]["sql"]
+
+    def test_drop_with_cascade(self):
+        """Test --cascade option adds CASCADE clause."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "drop", "my_table", "--cascade"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "CASCADE" in output["data"]["sql"]
+
+    def test_drop_with_schema_qualified_name(self):
+        """Test schema.table format is correctly parsed."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "drop", "myschema.my_table"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "myschema.my_table" in output["data"]["sql"]
+
+    def test_drop_without_schema_defaults_to_public(self):
+        """Test that table name without schema defaults to public."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "drop", "my_table"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "public.my_table" in output["data"]["sql"]
+
+    def test_drop_invalid_table_name(self):
+        """Test invalid table name returns INVALID_INPUT error."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "drop", "invalid;table"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_INPUT"
+
+    def test_drop_connection_error(self, mocker):
+        """Test connection error handling."""
+        mocker.patch("hologres_cli.commands.table.get_connection",
+                     side_effect=DSNError("No DSN configured"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "drop", "my_table", "--confirm"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_drop_execution_error(self, mock_get_connection):
+        """Test execution error returns QUERY_ERROR."""
+        mock_get_connection.execute.side_effect = Exception("relation not found")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "drop", "my_table", "--confirm"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+        mock_get_connection.close.assert_called_once()
+
+    def test_drop_with_if_exists_and_cascade(self):
+        """Test combining --if-exists and --cascade options."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "drop", "my_table", "--if-exists", "--cascade"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "IF EXISTS" in output["data"]["sql"]
+        assert "CASCADE" in output["data"]["sql"]
+
+
+class TestTableTruncateCmd:
+    """Tests for table truncate command."""
+
+    def test_truncate_without_confirm_is_dry_run(self):
+        """Test that truncate without --confirm is dry-run mode."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "truncate", "my_table"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["dry_run"] is True
+        assert "TRUNCATE TABLE" in output["data"]["sql"]
+        assert "public.my_table" in output["data"]["sql"]
+
+    def test_truncate_with_confirm_executes(self, mock_get_connection):
+        """Test that truncate with --confirm actually executes SQL."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "truncate", "my_table", "--confirm"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["executed"] is True
+        mock_get_connection.execute.assert_called_once()
+        sql = mock_get_connection.execute.call_args[0][0]
+        assert "TRUNCATE TABLE" in sql
+        mock_get_connection.close.assert_called_once()
+
+    def test_truncate_with_schema_qualified_name(self):
+        """Test schema.table format is correctly parsed."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "truncate", "myschema.my_table"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "myschema.my_table" in output["data"]["sql"]
+
+    def test_truncate_without_schema_defaults_to_public(self):
+        """Test that table name without schema defaults to public."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "truncate", "my_table"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "public.my_table" in output["data"]["sql"]
+
+    def test_truncate_invalid_table_name(self):
+        """Test invalid table name returns INVALID_INPUT error."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "truncate", "bad;name"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_INPUT"
+
+    def test_truncate_connection_error(self, mocker):
+        """Test connection error handling."""
+        mocker.patch("hologres_cli.commands.table.get_connection",
+                     side_effect=DSNError("No DSN configured"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "truncate", "my_table", "--confirm"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_truncate_execution_error(self, mock_get_connection):
+        """Test execution error returns QUERY_ERROR."""
+        mock_get_connection.execute.side_effect = Exception("permission denied")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "truncate", "my_table", "--confirm"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+        mock_get_connection.close.assert_called_once()

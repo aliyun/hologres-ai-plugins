@@ -49,6 +49,8 @@ hologres-ai-plugins/
 | `hologres table show <table>` | 查看表结构（列、类型、主键、注释等） |
 | `hologres table size <schema.table>` | 查看表存储大小 |
 | `hologres table properties <table>` | 查看表属性（存储格式、分布键、TTL 等） |
+| `hologres table drop <table> [--if-exists] [--cascade] --confirm` | 删除表（默认安全模式） |
+| `hologres table truncate <table> --confirm` | 清空表数据（默认安全模式） |
 | `hologres view list [--schema S]` | 列出所有视图 |
 | `hologres view show <view>` | 查看视图定义和结构 |
 | `hologres sql run "<query>"` | 执行只读 SQL 查询 |

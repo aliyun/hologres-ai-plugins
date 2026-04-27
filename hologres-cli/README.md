@@ -170,6 +170,16 @@ hologres table size public.my_table
 # Show table properties (orientation, distribution_key, clustering_key, TTL, etc.)
 hologres table properties <table_name>
 hologres table properties public.my_table
+
+# Drop a table (dry-run by default, use --confirm to execute)
+hologres table drop my_table              # dry-run, shows SQL
+hologres table drop my_table --confirm    # actually drops
+hologres table drop my_table --if-exists --confirm
+hologres table drop my_table --cascade --confirm
+
+# Truncate (empty) a table (dry-run by default, use --confirm to execute)
+hologres table truncate my_table              # dry-run, shows SQL
+hologres table truncate my_table --confirm    # actually truncates
 ```
 
 ### View Management
@@ -428,7 +438,9 @@ hologres sql run --write "DELETE FROM users WHERE id = 1"
 
 ### Drop Safety
 
-`hologres dt drop` defaults to dry-run mode. Use `--confirm` to actually execute.
+`hologres table drop` and `hologres table truncate` default to dry-run mode. Use `--confirm` to actually execute.
+
+`hologres dt drop` also defaults to dry-run mode. Use `--confirm` to actually execute.
 
 ## Error Codes
 
@@ -441,6 +453,7 @@ hologres sql run --write "DELETE FROM users WHERE id = 1"
 | `DANGEROUS_WRITE_BLOCKED` | DELETE/UPDATE without WHERE clause |
 | `WRITE_BLOCKED` | Write operation not allowed |
 | `NOT_FOUND` | Table or resource not found |
+| `INVALID_INPUT` | Invalid identifier or input validation failed |
 | `INVALID_ARGS` | Invalid or missing arguments |
 | `NO_CHANGES` | No properties specified to alter |
 | `EXPORT_ERROR` | Data export failed |

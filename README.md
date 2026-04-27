@@ -55,6 +55,8 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres table show <table>` | Show table structure |
 | `hologres table size <schema.table>` | Get table storage size |
 | `hologres table properties <table>` | Show table properties (orientation, distribution_key, TTL, etc.) |
+| `hologres table drop <table> [--if-exists] [--cascade] --confirm` | Drop a table (dry-run by default) |
+| `hologres table truncate <table> --confirm` | Truncate (empty) a table (dry-run by default) |
 | `hologres view list [--schema S]` | List all views |
 | `hologres view show <view>` | Show view definition and structure |
 | `hologres sql run "<query>"` | Execute read-only SQL |

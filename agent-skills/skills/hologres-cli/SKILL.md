@@ -50,6 +50,8 @@ hologres dt list
 | `hologres table show <table>` | Show table structure (columns, types, nullable, defaults, primary key, comments) |
 | `hologres table size <schema.table>` | Get table storage size |
 | `hologres table properties <table>` | Show Hologres-specific table properties (orientation, distribution_key, clustering_key, TTL, etc.) |
+| `hologres table drop <table> [--if-exists] [--cascade] --confirm` | Drop a table (dry-run by default) |
+| `hologres table truncate <table> --confirm` | Truncate (empty) a table (dry-run by default) |
 | `hologres view list [--schema S]` | List all views |
 | `hologres view show <view>` | Show view definition and structure |
 | `hologres extension list` | List installed extensions |
@@ -276,7 +278,7 @@ Disable: `hologres sql run --no-mask "SELECT * FROM users LIMIT 10"`
 
 1. Always use `LIMIT` for large result sets
 2. Use `--dry-run` to preview DT SQL before executing
-3. Use `--confirm` explicitly for destructive operations (dt drop)
+3. Use `--confirm` explicitly for destructive operations (table drop, table truncate, dt drop)
 4. Include `WHERE` clause in DELETE/UPDATE
 5. Use JSON output for automation/scripting
 6. Check `hologres status` before batch operations

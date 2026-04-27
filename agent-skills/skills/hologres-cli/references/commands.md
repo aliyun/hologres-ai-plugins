@@ -372,6 +372,88 @@ hologres table properties public.my_table
 }
 ```
 
+### table drop
+
+Drop a table from the database. **Defaults to dry-run for safety.**
+
+```bash
+hologres table drop my_table               # Dry-run (preview only)
+hologres table drop my_table --confirm     # Actually execute
+hologres table drop my_table --if-exists --confirm
+hologres table drop my_table --cascade --confirm
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--if-exists` | Add IF EXISTS clause. No error if table does not exist |
+| `--cascade` | Add CASCADE clause to drop dependent objects too |
+| `--confirm` | [REQUIRED to execute] Confirm the drop operation. Without --confirm, only dry-run SQL is shown |
+
+**Dry-run output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "DROP TABLE public.my_table",
+    "dry_run": true
+  },
+  "message": "SQL generated (dry-run mode)"
+}
+```
+
+**Executed output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "DROP TABLE public.my_table",
+    "executed": true
+  },
+  "message": "Statement executed successfully"
+}
+```
+
+### table truncate
+
+Truncate (empty) a table. **Defaults to dry-run for safety.**
+
+```bash
+hologres table truncate my_table               # Dry-run (preview only)
+hologres table truncate my_table --confirm     # Actually execute
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--confirm` | [REQUIRED to execute] Confirm the truncate operation. Without --confirm, only dry-run SQL is shown |
+
+**Dry-run output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "TRUNCATE TABLE public.my_table",
+    "dry_run": true
+  },
+  "message": "SQL generated (dry-run mode)"
+}
+```
+
+**Executed output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "TRUNCATE TABLE public.my_table",
+    "executed": true
+  },
+  "message": "Statement executed successfully"
+}
+```
+
 ## view
 
 View management commands.
