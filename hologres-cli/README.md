@@ -246,6 +246,14 @@ hologres table alter my_table --owner new_user
 # Rename table
 hologres table alter my_table --rename new_table
 
+# Modify logical partition table properties
+hologres table alter my_table --partition-expiration-time "60 day"
+hologres table alter my_table --partition-require-filter true --dry-run
+hologres table alter my_table --binlog replica --binlog-ttl 86400
+
+# Modify multiple logical partition table properties (wrapped in transaction)
+hologres table alter my_table --partition-expiration-time "60 day" --partition-keep-hot-window "30 day"
+
 # Dry-run (preview SQL without executing)
 hologres table alter my_table --ttl 3600 --dry-run
 
@@ -289,11 +297,33 @@ hologres partition drop -t my_table --partition "2025-04-01" --confirm
 
 # Drop a partition with multiple partition columns
 hologres partition drop -t public.events --partition "yy=2025,mm=04" --confirm
+
+# Alter partition properties (logical partition table only)
+hologres partition alter -t my_table --partition "ds=2025-03-16" --set "keep_alive=TRUE" --dry-run
+hologres partition alter -t public.events --partition "yy=2025,mm=04" --set "keep_alive=TRUE"
+hologres partition alter -t my_table --partition "ds=2025-03-16" --set "keep_alive=TRUE" --set "storage_mode=hot"
 ```
 
 > **Note:** Currently only logical partition tables are supported. Non-logical partition tables will return a `NOT_LOGICAL_PARTITION` error.
 > For logical partition tables, partitions are created automatically on INSERT. The `partition create` command returns a notice.
 > The `partition drop` command deletes all rows matching the partition value. The partition disappears automatically after data is removed.
+>
+> The `partition alter` command modifies properties of a specific partition in a logical partition table. Valid partition properties:
+>
+> | Property | Values | Description |
+> |----------|--------|-------------|
+> | `keep_alive` | `TRUE` / `FALSE` | Whether partition is exempt from auto-cleanup |
+> | `storage_mode` | `hot` / `cold` | Force partition storage type |
+> | `generate_binlog` | `on` / `off` | Whether partition generates binlog |
+>
+> **partition alter Options:**
+>
+> | Option | Description |
+> |--------|-------------|
+> | `--table, -t TABLE` | Table name `[schema.]table_name` (required) |
+> | `--partition VALUE` | Partition value, format: `'col=value'` or `'col1=v1,col2=v2'` (required) |
+> | `--set KEY=VALUE` | Set partition property. Repeatable. (required) |
+> | `--dry-run` | Preview SQL without executing |
 
 ### Extension Management
 
@@ -558,6 +588,7 @@ hologres sql run --write "DELETE FROM users WHERE id = 1"
 | `IMPORT_ERROR` | Data import failed |
 | `VIEW_NOT_FOUND` | View not found |
 | `NOT_LOGICAL_PARTITION` | Table is not a logical partition table |
+| `INVALID_PARTITION_PROPERTY` | Invalid partition property name or value |
 
 ## Sensitive Data Masking
 

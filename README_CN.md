@@ -52,10 +52,11 @@ hologres-ai-plugins/
 | `hologres table properties <table>` | 查看表属性（存储格式、分布键、TTL 等） |
 | `hologres table drop <table> [--if-exists] [--cascade] --confirm` | 删除表（默认安全模式） |
 | `hologres table truncate <table> --confirm` | 清空表数据（默认安全模式） |
-| `hologres table alter TABLE [选项] [--dry-run]` | 修改表属性（添加列、重命名、TTL 等） |
+| `hologres table alter TABLE [选项] [--dry-run]` | 修改表属性（添加列、重命名、TTL 等；逻辑分区表支持 SET 语法设置分区属性） |
 | `hologres partition list --table <table>` | 列出逻辑分区表的分区列表 |
 | `hologres partition create --table <table>` | 创建分区（逻辑分区表自动创建，返回提示） |
 | `hologres partition drop --table <table> --partition VALUE --confirm` | 删除分区（删除分区数据） |
+| `hologres partition alter --table <table> --partition <value> --set <key=value> [--dry-run]` | 修改逻辑分区表的分区属性（keep_alive/storage_mode/generate_binlog） |
 | `hologres view list [--schema S]` | 列出所有视图 |
 | `hologres view show <view>` | 查看视图定义和结构 |
 | `hologres sql run "<query>"` | 执行只读 SQL 查询 |

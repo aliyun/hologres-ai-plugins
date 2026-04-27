@@ -603,3 +603,364 @@ class TestPartitionListCmd:
         assert result.exit_code == 0
         output = json.loads(result.output)
         assert output["ok"] is True
+
+
+class TestPartitionAlterCmd:
+    """Tests for partition alter command."""
+
+    def test_alter_set_keep_alive_dry_run(self, mock_get_connection):
+        """Test setting keep_alive property in dry-run mode."""
+        mock_get_connection.execute.side_effect = [
+            [{"?column?": 1}],  # _table_exists
+            [{"property_value": "true"}],  # _is_logical_partitioned
+            [{"property_value": "ds"}],  # _get_partition_columns
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.logs",
+            "--partition", "ds=2025-03-16",
+            "--set", "keep_alive=TRUE",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["dry_run"] is True
+        sql = output["data"]["sql"]
+        assert "ALTER TABLE public.logs" in sql
+        assert "PARTITION (ds = '2025-03-16')" in sql
+        assert "SET (" in sql
+        assert "keep_alive = TRUE" in sql
+
+    def test_alter_set_storage_mode_dry_run(self, mock_get_connection):
+        """Test setting storage_mode property in dry-run mode."""
+        mock_get_connection.execute.side_effect = [
+            [{"?column?": 1}],
+            [{"property_value": "true"}],
+            [{"property_value": "ds"}],
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.logs",
+            "--partition", "ds=2025-03-16",
+            "--set", "storage_mode=hot",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "storage_mode = 'hot'" in sql
+
+    def test_alter_set_generate_binlog_dry_run(self, mock_get_connection):
+        """Test setting generate_binlog property in dry-run mode."""
+        mock_get_connection.execute.side_effect = [
+            [{"?column?": 1}],
+            [{"property_value": "true"}],
+            [{"property_value": "ds"}],
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.logs",
+            "--partition", "ds=2025-03-16",
+            "--set", "generate_binlog=on",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "generate_binlog = 'on'" in sql
+
+    def test_alter_set_multiple_props(self, mock_get_connection):
+        """Test setting multiple properties at once."""
+        mock_get_connection.execute.side_effect = [
+            [{"?column?": 1}],
+            [{"property_value": "true"}],
+            [{"property_value": "ds"}],
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.logs",
+            "--partition", "ds=2025-03-16",
+            "--set", "keep_alive=TRUE",
+            "--set", "storage_mode=hot",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "keep_alive = TRUE" in sql
+        assert "storage_mode = 'hot'" in sql
+
+    def test_alter_multi_column_partition(self, mock_get_connection):
+        """Test alter with multiple partition columns."""
+        mock_get_connection.execute.side_effect = [
+            [{"?column?": 1}],
+            [{"property_value": "true"}],
+            [{"property_value": "yy,mm"}],
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.events",
+            "--partition", "yy=2025,mm=04",
+            "--set", "keep_alive=TRUE",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "PARTITION (yy = '2025', mm = '04')" in sql
+        assert "keep_alive = TRUE" in sql
+
+    def test_alter_execute(self, mock_get_connection):
+        """Test execute mode calls conn.execute."""
+        mock_get_connection.execute.side_effect = [
+            [{"?column?": 1}],
+            [{"property_value": "true"}],
+            [{"property_value": "ds"}],
+            [],  # ALTER execution
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.logs",
+            "--partition", "ds=2025-03-16",
+            "--set", "keep_alive=TRUE"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["executed"] is True
+        assert output["message"] == "Partition altered successfully"
+        assert mock_get_connection.execute.call_count == 4
+        mock_get_connection.close.assert_called_once()
+
+    def test_alter_table_not_found(self, mock_get_connection):
+        """Test alter with non-existent table."""
+        mock_get_connection.execute.side_effect = [
+            [],  # _table_exists returns empty
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.nonexistent",
+            "--partition", "ds=2025-03-16",
+            "--set", "keep_alive=TRUE"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "TABLE_NOT_FOUND"
+
+    def test_alter_not_logical_partition(self, mock_get_connection):
+        """Test alter with non-logical partition table."""
+        mock_get_connection.execute.side_effect = [
+            [{"?column?": 1}],  # _table_exists
+            [],  # _is_logical_partitioned returns empty
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.regular_table",
+            "--partition", "ds=2025-03-16",
+            "--set", "keep_alive=TRUE"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "NOT_LOGICAL_PARTITION"
+
+    def test_alter_invalid_property_name(self):
+        """Test alter with invalid property name."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.logs",
+            "--partition", "ds=2025-03-16",
+            "--set", "invalid_prop=value",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_ARGS"
+
+    def test_alter_invalid_property_value(self):
+        """Test alter with invalid property value."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.logs",
+            "--partition", "ds=2025-03-16",
+            "--set", "keep_alive=maybe",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_ARGS"
+
+    def test_alter_invalid_set_format(self):
+        """Test alter with --set value without equals sign."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.logs",
+            "--partition", "ds=2025-03-16",
+            "--set", "no_equals",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_ARGS"
+
+    def test_alter_partition_column_mismatch(self, mock_get_connection):
+        """Test alter with mismatched partition column names."""
+        mock_get_connection.execute.side_effect = [
+            [{"?column?": 1}],
+            [{"property_value": "true"}],
+            [{"property_value": "yy,mm"}],
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.events",
+            "--partition", "xx=2025,zz=04",
+            "--set", "keep_alive=TRUE",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_ARGS"
+        assert "mismatch" in output["error"]["message"].lower()
+
+    def test_alter_connection_error(self, mocker):
+        """Test alter with connection failure."""
+        mocker.patch(
+            "hologres_cli.commands.partition.get_connection",
+            side_effect=DSNError("Connection refused"),
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.logs",
+            "--partition", "ds=2025-03-16",
+            "--set", "keep_alive=TRUE"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_alter_query_error(self, mock_get_connection):
+        """Test alter with SQL execution error."""
+        mock_get_connection.execute.side_effect = [
+            [{"?column?": 1}],
+            [{"property_value": "true"}],
+            [{"property_value": "ds"}],
+            Exception("permission denied"),
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.logs",
+            "--partition", "ds=2025-03-16",
+            "--set", "keep_alive=TRUE"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+
+    def test_alter_table_option_required(self):
+        """Test alter without --table fails."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter",
+            "--partition", "ds=2025-03-16",
+            "--set", "keep_alive=TRUE"
+        ])
+
+        assert result.exit_code != 0
+        assert "Missing option" in result.output or "--table" in result.output
+
+    def test_alter_partition_option_required(self):
+        """Test alter without --partition fails."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.logs",
+            "--set", "keep_alive=TRUE"
+        ])
+
+        assert result.exit_code != 0
+        assert "Missing option" in result.output or "--partition" in result.output
+
+    def test_alter_set_option_required(self):
+        """Test alter without --set fails."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.logs",
+            "--partition", "ds=2025-03-16"
+        ])
+
+        assert result.exit_code != 0
+        assert "Missing option" in result.output or "--set" in result.output
+
+    def test_alter_default_schema(self, mock_get_connection):
+        """Test alter defaults to public schema."""
+        mock_get_connection.execute.side_effect = [
+            [{"?column?": 1}],
+            [{"property_value": "true"}],
+            [{"property_value": "ds"}],
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "my_table",
+            "--partition", "ds=2025-03-16",
+            "--set", "keep_alive=TRUE",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "public.my_table" in sql
+
+    def test_alter_case_insensitive_value(self, mock_get_connection):
+        """Test that keep_alive value is case-insensitive."""
+        mock_get_connection.execute.side_effect = [
+            [{"?column?": 1}],
+            [{"property_value": "true"}],
+            [{"property_value": "ds"}],
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "partition", "alter", "-t", "public.logs",
+            "--partition", "ds=2025-03-16",
+            "--set", "keep_alive=true",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "keep_alive = TRUE" in sql

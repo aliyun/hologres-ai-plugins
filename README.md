@@ -58,8 +58,9 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres table properties <table>` | Show table properties (orientation, distribution_key, TTL, etc.) |
 | `hologres table drop <table> [--if-exists] [--cascade] --confirm` | Drop a table (dry-run by default) |
 | `hologres table truncate <table> --confirm` | Truncate (empty) a table (dry-run by default) |
-| `hologres table alter TABLE [options] [--dry-run]` | Alter table properties (add column, rename, TTL, etc.) |
+| `hologres table alter TABLE [options] [--dry-run]` | Alter table properties (add column, rename, TTL, etc.; logical partition tables support SET syntax for partition properties) |
 | `hologres partition list <table>` | List partitions of a logical partition table |
+| `hologres partition alter --table <table> --partition <value> --set <key=value> [--dry-run]` | Alter partition properties of a logical partition table (keep_alive/storage_mode/generate_binlog) |
 | `hologres view list [--schema S]` | List all views |
 | `hologres view show <view>` | Show view definition and structure |
 | `hologres sql run "<query>"` | Execute read-only SQL |

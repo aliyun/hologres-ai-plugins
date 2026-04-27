@@ -2047,3 +2047,184 @@ class TestTableAlterCmd:
         output = json.loads(result.output)
         assert output["ok"] is False
         assert output["error"]["code"] == "INVALID_INPUT"
+
+    # --- Logical partition table SET property tests ---
+
+    def test_alter_partition_expiration_time_dry_run(self):
+        """Test --partition-expiration-time generates SET SQL."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--partition-expiration-time", "30 day", "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["dry_run"] is True
+        sql = output["data"]["sql"]
+        assert "ALTER TABLE public.my_table SET" in sql
+        assert "partition_expiration_time = '30 day'" in sql
+
+    def test_alter_partition_keep_hot_window_dry_run(self):
+        """Test --partition-keep-hot-window generates SET SQL."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--partition-keep-hot-window", "15 day", "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "partition_keep_hot_window = '15 day'" in sql
+
+    def test_alter_partition_require_filter_dry_run(self):
+        """Test --partition-require-filter generates SET SQL with boolean."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--partition-require-filter", "true", "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "partition_require_filter = TRUE" in sql
+
+    def test_alter_partition_require_filter_false(self):
+        """Test --partition-require-filter false generates FALSE."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--partition-require-filter", "false", "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "partition_require_filter = FALSE" in sql
+
+    def test_alter_binlog_level_dry_run(self):
+        """Test --binlog generates SET SQL with binlog_level."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--binlog", "replica", "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "binlog_level = 'replica'" in sql
+
+    def test_alter_binlog_ttl_dry_run(self):
+        """Test --binlog-ttl generates SET SQL with numeric value."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--binlog-ttl", "86400", "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "binlog_ttl = 86400" in sql
+
+    def test_alter_partition_generate_binlog_window_dry_run(self):
+        """Test --partition-generate-binlog-window generates SET SQL."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--partition-generate-binlog-window", "3 day", "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "partition_generate_binlog_window = '3 day'" in sql
+
+    def test_alter_multiple_set_props_dry_run(self):
+        """Test multiple SET properties in one ALTER TABLE SET."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--partition-expiration-time", "60 day",
+            "--partition-keep-hot-window", "30 day",
+            "--partition-require-filter", "false",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert "ALTER TABLE public.my_table SET" in sql
+        assert "partition_expiration_time = '60 day'" in sql
+        assert "partition_keep_hot_window = '30 day'" in sql
+        assert "partition_require_filter = FALSE" in sql
+
+    def test_alter_set_props_with_add_column(self):
+        """Test SET props combined with traditional ALTER generates transaction."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--add-column", "age INT",
+            "--partition-expiration-time", "30 day",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert sql.startswith("BEGIN;")
+        assert "COMMIT;" in sql
+        assert "ADD COLUMN age INT" in sql
+        assert "ALTER TABLE public.my_table SET" in sql
+
+    def test_alter_set_props_with_ttl(self):
+        """Test SET props combined with TTL uses both syntaxes in transaction."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--ttl", "3600",
+            "--partition-require-filter", "true",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert sql.startswith("BEGIN;")
+        assert "COMMIT;" in sql
+        assert "time_to_live_in_seconds" in sql
+        assert "partition_require_filter = TRUE" in sql
+
+    def test_alter_set_props_single_no_transaction(self):
+        """Test single SET prop does not wrap in BEGIN/COMMIT."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--partition-expiration-time", "30 day", "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert not sql.startswith("BEGIN;")
+        assert "COMMIT;" not in sql
+
+    def test_alter_set_props_execute(self, mock_get_connection):
+        """Test execute mode calls conn.execute."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--partition-expiration-time", "30 day"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["executed"] is True
+        assert output["message"] == "Table altered successfully"
+        mock_get_connection.execute.assert_called_once()
+        mock_get_connection.close.assert_called_once()

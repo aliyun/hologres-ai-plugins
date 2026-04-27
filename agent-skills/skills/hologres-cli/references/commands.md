@@ -676,6 +676,11 @@ hologres table alter my_table --ttl 3600 --dry-run
 
 # Multiple options (wrapped in BEGIN/COMMIT transaction)
 hologres table alter my_table --add-column "age INT" --ttl 3600
+
+# Modify logical partition table properties
+hologres table alter my_table --partition-expiration-time "60 day"
+hologres table alter my_table --partition-require-filter true --dry-run
+hologres table alter my_table --binlog replica --binlog-ttl 86400
 ```
 
 **Options:**
@@ -689,6 +694,12 @@ hologres table alter my_table --add-column "age INT" --ttl 3600
 | `--bitmap-columns` | Set bitmap index columns. Format: `"col1:on,col2:off"` |
 | `--owner USER` | Change table owner |
 | `--rename NEW_NAME` | Rename the table |
+| `--partition-expiration-time` | Partition expiration time, e.g. '30 day', '12 month' (logical partition table) |
+| `--partition-keep-hot-window` | Partition hot storage window, e.g. '15 day' (logical partition table) |
+| `--partition-require-filter` | Require partition filter: true/false (logical partition table) |
+| `--binlog` | Binlog level: none/replica (logical partition table) |
+| `--binlog-ttl` | Binlog TTL in seconds (logical partition table) |
+| `--partition-generate-binlog-window` | Binlog generation window, e.g. '3 day' (logical partition table) |
 | `--dry-run` | Only display the SQL without executing |
 
 **Dry-run output:**
@@ -912,6 +923,65 @@ hologres partition drop -t public.events --partition "yy=2025,mm=04" --confirm
     "dry_run": true
   },
   "message": "SQL generated (dry-run mode)"
+}
+```
+
+### partition alter
+
+Alter partition properties of a logical partition table.
+
+```bash
+hologres partition alter -t public.logs --partition "ds=2025-03-16" --set "keep_alive=TRUE" --dry-run
+hologres partition alter -t public.events --partition "yy=2025,mm=04" --set "keep_alive=TRUE"
+hologres partition alter -t my_table --partition "ds=2025-03-16" --set "keep_alive=TRUE" --set "storage_mode=hot"
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--table, -t TABLE` | Table name `[schema.]table_name` (required) |
+| `--partition VALUE` | Partition value. Format: `'col=value'` or `'col1=v1,col2=v2'` (required) |
+| `--set KEY=VALUE` | Set partition property. Format: `'key=value'`. Repeatable. (required) |
+| `--dry-run` | Preview SQL without executing |
+
+**Valid partition properties:**
+
+| Property | Values | Description |
+|----------|--------|-------------|
+| `keep_alive` | TRUE/FALSE | Whether partition is exempt from auto-cleanup by partition_expiration_time |
+| `storage_mode` | hot/cold | Force partition storage type, overriding partition_keep_hot_window |
+| `generate_binlog` | on/off | Whether partition generates binlog, overriding partition_generate_binlog_window |
+
+**Dry-run output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "ALTER TABLE public.logs\nPARTITION (ds = '2025-03-16')\nSET (\n    keep_alive = TRUE)",
+    "dry_run": true
+  },
+  "message": "SQL generated (dry-run mode)"
+}
+```
+
+**Executed output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "ALTER TABLE public.logs\nPARTITION (ds = '2025-03-16')\nSET (\n    keep_alive = TRUE)",
+    "executed": true
+  },
+  "message": "Partition altered successfully"
+}
+```
+
+**Error (invalid property):**
+```json
+{
+  "ok": false,
+  "error": {"code": "INVALID_ARGS", "message": "Invalid --set value. Valid properties: keep_alive, storage_mode, generate_binlog. Format: 'key=value'."}
 }
 ```
 

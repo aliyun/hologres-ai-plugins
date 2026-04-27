@@ -701,10 +701,17 @@ def _build_table_alter_sql(
     bitmap_columns: Optional[str] = None,
     owner: Optional[str] = None,
     rename: Optional[str] = None,
+    partition_expiration_time: Optional[str] = None,
+    partition_keep_hot_window: Optional[str] = None,
+    partition_require_filter: Optional[str] = None,
+    binlog: Optional[str] = None,
+    binlog_ttl: Optional[int] = None,
+    partition_generate_binlog_window: Optional[str] = None,
 ) -> str:
     """Build ALTER TABLE SQL wrapped in a transaction.
 
     Returns a single SQL string. Multiple statements are wrapped in BEGIN/COMMIT.
+    Logical partition table properties use ALTER TABLE ... SET (...) syntax.
     """
     full_table = f"{schema_name}.{table_name}"
     statements: list[str] = []
@@ -753,6 +760,25 @@ def _build_table_alter_sql(
             f"ALTER TABLE IF EXISTS {full_table} RENAME TO {rename}"
         )
 
+    # 8. Logical partition table properties: ALTER TABLE ... SET (...)
+    set_props: dict[str, str] = {}
+    if partition_expiration_time:
+        set_props["partition_expiration_time"] = f"'{partition_expiration_time}'"
+    if partition_keep_hot_window:
+        set_props["partition_keep_hot_window"] = f"'{partition_keep_hot_window}'"
+    if partition_require_filter is not None:
+        set_props["partition_require_filter"] = partition_require_filter.upper()
+    if binlog:
+        set_props["binlog_level"] = f"'{binlog}'"
+    if binlog_ttl is not None:
+        set_props["binlog_ttl"] = str(binlog_ttl)
+    if partition_generate_binlog_window:
+        set_props["partition_generate_binlog_window"] = f"'{partition_generate_binlog_window}'"
+
+    if set_props:
+        props_str = ",\n    ".join(f"{k} = {v}" for k, v in set_props.items())
+        statements.append(f"ALTER TABLE {full_table} SET (\n    {props_str})")
+
     if not statements:
         return ""
 
@@ -784,6 +810,22 @@ def _build_table_alter_sql(
               help="Change table owner.")
 @click.option("--rename", default=None,
               help="Rename the table to a new name.")
+@click.option("--partition-expiration-time", default=None,
+              help="Partition expiration time (logical partition table). "
+                   "Example: '30 day', '12 month'")
+@click.option("--partition-keep-hot-window", default=None,
+              help="Partition hot storage window (logical partition table). "
+                   "Example: '15 day', '6 month'")
+@click.option("--partition-require-filter", type=click.Choice(["true", "false"]),
+              default=None,
+              help="Require partition filter in queries (logical partition table).")
+@click.option("--binlog", default=None, type=click.Choice(["none", "replica"]),
+              help="Binlog level: none or replica (logical partition table).")
+@click.option("--binlog-ttl", type=int, default=None,
+              help="Binlog TTL in seconds (logical partition table).")
+@click.option("--partition-generate-binlog-window", default=None,
+              help="Binlog generation window for partitions (logical partition table). "
+                   "Example: '3 day'")
 @click.option("--dry-run", is_flag=True, default=False,
               help="Only display the SQL without executing.")
 @click.pass_context
@@ -792,6 +834,12 @@ def alter_cmd(ctx: click.Context, table: str, add_column: Tuple[str, ...],
               dictionary_encoding_columns: Optional[str],
               bitmap_columns: Optional[str],
               owner: Optional[str], rename: Optional[str],
+              partition_expiration_time: Optional[str],
+              partition_keep_hot_window: Optional[str],
+              partition_require_filter: Optional[str],
+              binlog: Optional[str],
+              binlog_ttl: Optional[int],
+              partition_generate_binlog_window: Optional[str],
               dry_run: bool) -> None:
     """Alter table properties.
 
@@ -807,6 +855,9 @@ def alter_cmd(ctx: click.Context, table: str, add_column: Tuple[str, ...],
       hologres table alter my_table --owner new_user
       hologres table alter my_table --bitmap-columns "a:on,b:off"
       hologres table alter my_table --dictionary-encoding-columns "a:on,b:auto"
+      hologres table alter my_table --partition-expiration-time "60 day"
+      hologres table alter my_table --partition-require-filter true --dry-run
+      hologres table alter my_table --binlog replica --binlog-ttl 86400
     """
     profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
@@ -868,6 +919,12 @@ def alter_cmd(ctx: click.Context, table: str, add_column: Tuple[str, ...],
         bitmap_columns=bitmap_columns,
         owner=owner,
         rename=rename,
+        partition_expiration_time=partition_expiration_time,
+        partition_keep_hot_window=partition_keep_hot_window,
+        partition_require_filter=partition_require_filter,
+        binlog=binlog,
+        binlog_ttl=binlog_ttl,
+        partition_generate_binlog_window=partition_generate_binlog_window,
     )
 
     if not sql:

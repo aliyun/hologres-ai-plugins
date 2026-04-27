@@ -71,6 +71,8 @@ hologres dt list                                   # List Dynamic Tables
 | `hologres partition list --table <table>` | List partitions of a logical partition table |
 | `hologres partition create --table <table>` | Create partition (no-op for logical tables, returns notice) |
 | `hologres partition drop --table <table> --partition VALUE --confirm` | Drop partition (deletes partition data) |
+| `hologres partition alter --table <table> --partition <value> --set <key=value> [--dry-run]` | Alter partition properties (keep_alive, storage_mode, generate_binlog) |
+| `hologres partition alter --table <table> --partition <value> --set <key=value> [--dry-run]` | Alter partition properties (keep_alive, storage_mode, generate_binlog) |
 | `hologres view list [--schema S]` | List all views |
 | `hologres view show <view>` | Show view definition and structure |
 | `hologres extension list` | List installed extensions |
@@ -207,6 +209,22 @@ hologres dt drop my_dt --if-exists --confirm
 hologres dt convert my_old_dt          # Convert single table
 hologres dt convert --all              # Convert all V3.0 tables
 hologres dt convert my_old_dt --dry-run
+```
+
+## Output Formats
+
+### Partition Management
+
+```bash
+# List partitions
+hologres partition list -t public.logs
+
+# Drop a partition
+hologres partition drop -t my_table --partition "2025-04-01" --confirm
+
+# Alter partition properties
+hologres partition alter -t public.logs --partition "ds=2025-03-16" --set "keep_alive=TRUE"
+hologres partition alter -t my_table --partition "ds=2025-03-16" --set "keep_alive=TRUE" --set "storage_mode=hot" --dry-run
 ```
 
 ## Output Formats
