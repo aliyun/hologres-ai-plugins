@@ -284,7 +284,7 @@ def create_cmd(ctx: click.Context, name: str, columns: str,
       hologres table create --name public.orders \\
         --columns "order_id BIGINT NOT NULL, user_id INT, amount DECIMAL(10,2)" \\
         --primary-key order_id --orientation column \\
-        --distribution-key user_id --dry-run
+        --distribution-key order_id --dry-run
 
     \b
       # Physical partition table

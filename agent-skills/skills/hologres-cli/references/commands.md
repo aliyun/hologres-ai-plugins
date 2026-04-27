@@ -266,7 +266,7 @@ hologres table create --name public.my_table \
 hologres table create --name public.orders \
   --columns "order_id BIGINT NOT NULL, user_id INT, amount DECIMAL(10,2), created_at TIMESTAMPTZ" \
   --primary-key order_id --orientation column \
-  --distribution-key user_id --clustering-key "created_at:asc" \
+  --distribution-key order_id --clustering-key "created_at:asc" \
   --ttl 7776000 --dry-run
 
 # Physical partition table

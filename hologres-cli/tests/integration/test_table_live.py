@@ -259,10 +259,10 @@ class TestTableCreateLive:
             result = runner.invoke(cli, [
                 "--profile", test_profile, "table", "create",
                 "-n", f"public.{unique_table_name}",
-                "-c", "order_id BIGINT NOT NULL, user_id INT, created_at TIMESTAMPTZ",
+                "-c", "order_id BIGINT NOT NULL, user_id INT, created_at TIMESTAMPTZ NOT NULL",
                 "--primary-key", "order_id",
                 "--orientation", "column",
-                "--distribution-key", "user_id",
+                "--distribution-key", "order_id",
                 "--clustering-key", "created_at:asc",
             ])
 
