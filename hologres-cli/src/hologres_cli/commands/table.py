@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Optional
+from typing import Optional, Tuple
 
 import click
 
@@ -686,6 +686,221 @@ def properties_cmd(ctx: click.Context, table: str) -> None:
         duration_ms = (time.time() - start_time) * 1000
         log_operation("table.properties", dsn_masked=conn.masked_dsn, success=False,
                       error_code="QUERY_ERROR", error_message=str(e), duration_ms=duration_ms)
+        print_output(query_error(str(e), fmt))
+    finally:
+        conn.close()
+
+
+def _build_table_alter_sql(
+    schema_name: str,
+    table_name: str,
+    add_columns: Tuple[str, ...] = (),
+    rename_column: Optional[str] = None,
+    ttl: Optional[int] = None,
+    dictionary_encoding_columns: Optional[str] = None,
+    bitmap_columns: Optional[str] = None,
+    owner: Optional[str] = None,
+    rename: Optional[str] = None,
+) -> str:
+    """Build ALTER TABLE SQL wrapped in a transaction.
+
+    Returns a single SQL string. Multiple statements are wrapped in BEGIN/COMMIT.
+    """
+    full_table = f"{schema_name}.{table_name}"
+    statements: list[str] = []
+
+    # 1. ADD COLUMN
+    if add_columns:
+        add_parts = [f"ADD COLUMN {col}" for col in add_columns]
+        statements.append(
+            f"ALTER TABLE IF EXISTS {full_table} {', '.join(add_parts)}"
+        )
+
+    # 2. RENAME COLUMN
+    if rename_column:
+        old_name, new_name = rename_column.split(":", 1)
+        statements.append(
+            f"ALTER TABLE IF EXISTS {full_table} RENAME COLUMN {old_name.strip()} TO {new_name.strip()}"
+        )
+
+    # 3. TTL
+    if ttl is not None:
+        statements.append(
+            f"CALL set_table_property('{full_table}', 'time_to_live_in_seconds', '{ttl}')"
+        )
+
+    # 4. dictionary_encoding_columns
+    if dictionary_encoding_columns is not None:
+        statements.append(
+            f"CALL SET_TABLE_PROPERTY('{full_table}', 'dictionary_encoding_columns', '{dictionary_encoding_columns}')"
+        )
+
+    # 5. bitmap_columns
+    if bitmap_columns is not None:
+        statements.append(
+            f"CALL SET_TABLE_PROPERTY('{full_table}', 'bitmap_columns', '{bitmap_columns}')"
+        )
+
+    # 6. OWNER TO
+    if owner:
+        statements.append(
+            f"ALTER TABLE IF EXISTS {full_table} OWNER TO {owner}"
+        )
+
+    # 7. RENAME TO (last, because table name changes)
+    if rename:
+        statements.append(
+            f"ALTER TABLE IF EXISTS {full_table} RENAME TO {rename}"
+        )
+
+    if not statements:
+        return ""
+
+    if len(statements) == 1:
+        return statements[0]
+
+    # Multiple statements: wrap in BEGIN/COMMIT transaction
+    lines = ["BEGIN;", ""]
+    for stmt in statements:
+        lines.append(stmt + ";")
+        lines.append("")
+    lines.append("COMMIT;")
+    return "\n".join(lines)
+
+
+@table_cmd.command("alter")
+@click.argument("table")
+@click.option("--add-column", multiple=True,
+              help='Add a column. Format: "name TYPE [constraints]". Repeatable.')
+@click.option("--rename-column", default=None,
+              help='Rename a column. Format: "old_name:new_name".')
+@click.option("--ttl", type=int, default=None,
+              help="Set data TTL in seconds.")
+@click.option("--dictionary-encoding-columns", default=None,
+              help='Set dictionary encoding columns. Format: "col1:on,col2:off,col3:auto".')
+@click.option("--bitmap-columns", default=None,
+              help='Set bitmap index columns. Format: "col1:on,col2:off".')
+@click.option("--owner", default=None,
+              help="Change table owner.")
+@click.option("--rename", default=None,
+              help="Rename the table to a new name.")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Only display the SQL without executing.")
+@click.pass_context
+def alter_cmd(ctx: click.Context, table: str, add_column: Tuple[str, ...],
+              rename_column: Optional[str], ttl: Optional[int],
+              dictionary_encoding_columns: Optional[str],
+              bitmap_columns: Optional[str],
+              owner: Optional[str], rename: Optional[str],
+              dry_run: bool) -> None:
+    """Alter table properties.
+
+    \b
+    TABLE: Table name in format [schema.]table_name.
+
+    \b
+    Examples:
+      hologres table alter my_table --add-column "age INT"
+      hologres table alter my_table --ttl 3600
+      hologres table alter my_table --rename-column "old_col:new_col"
+      hologres table alter my_table --rename new_name --dry-run
+      hologres table alter my_table --owner new_user
+      hologres table alter my_table --bitmap-columns "a:on,b:off"
+      hologres table alter my_table --dictionary-encoding-columns "a:on,b:auto"
+    """
+    profile = ctx.obj.get("profile")
+    fmt = ctx.obj.get("format", FORMAT_JSON)
+
+    # Parse schema.table format
+    if "." in table:
+        schema_name, table_name = table.rsplit(".", 1)
+    else:
+        schema_name, table_name = "public", table
+
+    # Validate identifiers
+    try:
+        _validate_identifier(schema_name, "schema name")
+        _validate_identifier(table_name, "table name")
+    except ValueError as e:
+        print_output(error("INVALID_INPUT", str(e), fmt))
+        return
+
+    # Validate --rename-column format
+    if rename_column is not None and ":" not in rename_column:
+        print_output(error("INVALID_ARGS",
+                           'Invalid --rename-column format. Expected "old_name:new_name".', fmt))
+        return
+
+    # Validate rename-column identifiers
+    if rename_column is not None:
+        old_col, new_col = rename_column.split(":", 1)
+        try:
+            _validate_identifier(old_col.strip(), "old column name")
+            _validate_identifier(new_col.strip(), "new column name")
+        except ValueError as e:
+            print_output(error("INVALID_INPUT", str(e), fmt))
+            return
+
+    # Validate --rename identifier
+    if rename is not None:
+        try:
+            _validate_identifier(rename, "new table name")
+        except ValueError as e:
+            print_output(error("INVALID_INPUT", str(e), fmt))
+            return
+
+    # Validate --owner identifier
+    if owner is not None:
+        try:
+            _validate_identifier(owner, "owner name")
+        except ValueError as e:
+            print_output(error("INVALID_INPUT", str(e), fmt))
+            return
+
+    # Build SQL
+    sql = _build_table_alter_sql(
+        schema_name=schema_name,
+        table_name=table_name,
+        add_columns=add_column,
+        rename_column=rename_column,
+        ttl=ttl,
+        dictionary_encoding_columns=dictionary_encoding_columns,
+        bitmap_columns=bitmap_columns,
+        owner=owner,
+        rename=rename,
+    )
+
+    if not sql:
+        print_output(error("NO_CHANGES",
+                           "No properties specified to alter. Use --help for options.", fmt))
+        return
+
+    # Dry-run mode
+    if dry_run:
+        print_output(success({"sql": sql, "dry_run": True}, fmt,
+                             message="SQL generated (dry-run mode)"))
+        return
+
+    # Execute mode
+    try:
+        conn = get_connection(profile=profile)
+    except DSNError as e:
+        print_output(connection_error(str(e), fmt))
+        return
+
+    start_time = time.time()
+    try:
+        conn.execute(sql)
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation("table.alter", sql=sql, dsn_masked=conn.masked_dsn,
+                      success=True, duration_ms=duration_ms)
+        print_output(success({"sql": sql, "executed": True}, fmt,
+                             message="Table altered successfully"))
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation("table.alter", sql=sql, dsn_masked=conn.masked_dsn,
+                      success=False, error_code="QUERY_ERROR", error_message=str(e),
+                      duration_ms=duration_ms)
         print_output(query_error(str(e), fmt))
     finally:
         conn.close()

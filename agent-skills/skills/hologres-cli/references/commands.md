@@ -642,6 +642,86 @@ hologres table truncate my_table --confirm     # Actually execute
 }
 ```
 
+### table alter
+
+Alter table properties. Supports adding columns, renaming columns/table, modifying TTL, dictionary encoding, bitmap columns, and changing owner.
+
+```bash
+# Add a column
+hologres table alter my_table --add-column "age INT"
+
+# Add multiple columns
+hologres table alter my_table --add-column "a INT" --add-column "b TEXT"
+
+# Rename a column
+hologres table alter my_table --rename-column "old_col:new_col"
+
+# Modify TTL
+hologres table alter my_table --ttl 3600
+
+# Update dictionary encoding columns
+hologres table alter my_table --dictionary-encoding-columns "a:on,b:auto"
+
+# Update bitmap index columns
+hologres table alter my_table --bitmap-columns "a:on,b:off"
+
+# Change table owner
+hologres table alter my_table --owner new_user
+
+# Rename table
+hologres table alter my_table --rename new_table
+
+# Dry-run (preview SQL)
+hologres table alter my_table --ttl 3600 --dry-run
+
+# Multiple options (wrapped in BEGIN/COMMIT transaction)
+hologres table alter my_table --add-column "age INT" --ttl 3600
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--add-column "name TYPE"` | Add a column. Repeatable for multiple columns |
+| `--rename-column "old:new"` | Rename a column |
+| `--ttl SECONDS` | Set data TTL in seconds |
+| `--dictionary-encoding-columns` | Set dictionary encoding columns. Format: `"col1:on,col2:off,col3:auto"` |
+| `--bitmap-columns` | Set bitmap index columns. Format: `"col1:on,col2:off"` |
+| `--owner USER` | Change table owner |
+| `--rename NEW_NAME` | Rename the table |
+| `--dry-run` | Only display the SQL without executing |
+
+**Dry-run output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "ALTER TABLE IF EXISTS public.my_table ADD COLUMN age INT",
+    "dry_run": true
+  },
+  "message": "SQL generated (dry-run mode)"
+}
+```
+
+**Executed output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "ALTER TABLE IF EXISTS public.my_table ADD COLUMN age INT",
+    "executed": true
+  },
+  "message": "Table altered successfully"
+}
+```
+
+**Notes:**
+- Multiple options generate multiple SQL statements wrapped in a `BEGIN;...COMMIT;` transaction
+- Single option generates a single SQL statement without transaction wrapping
+- `RENAME TO` is always executed last (since the table name changes)
+- Dictionary encoding and bitmap columns use `CALL SET_TABLE_PROPERTY()` (full replacement)
+- TTL uses `CALL set_table_property()` with `time_to_live_in_seconds`
+
 ## view
 
 View management commands.

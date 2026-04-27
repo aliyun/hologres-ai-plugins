@@ -58,6 +58,7 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres table properties <table>` | Show table properties (orientation, distribution_key, TTL, etc.) |
 | `hologres table drop <table> [--if-exists] [--cascade] --confirm` | Drop a table (dry-run by default) |
 | `hologres table truncate <table> --confirm` | Truncate (empty) a table (dry-run by default) |
+| `hologres table alter TABLE [options] [--dry-run]` | Alter table properties (add column, rename, TTL, etc.) |
 | `hologres partition list <table>` | List partitions of a logical partition table |
 | `hologres view list [--schema S]` | List all views |
 | `hologres view show <view>` | Show view definition and structure |

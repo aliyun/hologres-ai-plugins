@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from hologres_cli.commands.table import _build_table_create_sql
+from hologres_cli.commands.table import _build_table_alter_sql, _build_table_create_sql
 from hologres_cli.connection import DSNError
 from hologres_cli.main import cli
 
@@ -1683,3 +1683,367 @@ class TestTableCreateCmd:
         sql = output["data"]["sql"]
         assert "set_table_property('public.t', 'binlog.level', 'replica')" in sql
         assert "set_table_property('public.t', 'binlog.ttl', '86400')" in sql
+
+
+class TestBuildTableAlterSql:
+    """Tests for _build_table_alter_sql helper."""
+
+    def test_add_single_column(self):
+        sql = _build_table_alter_sql("public", "t", add_columns=("age INT",))
+        assert sql == "ALTER TABLE IF EXISTS public.t ADD COLUMN age INT"
+
+    def test_add_multiple_columns(self):
+        sql = _build_table_alter_sql("public", "t", add_columns=("a INT", "b TEXT"))
+        assert sql == "ALTER TABLE IF EXISTS public.t ADD COLUMN a INT, ADD COLUMN b TEXT"
+
+    def test_add_column_with_constraints(self):
+        sql = _build_table_alter_sql("public", "t", add_columns=("age INT NOT NULL DEFAULT 0",))
+        assert sql == "ALTER TABLE IF EXISTS public.t ADD COLUMN age INT NOT NULL DEFAULT 0"
+
+    def test_rename_column(self):
+        sql = _build_table_alter_sql("public", "t", rename_column="old:new")
+        assert sql == "ALTER TABLE IF EXISTS public.t RENAME COLUMN old TO new"
+
+    def test_rename_column_with_spaces(self):
+        sql = _build_table_alter_sql("public", "t", rename_column="old : new")
+        assert sql == "ALTER TABLE IF EXISTS public.t RENAME COLUMN old TO new"
+
+    def test_ttl(self):
+        sql = _build_table_alter_sql("public", "t", ttl=3600)
+        assert sql == "CALL set_table_property('public.t', 'time_to_live_in_seconds', '3600')"
+
+    def test_dictionary_encoding_columns(self):
+        sql = _build_table_alter_sql("public", "t", dictionary_encoding_columns="a:on,b:off")
+        assert sql == "CALL SET_TABLE_PROPERTY('public.t', 'dictionary_encoding_columns', 'a:on,b:off')"
+
+    def test_bitmap_columns(self):
+        sql = _build_table_alter_sql("public", "t", bitmap_columns="a:on,b:off")
+        assert sql == "CALL SET_TABLE_PROPERTY('public.t', 'bitmap_columns', 'a:on,b:off')"
+
+    def test_owner(self):
+        sql = _build_table_alter_sql("public", "t", owner="new_user")
+        assert sql == "ALTER TABLE IF EXISTS public.t OWNER TO new_user"
+
+    def test_rename_table(self):
+        sql = _build_table_alter_sql("public", "t", rename="new_table")
+        assert sql == "ALTER TABLE IF EXISTS public.t RENAME TO new_table"
+
+    def test_no_options_returns_empty(self):
+        sql = _build_table_alter_sql("public", "t")
+        assert sql == ""
+
+    def test_with_schema(self):
+        sql = _build_table_alter_sql("myschema", "t", ttl=600)
+        assert sql == "CALL set_table_property('myschema.t', 'time_to_live_in_seconds', '600')"
+
+    def test_single_option_no_transaction(self):
+        sql = _build_table_alter_sql("public", "t", ttl=600)
+        assert not sql.startswith("BEGIN;")
+        assert "COMMIT;" not in sql
+
+    def test_multiple_options_wrapped_in_transaction(self):
+        sql = _build_table_alter_sql("public", "t", add_columns=("a INT",), ttl=600)
+        assert sql.startswith("BEGIN;")
+        assert sql.endswith("COMMIT;")
+        assert "ALTER TABLE IF EXISTS public.t ADD COLUMN a INT;" in sql
+        assert "CALL set_table_property('public.t', 'time_to_live_in_seconds', '600');" in sql
+
+    def test_execution_order(self):
+        """Verify the correct order: ADD COLUMN -> RENAME COLUMN -> TTL -> OWNER -> RENAME."""
+        sql = _build_table_alter_sql(
+            "public", "t",
+            add_columns=("a INT",),
+            rename_column="x:y",
+            ttl=600,
+            owner="admin",
+            rename="new_t",
+        )
+        lines = sql.split("\n")
+        stmts = [l for l in lines if l.strip() and l.strip() not in ("BEGIN;", "COMMIT;")]
+        assert "ADD COLUMN" in stmts[0]
+        assert "RENAME COLUMN" in stmts[1]
+        assert "time_to_live_in_seconds" in stmts[2]
+        assert "OWNER TO" in stmts[3]
+        assert "RENAME TO" in stmts[4]
+
+    def test_rename_is_last(self):
+        """Verify RENAME TO is the last statement."""
+        sql = _build_table_alter_sql("public", "t", ttl=600, rename="new_t")
+        lines = sql.split("\n")
+        stmts = [l for l in lines if l.strip() and l.strip() not in ("BEGIN;", "COMMIT;")]
+        assert "RENAME TO" in stmts[-1]
+        assert "time_to_live_in_seconds" in stmts[0]
+
+
+class TestTableAlterCmd:
+    """Tests for table alter command."""
+
+    def test_alter_dry_run(self):
+        """Test dry-run mode returns SQL preview."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--add-column", "age INT", "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["dry_run"] is True
+        assert "ADD COLUMN age INT" in output["data"]["sql"]
+
+    def test_alter_execute(self, mock_get_connection):
+        """Test execute mode calls conn.execute."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--add-column", "age INT"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["executed"] is True
+        assert output["message"] == "Table altered successfully"
+        mock_get_connection.execute.assert_called_once()
+        mock_get_connection.close.assert_called_once()
+
+    def test_alter_no_changes(self):
+        """Test that no options returns NO_CHANGES error."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["table", "alter", "my_table"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "NO_CHANGES"
+
+    def test_alter_add_column(self, mock_get_connection):
+        """Test adding a column."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--add-column", "age INT"
+        ])
+
+        assert result.exit_code == 0
+        sql = mock_get_connection.execute.call_args[0][0]
+        assert "ALTER TABLE IF EXISTS public.my_table ADD COLUMN age INT" == sql
+
+    def test_alter_add_multiple_columns(self):
+        """Test adding multiple columns."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--add-column", "a INT", "--add-column", "b TEXT",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "ADD COLUMN a INT, ADD COLUMN b TEXT" in output["data"]["sql"]
+
+    def test_alter_rename_column(self, mock_get_connection):
+        """Test renaming a column."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--rename-column", "old_col:new_col"
+        ])
+
+        assert result.exit_code == 0
+        sql = mock_get_connection.execute.call_args[0][0]
+        assert "RENAME COLUMN old_col TO new_col" in sql
+
+    def test_alter_rename_column_invalid_format(self):
+        """Test invalid --rename-column format."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--rename-column", "no_colon"
+        ])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_ARGS"
+
+    def test_alter_ttl(self, mock_get_connection):
+        """Test modifying TTL."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--ttl", "3600"
+        ])
+
+        assert result.exit_code == 0
+        sql = mock_get_connection.execute.call_args[0][0]
+        assert "time_to_live_in_seconds" in sql
+        assert "'3600'" in sql
+
+    def test_alter_dictionary_encoding(self, mock_get_connection):
+        """Test modifying dictionary encoding columns."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--dictionary-encoding-columns", "a:on,b:auto"
+        ])
+
+        assert result.exit_code == 0
+        sql = mock_get_connection.execute.call_args[0][0]
+        assert "dictionary_encoding_columns" in sql
+        assert "a:on,b:auto" in sql
+
+    def test_alter_bitmap(self, mock_get_connection):
+        """Test modifying bitmap columns."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--bitmap-columns", "a:on,b:off"
+        ])
+
+        assert result.exit_code == 0
+        sql = mock_get_connection.execute.call_args[0][0]
+        assert "bitmap_columns" in sql
+        assert "a:on,b:off" in sql
+
+    def test_alter_owner(self, mock_get_connection):
+        """Test changing table owner."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--owner", "new_user"
+        ])
+
+        assert result.exit_code == 0
+        sql = mock_get_connection.execute.call_args[0][0]
+        assert "OWNER TO new_user" in sql
+
+    def test_alter_rename_table(self, mock_get_connection):
+        """Test renaming a table."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--rename", "new_table"
+        ])
+
+        assert result.exit_code == 0
+        sql = mock_get_connection.execute.call_args[0][0]
+        assert "RENAME TO new_table" in sql
+
+    def test_alter_connection_error(self, mocker):
+        """Test connection error handling."""
+        mocker.patch("hologres_cli.commands.table.get_connection",
+                     side_effect=DSNError("No DSN configured"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--ttl", "3600"
+        ])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_alter_query_error(self, mock_get_connection):
+        """Test SQL execution failure returns QUERY_ERROR."""
+        mock_get_connection.execute.side_effect = Exception("Query failed")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--ttl", "3600"
+        ])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+        mock_get_connection.close.assert_called_once()
+
+    def test_alter_invalid_identifier(self):
+        """Test invalid table name returns INVALID_INPUT."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "invalid;table", "--ttl", "3600"
+        ])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_INPUT"
+
+    def test_alter_multiple_options(self):
+        """Test multiple options generate transaction-wrapped SQL."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--add-column", "age INT", "--ttl", "3600",
+            "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert sql.startswith("BEGIN;")
+        assert "COMMIT;" in sql
+        assert "ADD COLUMN age INT" in sql
+        assert "time_to_live_in_seconds" in sql
+
+    def test_alter_with_schema(self):
+        """Test schema.table format."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "myschema.my_table", "--ttl", "3600", "--dry-run"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "myschema.my_table" in output["data"]["sql"]
+
+    def test_alter_rename_validates_identifier(self):
+        """Test --rename value is validated."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--rename", "bad;name"
+        ])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_INPUT"
+
+    def test_alter_owner_validates_identifier(self):
+        """Test --owner value is validated."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--owner", "bad;user"
+        ])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_INPUT"
+
+    def test_alter_single_option_no_transaction(self):
+        """Test single option does not wrap in BEGIN/COMMIT."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--ttl", "600", "--dry-run"
+        ])
+
+        output = json.loads(result.output)
+        sql = output["data"]["sql"]
+        assert not sql.startswith("BEGIN;")
+        assert "COMMIT;" not in sql
+
+    def test_alter_transaction_failure(self, mock_get_connection):
+        """Test transaction failure returns QUERY_ERROR."""
+        mock_get_connection.execute.side_effect = Exception("Transaction failed")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table",
+            "--add-column", "a INT", "--ttl", "600"
+        ])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+        mock_get_connection.close.assert_called_once()
+
+    def test_alter_rename_column_validates_identifiers(self):
+        """Test --rename-column validates both old and new column names."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "table", "alter", "my_table", "--rename-column", "ok:bad;col"
+        ])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_INPUT"

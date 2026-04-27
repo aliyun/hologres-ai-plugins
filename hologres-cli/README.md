@@ -219,6 +219,40 @@ hologres table truncate my_table              # dry-run, shows SQL
 hologres table truncate my_table --confirm    # actually truncates
 ```
 
+### Alter Table
+
+```bash
+# Add a column
+hologres table alter my_table --add-column "age INT"
+
+# Add multiple columns
+hologres table alter my_table --add-column "a INT" --add-column "b TEXT"
+
+# Rename a column
+hologres table alter my_table --rename-column "old_col:new_col"
+
+# Modify TTL
+hologres table alter my_table --ttl 3600
+
+# Update dictionary encoding columns
+hologres table alter my_table --dictionary-encoding-columns "a:on,b:auto"
+
+# Update bitmap index columns
+hologres table alter my_table --bitmap-columns "a:on,b:off"
+
+# Change table owner
+hologres table alter my_table --owner new_user
+
+# Rename table
+hologres table alter my_table --rename new_table
+
+# Dry-run (preview SQL without executing)
+hologres table alter my_table --ttl 3600 --dry-run
+
+# Multiple options (wrapped in transaction)
+hologres table alter my_table --add-column "age INT" --ttl 3600
+```
+
 ### View Management
 
 ```bash
