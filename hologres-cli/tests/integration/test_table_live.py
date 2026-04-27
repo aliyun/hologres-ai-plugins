@@ -563,3 +563,399 @@ class TestTableTruncateLive:
             f"SELECT count(*) as cnt FROM {test_table_with_data}"
         )
         assert rows[0]["cnt"] == 0
+
+
+@pytest.mark.integration
+class TestPartitionLifecycleLive:
+    """Integration tests for logical partition lifecycle management (single partition column)."""
+
+    def test_partition_list_empty(self, test_profile, unique_table_name):
+        """New logical partition table should have no partitions."""
+        runner = CliRunner()
+        try:
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "table", "create",
+                "-n", f"public.{unique_table_name}",
+                "-c", "a TEXT, b INT, ds DATE NOT NULL",
+                "--primary-key", "b,ds",
+                "--partition-by", "ds",
+                "--partition-mode", "logical",
+                "--orientation", "column",
+                "--distribution-key", "b",
+            ])
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+
+            result2 = runner.invoke(cli, [
+                "--profile", test_profile, "partition", "list", unique_table_name
+            ])
+            assert result2.exit_code == 0
+            output2 = json.loads(result2.output)
+            assert output2["ok"] is True
+            assert output2["data"]["count"] == 0
+        finally:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "drop",
+                unique_table_name, "--confirm",
+            ])
+
+    def test_partition_create_returns_notice(self, test_profile, unique_table_name):
+        """partition create on logical table returns notice (no-op)."""
+        runner = CliRunner()
+        try:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "create",
+                "-n", f"public.{unique_table_name}",
+                "-c", "a TEXT, b INT, ds DATE NOT NULL",
+                "--primary-key", "b,ds",
+                "--partition-by", "ds",
+                "--partition-mode", "logical",
+                "--orientation", "column",
+            ])
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "partition", "create", unique_table_name
+            ])
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert "notice" in output["data"]
+            assert "automatically" in output["data"]["notice"]
+        finally:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "drop",
+                unique_table_name, "--confirm",
+            ])
+
+    def test_partition_list_after_insert(self, test_profile, unique_table_name, integration_conn):
+        """Insert data should auto-create partitions visible in partition list."""
+        runner = CliRunner()
+        try:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "create",
+                "-n", f"public.{unique_table_name}",
+                "-c", "a TEXT, b INT, ds DATE NOT NULL",
+                "--primary-key", "b,ds",
+                "--partition-by", "ds",
+                "--partition-mode", "logical",
+                "--orientation", "column",
+                "--distribution-key", "b",
+            ])
+
+            integration_conn.execute(
+                f"INSERT INTO {unique_table_name} (a, b, ds) VALUES "
+                f"('x', 1, '2025-04-01'), ('y', 2, '2025-04-02')"
+            )
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "partition", "list", unique_table_name
+            ])
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["count"] >= 2
+        finally:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "drop",
+                unique_table_name, "--confirm",
+            ])
+
+    def test_partition_drop_dry_run(self, test_profile, unique_table_name, integration_conn):
+        """partition drop without --confirm should be dry-run, data unchanged."""
+        runner = CliRunner()
+        try:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "create",
+                "-n", f"public.{unique_table_name}",
+                "-c", "a TEXT, b INT, ds DATE NOT NULL",
+                "--primary-key", "b,ds",
+                "--partition-by", "ds",
+                "--partition-mode", "logical",
+                "--orientation", "column",
+            ])
+            integration_conn.execute(
+                f"INSERT INTO {unique_table_name} (a, b, ds) VALUES ('x', 1, '2025-04-01')"
+            )
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "partition", "drop", unique_table_name,
+                "--partition", "2025-04-01",
+            ])
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["dry_run"] is True
+            assert "DELETE FROM" in output["data"]["sql"]
+
+            rows = integration_conn.execute(
+                f"SELECT count(*) as cnt FROM {unique_table_name}"
+            )
+            assert rows[0]["cnt"] == 1
+        finally:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "drop",
+                unique_table_name, "--confirm",
+            ])
+
+    def test_partition_drop_with_confirm_and_verify(self, test_profile, unique_table_name, integration_conn):
+        """partition drop --confirm should delete data and remove partition."""
+        runner = CliRunner()
+        try:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "create",
+                "-n", f"public.{unique_table_name}",
+                "-c", "a TEXT, b INT, ds DATE NOT NULL",
+                "--primary-key", "b,ds",
+                "--partition-by", "ds",
+                "--partition-mode", "logical",
+                "--orientation", "column",
+                "--distribution-key", "b",
+            ])
+            integration_conn.execute(
+                f"INSERT INTO {unique_table_name} (a, b, ds) VALUES "
+                f"('x', 1, '2025-04-01'), ('y', 2, '2025-04-02')"
+            )
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "partition", "drop", unique_table_name,
+                "--partition", "2025-04-01", "--confirm",
+            ])
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["executed"] is True
+
+            rows = integration_conn.execute(
+                f"SELECT count(*) as cnt FROM {unique_table_name}"
+            )
+            assert rows[0]["cnt"] == 1
+
+            result2 = runner.invoke(cli, [
+                "--profile", test_profile, "partition", "list", unique_table_name
+            ])
+            output2 = json.loads(result2.output)
+            assert output2["ok"] is True
+            # Only the 2025-04-02 partition should remain
+            assert output2["data"]["count"] == 1
+        finally:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "drop",
+                unique_table_name, "--confirm",
+            ])
+
+    def test_partition_lifecycle_with_expiration(self, test_profile, unique_table_name):
+        """Create logical partition table with lifecycle options and verify properties."""
+        runner = CliRunner()
+        try:
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "table", "create",
+                "-n", f"public.{unique_table_name}",
+                "-c", "a TEXT, b INT, ds DATE NOT NULL",
+                "--primary-key", "b,ds",
+                "--partition-by", "ds",
+                "--partition-mode", "logical",
+                "--orientation", "column",
+                "--distribution-key", "b",
+                "--partition-expiration-time", "30 day",
+                "--partition-keep-hot-window", "15 day",
+                "--partition-require-filter", "true",
+            ])
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["executed"] is True
+
+            result2 = runner.invoke(cli, [
+                "--profile", test_profile, "table", "properties", unique_table_name,
+            ])
+            assert result2.exit_code == 0
+            output2 = json.loads(result2.output)
+            assert output2["ok"] is True
+
+            props = {r["property_key"]: r["property_value"] for r in output2["data"]["rows"]}
+            assert props.get("is_logical_partitioned_table") == "true"
+            # Verify at least one partition lifecycle property exists
+            has_expiration = any(
+                k for k in props if "partition_expiration" in k
+            )
+            assert has_expiration
+        finally:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "drop",
+                unique_table_name, "--confirm",
+            ])
+
+
+@pytest.mark.integration
+class TestMultiColumnPartitionLive:
+    """Integration tests for two-column logical partition tables."""
+
+    def test_create_two_column_partition_dry_run(self, test_profile):
+        """Dry-run for two-column logical partition table."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "--profile", test_profile, "table", "create",
+            "-n", "public.dry_run_2col_part",
+            "-c", "a TEXT, b INT, yy TEXT NOT NULL, mm TEXT NOT NULL",
+            "--partition-by", "yy, mm",
+            "--partition-mode", "logical",
+            "--orientation", "column",
+            "--partition-require-filter", "true",
+            "--dry-run",
+        ])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["dry_run"] is True
+        sql = output["data"]["sql"]
+        assert "LOGICAL PARTITION BY LIST (yy, mm)" in sql
+        assert "BEGIN;" not in sql
+        assert "COMMIT;" not in sql
+
+    def test_create_two_column_partition_table(self, test_profile, unique_table_name):
+        """Create and verify a two-column logical partition table."""
+        runner = CliRunner()
+        try:
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "table", "create",
+                "-n", f"public.{unique_table_name}",
+                "-c", "a TEXT, b INT, yy TEXT NOT NULL, mm TEXT NOT NULL",
+                "--partition-by", "yy, mm",
+                "--partition-mode", "logical",
+                "--orientation", "column",
+                "--partition-require-filter", "true",
+            ])
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["executed"] is True
+
+            # Verify table exists
+            result2 = runner.invoke(cli, [
+                "--profile", test_profile, "table", "show", unique_table_name,
+            ])
+            assert result2.exit_code == 0
+            output2 = json.loads(result2.output)
+            assert output2["ok"] is True
+
+            # Verify is logical partition table
+            result3 = runner.invoke(cli, [
+                "--profile", test_profile, "table", "properties", unique_table_name,
+            ])
+            output3 = json.loads(result3.output)
+            props = {r["property_key"]: r["property_value"] for r in output3["data"]["rows"]}
+            assert props.get("is_logical_partitioned_table") == "true"
+        finally:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "drop",
+                unique_table_name, "--confirm",
+            ])
+
+    def test_partition_list_multi_column(self, test_profile, unique_table_name, integration_conn):
+        """Insert data and verify partition list for two-column partition table."""
+        runner = CliRunner()
+        try:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "create",
+                "-n", f"public.{unique_table_name}",
+                "-c", "a TEXT, b INT, yy TEXT NOT NULL, mm TEXT NOT NULL",
+                "--partition-by", "yy, mm",
+                "--partition-mode", "logical",
+                "--orientation", "column",
+            ])
+
+            integration_conn.execute(
+                f"INSERT INTO {unique_table_name} (a, b, yy, mm) VALUES "
+                f"('x', 1, '2025', '04'), ('y', 2, '2025', '05')"
+            )
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "partition", "list", unique_table_name,
+            ])
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["count"] >= 2
+        finally:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "drop",
+                unique_table_name, "--confirm",
+            ])
+
+    def test_partition_drop_multi_column_dry_run(self, test_profile, unique_table_name, integration_conn):
+        """Dry-run partition drop with two-column key=value format."""
+        runner = CliRunner()
+        try:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "create",
+                "-n", f"public.{unique_table_name}",
+                "-c", "a TEXT, b INT, yy TEXT NOT NULL, mm TEXT NOT NULL",
+                "--partition-by", "yy, mm",
+                "--partition-mode", "logical",
+                "--orientation", "column",
+            ])
+
+            integration_conn.execute(
+                f"INSERT INTO {unique_table_name} (a, b, yy, mm) VALUES ('x', 1, '2025', '04')"
+            )
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "partition", "drop", unique_table_name,
+                "--partition", "yy=2025,mm=04",
+            ])
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["dry_run"] is True
+            assert "yy = '2025'" in output["data"]["sql"]
+            assert "mm = '04'" in output["data"]["sql"]
+
+            # Data should still exist
+            rows = integration_conn.execute(
+                f"SELECT count(*) as cnt FROM {unique_table_name}"
+            )
+            assert rows[0]["cnt"] == 1
+        finally:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "drop",
+                unique_table_name, "--confirm",
+            ])
+
+    def test_partition_drop_multi_column_with_confirm(self, test_profile, unique_table_name, integration_conn):
+        """Drop partition with two-column key=value format and verify deletion."""
+        runner = CliRunner()
+        try:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "create",
+                "-n", f"public.{unique_table_name}",
+                "-c", "a TEXT, b INT, yy TEXT NOT NULL, mm TEXT NOT NULL",
+                "--partition-by", "yy, mm",
+                "--partition-mode", "logical",
+                "--orientation", "column",
+            ])
+
+            integration_conn.execute(
+                f"INSERT INTO {unique_table_name} (a, b, yy, mm) VALUES "
+                f"('x', 1, '2025', '04'), ('y', 2, '2025', '05')"
+            )
+
+            result = runner.invoke(cli, [
+                "--profile", test_profile, "partition", "drop", unique_table_name,
+                "--partition", "yy=2025,mm=04", "--confirm",
+            ])
+            assert result.exit_code == 0
+            output = json.loads(result.output)
+            assert output["ok"] is True
+            assert output["data"]["executed"] is True
+
+            # Verify only one record remains
+            rows = integration_conn.execute(
+                f"SELECT count(*) as cnt FROM {unique_table_name}"
+            )
+            assert rows[0]["cnt"] == 1
+        finally:
+            runner.invoke(cli, [
+                "--profile", test_profile, "table", "drop",
+                unique_table_name, "--confirm",
+            ])
