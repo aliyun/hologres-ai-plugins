@@ -1,0 +1,11 @@
+{
+  "name": "hologres-bsi-profile-analysis",
+  "version": "1.0.0",
+  "description": "Hologres BSI（位切片索引）画像分析 Skill，用于用户画像和标签计算。 适用于 BSI 表设计、数据导入、属性标签+行为标签联合人群圈选、 GMV 分析、标签分布统计、Top K 查询、分桶并行计算等场景。 Triggers: \"BSI\", \"位切片索引\", \"画像分析\", \"用户画像\", \"标签计算\", \"人群圈选\", \"行为标签\", \"bsi_build\", \"bsi_sum\", \"bsi_filter\", \"bsi_stat\", \"bsi_topk\", \"roaring bitmap profile\", \"标签圈人\", \"分桶计算\"",
+  "publishConfig": {
+    "registry": "https://contextlab.alibaba-inc.com/skill"
+  },
+  "aoneKit": {
+    "generated": true
+  }
+}
