@@ -33,7 +33,8 @@ class TestTableListLive:
         """Test listing tables with --schema public filter."""
         runner = CliRunner()
         result = runner.invoke(
-            cli, ["--profile", test_profile, "table", "list", "--schema", "public"]
+            cli, ["--profile", test_profile, "table",
+                  "list", "--schema", "public"]
         )
 
         assert result.exit_code == 0
@@ -48,7 +49,8 @@ class TestTableListLive:
         """Test listing tables in table format output."""
         runner = CliRunner()
         result = runner.invoke(
-            cli, ["--profile", test_profile, "--format", "table", "table", "list"]
+            cli, ["--profile", test_profile,
+                  "--format", "table", "table", "list"]
         )
 
         assert result.exit_code == 0
@@ -86,7 +88,8 @@ class TestTableShowLive:
         assert result.exit_code == 0
         output = json.loads(result.output)
 
-        column_names = [col["column_name"] for col in output["data"]["columns"]]
+        column_names = [col["column_name"]
+                        for col in output["data"]["columns"]]
         assert "id" in column_names
         assert "name" in column_names
 
@@ -100,7 +103,8 @@ class TestTableShowLive:
         """Test showing a non-existent table returns TABLE_NOT_FOUND."""
         runner = CliRunner()
         result = runner.invoke(
-            cli, ["--profile", test_profile, "table", "show", "nonexistent_table_xyz"]
+            cli, ["--profile", test_profile, "table",
+                  "show", "nonexistent_table_xyz"]
         )
 
         assert result.exit_code == 0
@@ -117,7 +121,8 @@ class TestTableDumpLive:
         """Test dumping table DDL via hg_dump_script."""
         runner = CliRunner()
         result = runner.invoke(
-            cli, ["--profile", test_profile, "table", "dump", f"public.{test_table}"]
+            cli, ["--profile", test_profile, "table",
+                  "dump", f"public.{test_table}"]
         )
 
         # hg_dump_script may not be available in all Hologres versions
@@ -130,7 +135,8 @@ class TestTableDumpLive:
         """Test dumping a non-existent table."""
         runner = CliRunner()
         result = runner.invoke(
-            cli, ["--profile", test_profile, "table", "dump", "public.nonexistent_xyz"]
+            cli, ["--profile", test_profile, "table",
+                  "dump", "public.nonexistent_xyz"]
         )
 
         assert result.exit_code == 0
@@ -146,7 +152,8 @@ class TestTableSizeLive:
         """Test getting table storage size."""
         runner = CliRunner()
         result = runner.invoke(
-            cli, ["--profile", test_profile, "table", "size", f"public.{test_table}"]
+            cli, ["--profile", test_profile, "table",
+                  "size", f"public.{test_table}"]
         )
 
         assert result.exit_code == 0
@@ -160,7 +167,8 @@ class TestTableSizeLive:
         """Test getting size of a non-existent table."""
         runner = CliRunner()
         result = runner.invoke(
-            cli, ["--profile", test_profile, "table", "size", "public.nonexistent_xyz"]
+            cli, ["--profile", test_profile, "table",
+                  "size", "public.nonexistent_xyz"]
         )
 
         assert result.exit_code == 0
@@ -191,7 +199,8 @@ class TestTablePropertiesLive:
         """Test properties of a non-existent table."""
         runner = CliRunner()
         result = runner.invoke(
-            cli, ["--profile", test_profile, "table", "properties", "nonexistent_table_xyz"]
+            cli, ["--profile", test_profile, "table",
+                  "properties", "nonexistent_table_xyz"]
         )
 
         assert result.exit_code == 0
@@ -279,7 +288,8 @@ class TestTableCreateLive:
             output2 = json.loads(result2.output)
             assert output2["ok"] is True
 
-            props = {r["property_key"]: r["property_value"] for r in output2["data"]["rows"]}
+            props = {r["property_key"]: r["property_value"]
+                     for r in output2["data"]["rows"]}
             assert props.get("orientation") == "column"
         finally:
             runner.invoke(cli, [
@@ -779,7 +789,8 @@ class TestPartitionLifecycleLive:
             output2 = json.loads(result2.output)
             assert output2["ok"] is True
 
-            props = {r["property_key"]: r["property_value"] for r in output2["data"]["rows"]}
+            props = {r["property_key"]: r["property_value"]
+                     for r in output2["data"]["rows"]}
             assert props.get("is_logical_partitioned_table") == "true"
             # Verify at least one partition lifecycle property exists
             has_expiration = any(
@@ -850,7 +861,8 @@ class TestMultiColumnPartitionLive:
                 "--profile", test_profile, "table", "properties", unique_table_name,
             ])
             output3 = json.loads(result3.output)
-            props = {r["property_key"]: r["property_value"] for r in output3["data"]["rows"]}
+            props = {r["property_key"]: r["property_value"]
+                     for r in output3["data"]["rows"]}
             assert props.get("is_logical_partitioned_table") == "true"
         finally:
             runner.invoke(cli, [
@@ -1004,7 +1016,8 @@ class TestTableAlterLive:
             "--profile", test_profile, "table", "show", test_table,
         ])
         output_after = json.loads(result_after.output)
-        col_names_after = [c["column_name"] for c in output_after["data"]["columns"]]
+        col_names_after = [c["column_name"]
+                           for c in output_after["data"]["columns"]]
         assert "age" not in col_names_after
         assert len(output_after["data"]["columns"]) == col_count_before
 
@@ -1085,7 +1098,8 @@ class TestTableAlterLive:
             assert "name" not in col_names
             assert "full_name" in col_names
         finally:
-            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
+            integration_conn.execute(
+                f"DROP TABLE IF EXISTS {unique_table_name}")
 
     # --- ttl ---
 
@@ -1099,11 +1113,12 @@ class TestTableAlterLive:
 
             result = runner.invoke(cli, [
                 "--profile", test_profile, "table", "alter", unique_table_name,
-                "--ttl", "3600",
+                "--ttl", "864000",
             ])
 
             assert result.exit_code == 0
             output = json.loads(result.output)
+            print(output)
             assert output["ok"] is True
             assert output["data"]["executed"] is True
 
@@ -1114,10 +1129,12 @@ class TestTableAlterLive:
             assert result2.exit_code == 0
             output2 = json.loads(result2.output)
             assert output2["ok"] is True
-            props = {r["property_key"]: r["property_value"] for r in output2["data"]["rows"]}
-            assert props.get("time_to_live_in_seconds") == "3600"
+            props = {r["property_key"]: r["property_value"]
+                     for r in output2["data"]["rows"]}
+            assert props.get("time_to_live_in_seconds") == "864000"
         finally:
-            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
+            integration_conn.execute(
+                f"DROP TABLE IF EXISTS {unique_table_name}")
 
     # --- dictionary-encoding-columns ---
 
@@ -1146,10 +1163,12 @@ class TestTableAlterLive:
             assert result2.exit_code == 0
             output2 = json.loads(result2.output)
             assert output2["ok"] is True
-            props = {r["property_key"]: r["property_value"] for r in output2["data"]["rows"]}
+            props = {r["property_key"]: r["property_value"]
+                     for r in output2["data"]["rows"]}
             assert "val" in props.get("dictionary_encoding_columns", "")
         finally:
-            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
+            integration_conn.execute(
+                f"DROP TABLE IF EXISTS {unique_table_name}")
 
     # --- bitmap-columns ---
 
@@ -1178,10 +1197,12 @@ class TestTableAlterLive:
             assert result2.exit_code == 0
             output2 = json.loads(result2.output)
             assert output2["ok"] is True
-            props = {r["property_key"]: r["property_value"] for r in output2["data"]["rows"]}
+            props = {r["property_key"]: r["property_value"]
+                     for r in output2["data"]["rows"]}
             assert "val" in props.get("bitmap_columns", "")
         finally:
-            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
+            integration_conn.execute(
+                f"DROP TABLE IF EXISTS {unique_table_name}")
 
     # --- owner (dry-run only, actual execution depends on available users) ---
 
@@ -1236,7 +1257,8 @@ class TestTableAlterLive:
             assert output3["ok"] is False
         finally:
             # Clean up both names since rename may or may not have succeeded
-            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
+            integration_conn.execute(
+                f"DROP TABLE IF EXISTS {unique_table_name}")
             integration_conn.execute(f"DROP TABLE IF EXISTS {new_name}")
 
     # --- no changes ---
@@ -1265,11 +1287,12 @@ class TestTableAlterLive:
 
             result = runner.invoke(cli, [
                 "--profile", test_profile, "table", "alter", unique_table_name,
-                "--add-column", "age INT", "--ttl", "3600",
+                "--add-column", "age INT", "--ttl", "864000",
             ])
 
             assert result.exit_code == 0
             output = json.loads(result.output)
+            print(output)
             assert output["ok"] is True
             assert output["data"]["executed"] is True
 
@@ -1293,10 +1316,12 @@ class TestTableAlterLive:
             ])
             assert result3.exit_code == 0
             output3 = json.loads(result3.output)
-            props = {r["property_key"]: r["property_value"] for r in output3["data"]["rows"]}
-            assert props.get("time_to_live_in_seconds") == "3600"
+            props = {r["property_key"]: r["property_value"]
+                     for r in output3["data"]["rows"]}
+            assert props.get("time_to_live_in_seconds") == "864000"
         finally:
-            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
+            integration_conn.execute(
+                f"DROP TABLE IF EXISTS {unique_table_name}")
 
     # --- schema.table format ---
 
@@ -1328,4 +1353,5 @@ class TestTableAlterLive:
             col_names = [c["column_name"] for c in output2["data"]["columns"]]
             assert "x" in col_names
         finally:
-            integration_conn.execute(f"DROP TABLE IF EXISTS {unique_table_name}")
+            integration_conn.execute(
+                f"DROP TABLE IF EXISTS {unique_table_name}")
