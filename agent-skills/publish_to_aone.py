@@ -2,8 +2,8 @@
 """Publish agent skills to Aone (contextlab) platform.
 
 Reads skill metadata (name, version, description) from each skill's
-package.json file. The script does NOT generate package.json — it treats
-package.json as the source of truth.
+package.json file. If a skill has no package.json, one is automatically
+generated from the SKILL.md YAML frontmatter and written to disk.
 
 Requires AONE_TOKEN environment variable for authentication::
 
@@ -35,6 +35,7 @@ import base64
 import io
 import json
 import os
+import re
 import sys
 import tarfile
 from pathlib import Path
@@ -52,12 +53,77 @@ PLATFORM = "holomcp"
 EXCLUDE_NAMES = {"tests", "__pycache__", ".pyc", "pyproject.toml", ".pytest_cache"}
 
 
-def read_package_json(skill_dir: Path) -> dict:
-    """Read package.json from skill directory."""
+def parse_skill_md_frontmatter(skill_dir: Path) -> dict:
+    """Parse YAML frontmatter from SKILL.md to extract name and description.
+
+    Uses simple string parsing to avoid requiring pyyaml.
+    """
+    fallback = {"name": skill_dir.name, "description": ""}
+    skill_md = skill_dir / "SKILL.md"
+    if not skill_md.exists():
+        return fallback
+
+    content = skill_md.read_text(encoding="utf-8")
+    if not content.startswith("---"):
+        return fallback
+
+    end = content.find("---", 3)
+    if end == -1:
+        return fallback
+
+    frontmatter = content[3:end]
+    result = dict(fallback)
+
+    # Extract name (single-line value)
+    m = re.search(r"^name:\s*(.+)$", frontmatter, re.MULTILINE)
+    if m:
+        result["name"] = m.group(1).strip()
+
+    # Extract description (supports multiline YAML | syntax)
+    m = re.search(r"^description:\s*(.*)$", frontmatter, re.MULTILINE)
+    if m:
+        first_line = m.group(1).strip()
+        if first_line == "|" or first_line == ">":
+            # Collect indented continuation lines
+            lines = []
+            for line in frontmatter[m.end():].splitlines():
+                if line and not line[0].isspace():
+                    break
+                lines.append(line.strip())
+            result["description"] = " ".join(l for l in lines if l)
+        elif first_line:
+            result["description"] = first_line
+
+    return result
+
+
+def generate_package_json(skill_dir: Path) -> dict:
+    """Generate a package.json from SKILL.md frontmatter and write it to disk."""
+    meta = parse_skill_md_frontmatter(skill_dir)
+    pkg = {
+        "name": meta["name"],
+        "version": "1.0.0",
+        "description": meta["description"],
+        "publishConfig": {
+            "registry": "https://contextlab.alibaba-inc.com/skill"
+        },
+        "aoneKit": {
+            "generated": True
+        },
+    }
     pkg_path = skill_dir / "package.json"
-    if not pkg_path.exists():
-        raise FileNotFoundError(f"package.json not found in {skill_dir}")
-    return json.loads(pkg_path.read_text(encoding="utf-8"))
+    pkg_path.write_text(
+        json.dumps(pkg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    return pkg
+
+
+def read_package_json(skill_dir: Path) -> dict:
+    """Read package.json from skill directory. Generate one if missing."""
+    pkg_path = skill_dir / "package.json"
+    if pkg_path.exists():
+        return json.loads(pkg_path.read_text(encoding="utf-8"))
+    return generate_package_json(skill_dir)
 
 
 def update_package_json_version(skill_dir: Path, version: str) -> None:
@@ -244,14 +310,18 @@ Examples:
     for skill_dir in skills:
         print(f"--- {skill_dir.name} ---")
 
-        # Read metadata from package.json
+        # Read metadata from package.json (auto-generated if missing)
+        pkg_existed = (skill_dir / "package.json").exists()
         try:
             pkg = read_package_json(skill_dir)
-        except (FileNotFoundError, json.JSONDecodeError) as e:
+        except (json.JSONDecodeError, OSError) as e:
             print(f"  ERROR: Failed to read package.json — {e}")
             fail_count += 1
             print()
             continue
+
+        if not pkg_existed:
+            print(f"  Generated package.json from SKILL.md frontmatter")
 
         name = pkg.get("name", skill_dir.name)
         description = pkg.get("description", "")
