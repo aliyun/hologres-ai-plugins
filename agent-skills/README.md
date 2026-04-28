@@ -98,6 +98,9 @@ Publish individual skills to the Aone platform:
 ```bash
 cd agent-skills
 
+# Set authentication token
+export AONE_TOKEN=<your-token>
+
 # Publish all skills
 python publish_to_aone.py
 

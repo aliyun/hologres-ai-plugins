@@ -98,6 +98,9 @@ python upload_to_pypi.py --publish --version 0.2.0
 ```bash
 cd agent-skills
 
+# 设置认证 Token
+export AONE_TOKEN=<your-token>
+
 # 发布全部技能
 python publish_to_aone.py
 

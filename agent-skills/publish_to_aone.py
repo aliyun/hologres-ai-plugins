@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Publish agent skills to Aone (contextlab) platform.
 
+Requires AONE_TOKEN environment variable for authentication::
+
+    export AONE_TOKEN=<your-token>
+
 Usage::
 
     # Publish all skills
@@ -26,6 +30,7 @@ import argparse
 import base64
 import io
 import json
+import os
 import re
 import sys
 import tarfile
@@ -171,7 +176,8 @@ def create_tgz(skill_dir: Path) -> str:
 
 
 def publish_skill(
-    name: str, version: str, data_b64: str, package_json: dict, api_url: str
+    name: str, version: str, data_b64: str, package_json: dict, api_url: str,
+    token: str,
 ) -> bool:
     """POST skill to Aone API. Returns True on success."""
     body = {
@@ -191,10 +197,13 @@ def publish_skill(
     }
 
     payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     req = Request(
         api_url,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
 
@@ -264,6 +273,12 @@ Examples:
 
     args = parser.parse_args()
 
+    aone_token = os.environ.get("AONE_TOKEN", "")
+    if not aone_token and not args.dry_run:
+        print("ERROR: AONE_TOKEN environment variable is not set.")
+        print("Please set it: export AONE_TOKEN=<your-token>")
+        sys.exit(1)
+
     skills = discover_skills(SKILLS_DIR, args.skill)
     print(f"Skills to publish: {[s.name for s in skills]}")
     print()
@@ -312,7 +327,7 @@ Examples:
             print(f"  [dry-run] packageJson: {json.dumps(pkg, indent=2)}")
             success_count += 1
         else:
-            if publish_skill(name, version, data_b64, pkg, args.api_url):
+            if publish_skill(name, version, data_b64, pkg, args.api_url, aone_token):
                 success_count += 1
             else:
                 fail_count += 1
