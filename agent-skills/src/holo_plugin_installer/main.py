@@ -39,6 +39,9 @@ AVAILABLE_SKILLS = [
     "hologres-cli",
     "hologres-query-optimizer",
     "hologres-slow-query-analysis",
+    "hologres-privileges",
+    "hologres-uv-compute",
+    "hologres-schema-generator",
 ]
 
 
@@ -184,6 +187,9 @@ def main():
                     questionary.Choice("hologres-cli", checked=True),
                     "hologres-query-optimizer",
                     "hologres-slow-query-analysis",
+                    "hologres-privileges",
+                    "hologres-uv-compute",
+                    "hologres-schema-generator",
                 ],
                 instruction="(Select multiple with Space)",
                 style=_NO_BG_STYLE,
