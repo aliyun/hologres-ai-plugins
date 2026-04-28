@@ -1,0 +1,11 @@
+{
+  "name": "hologres-slow-query-analysis",
+  "version": "1.0.0",
+  "description": "Hologres slow query log analysis and diagnosis skill. Use for analyzing slow queries, failed queries, query performance diagnosis, and log management in Alibaba Cloud Hologres. Triggers: \"hologres slow query\", \"hg_query_log\", \"query diagnosis\", \"慢Query分析\", \"Hologres性能诊断\"",
+  "publishConfig": {
+    "registry": "https://contextlab.alibaba-inc.com/skill"
+  },
+  "aoneKit": {
+    "generated": true
+  }
+}

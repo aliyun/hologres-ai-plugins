@@ -71,7 +71,7 @@ $ hologres-agent-skills
 
 ## Development
 
-### Build & Publish
+### Build & Publish to PyPI
 
 ```bash
 cd agent-skills
@@ -91,6 +91,29 @@ python upload_to_pypi.py --publish
 python upload_to_pypi.py --publish --version 0.2.0
 ```
 
+### Publish to Aone (contextlab)
+
+Publish individual skills to the Aone platform:
+
+```bash
+cd agent-skills
+
+# Publish all skills
+python publish_to_aone.py
+
+# Publish a specific skill
+python publish_to_aone.py --skill hologres-cli
+
+# Dry-run (preview without publishing)
+python publish_to_aone.py --dry-run
+
+# Bump patch version before publishing
+python publish_to_aone.py --bump
+
+# Set a specific version
+python publish_to_aone.py --version 1.2.0
+```
+
 ### Project Structure
 
 ```
@@ -106,6 +129,7 @@ agent-skills/
 ├── pyproject.toml
 ├── MANIFEST.in
 ├── upload_to_pypi.py
+├── publish_to_aone.py
 ├── README.md
 └── README_CN.md
 ```

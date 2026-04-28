@@ -71,7 +71,7 @@ $ hologres-agent-skills
 
 ## 开发
 
-### 构建与发布
+### 构建与发布到 PyPI
 
 ```bash
 cd agent-skills
@@ -91,6 +91,29 @@ python upload_to_pypi.py --publish
 python upload_to_pypi.py --publish --version 0.2.0
 ```
 
+### 发布到 Aone (contextlab) 平台
+
+将单个技能发布到 Aone 平台：
+
+```bash
+cd agent-skills
+
+# 发布全部技能
+python publish_to_aone.py
+
+# 发布指定技能
+python publish_to_aone.py --skill hologres-cli
+
+# 预览模式（不实际发布）
+python publish_to_aone.py --dry-run
+
+# 自动递增 patch 版本后发布
+python publish_to_aone.py --bump
+
+# 指定版本号
+python publish_to_aone.py --version 1.2.0
+```
+
 ### 项目结构
 
 ```
@@ -106,6 +129,7 @@ agent-skills/
 ├── pyproject.toml
 ├── MANIFEST.in
 ├── upload_to_pypi.py
+├── publish_to_aone.py
 ├── README.md
 └── README_CN.md
 ```

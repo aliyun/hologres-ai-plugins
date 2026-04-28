@@ -1,0 +1,11 @@
+{
+  "name": "hologres-query-optimizer",
+  "version": "1.0.0",
+  "description": "Hologres Query Execution Plan Analyzer and Optimizer. Use for analyzing SQL performance issues, understanding EXPLAIN/EXPLAIN ANALYZE output, interpreting query operators, and providing optimization recommendations for Hologres queries. Triggers: \"hologres explain\", \"query plan\", \"execution plan\", \"sql optimization\", \"query performance\", \"hologres performance\", \"slow query\", \"query optimizer\", \"explain analyze\"",
+  "publishConfig": {
+    "registry": "https://contextlab.alibaba-inc.com/skill"
+  },
+  "aoneKit": {
+    "generated": true
+  }
+}
