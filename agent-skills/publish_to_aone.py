@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Publish agent skills to Aone (contextlab) platform.
 
+Reads skill metadata (name, version, description) from each skill's
+package.json file. The script does NOT generate package.json — it treats
+package.json as the source of truth.
+
 Requires AONE_TOKEN environment variable for authentication::
 
     export AONE_TOKEN=<your-token>
@@ -16,10 +20,10 @@ Usage::
     # Dry-run (preview without publishing)
     python publish_to_aone.py --dry-run
 
-    # Bump patch version before publishing
+    # Bump patch version in package.json before publishing
     python publish_to_aone.py --bump
 
-    # Bump to a specific version
+    # Set a specific version in package.json before publishing
     python publish_to_aone.py --version 1.2.0
 
     # Custom API URL
@@ -31,7 +35,6 @@ import base64
 import io
 import json
 import os
-import re
 import sys
 import tarfile
 from pathlib import Path
@@ -49,47 +52,22 @@ PLATFORM = "holomcp"
 EXCLUDE_NAMES = {"tests", "__pycache__", ".pyc", "pyproject.toml", ".pytest_cache"}
 
 
-def parse_frontmatter(skill_md_path: Path) -> dict[str, str]:
-    """Parse YAML frontmatter from SKILL.md using simple string parsing.
+def read_package_json(skill_dir: Path) -> dict:
+    """Read package.json from skill directory."""
+    pkg_path = skill_dir / "package.json"
+    if not pkg_path.exists():
+        raise FileNotFoundError(f"package.json not found in {skill_dir}")
+    return json.loads(pkg_path.read_text(encoding="utf-8"))
 
-    Returns dict with 'name' and 'description' keys.
-    """
-    text = skill_md_path.read_text(encoding="utf-8")
-    m = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
-    if not m:
-        raise ValueError(f"No frontmatter found in {skill_md_path}")
 
-    frontmatter = m.group(1)
-    result = {}
-
-    # Parse name
-    name_match = re.search(r"^name:\s*(.+)$", frontmatter, re.MULTILINE)
-    if name_match:
-        result["name"] = name_match.group(1).strip()
-
-    # Parse description (handles multi-line YAML block scalar with |)
-    desc_match = re.search(
-        r"^description:\s*\|?\s*\n((?:\s+.+\n?)*)", frontmatter, re.MULTILINE
+def update_package_json_version(skill_dir: Path, version: str) -> None:
+    """Update only the version field in package.json, preserving all other fields."""
+    pkg_path = skill_dir / "package.json"
+    pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
+    pkg["version"] = version
+    pkg_path.write_text(
+        json.dumps(pkg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-    if desc_match:
-        lines = desc_match.group(1).strip().splitlines()
-        result["description"] = " ".join(line.strip() for line in lines)
-
-    return result
-
-
-def read_version(skill_dir: Path) -> str:
-    """Read version from VERSION file, defaulting to '1.0.0'."""
-    version_file = skill_dir / "VERSION"
-    if version_file.exists():
-        return version_file.read_text(encoding="utf-8").strip()
-    return "1.0.0"
-
-
-def write_version(skill_dir: Path, version: str) -> None:
-    """Write version to VERSION file."""
-    version_file = skill_dir / "VERSION"
-    version_file.write_text(version + "\n", encoding="utf-8")
 
 
 def bump_patch(version: str) -> str:
@@ -121,29 +99,6 @@ def discover_skills(skills_dir: Path, skill_filter: str | None = None) -> list[P
         return matched
 
     return candidates
-
-
-def generate_package_json(
-    skill_dir: Path, name: str, version: str, description: str
-) -> dict:
-    """Generate and write package.json to skill directory. Returns the dict."""
-    pkg = {
-        "name": name,
-        "version": version,
-        "description": description,
-        "publishConfig": {
-            "registry": "https://contextlab.alibaba-inc.com/skill",
-        },
-        "aoneKit": {
-            "generated": True,
-        },
-    }
-
-    pkg_path = skill_dir / "package.json"
-    pkg_path.write_text(
-        json.dumps(pkg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
-    return pkg
 
 
 def _should_exclude(tarinfo: tarfile.TarInfo) -> tarfile.TarInfo | None:
@@ -258,12 +213,12 @@ Examples:
     version_group.add_argument(
         "--bump",
         action="store_true",
-        help="Auto-increment patch version before publishing",
+        help="Auto-increment patch version in package.json before publishing",
     )
     version_group.add_argument(
         "--version",
         dest="set_version",
-        help="Set a specific version before publishing (e.g., 1.2.0)",
+        help="Set a specific version in package.json before publishing (e.g., 1.2.0)",
     )
     parser.add_argument(
         "--api-url",
@@ -289,33 +244,31 @@ Examples:
     for skill_dir in skills:
         print(f"--- {skill_dir.name} ---")
 
-        # Read metadata from SKILL.md
+        # Read metadata from package.json
         try:
-            meta = parse_frontmatter(skill_dir / "SKILL.md")
-        except (ValueError, FileNotFoundError) as e:
-            print(f"  ERROR: Failed to read SKILL.md — {e}")
+            pkg = read_package_json(skill_dir)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"  ERROR: Failed to read package.json — {e}")
             fail_count += 1
             print()
             continue
 
-        name = meta.get("name", skill_dir.name)
-        description = meta.get("description", "")
-
-        # Determine version
-        version = read_version(skill_dir)
+        name = pkg.get("name", skill_dir.name)
+        description = pkg.get("description", "")
+        version = pkg.get("version", "1.0.0")
 
         if args.bump:
             version = bump_patch(version)
-            write_version(skill_dir, version)
+            update_package_json_version(skill_dir, version)
+            pkg["version"] = version
             print(f"  Bumped version to {version}")
         elif args.set_version:
             version = args.set_version
-            write_version(skill_dir, version)
+            update_package_json_version(skill_dir, version)
+            pkg["version"] = version
             print(f"  Set version to {version}")
 
-        # Generate and write package.json
-        pkg = generate_package_json(skill_dir, name, version, description)
-        print(f"  Generated package.json: {name}@{version}")
+        print(f"  Using package.json: {name}@{version}")
 
         # Create tgz
         data_b64 = create_tgz(skill_dir)
