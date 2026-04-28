@@ -55,7 +55,7 @@ def integration_conn(integration_dsn: str) -> Generator[HologresConnection, None
 
     Connection is automatically closed after the test.
     """
-    conn = HologresConnection(integration_dsn)
+    conn = HologresConnection(integration_dsn, read_only=False)
     yield conn
     conn.close()
 
@@ -63,7 +63,7 @@ def integration_conn(integration_dsn: str) -> Generator[HologresConnection, None
 @pytest.fixture
 def integration_conn_no_autocommit(integration_dsn: str) -> Generator[HologresConnection, None, None]:
     """Create a real Hologres connection without autocommit for transaction tests."""
-    conn = HologresConnection(integration_dsn, autocommit=False)
+    conn = HologresConnection(integration_dsn, autocommit=False, read_only=False)
     yield conn
     conn.close()
 
