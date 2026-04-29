@@ -39,9 +39,10 @@ AVAILABLE_SKILLS = [
     "hologres-cli",
     "hologres-query-optimizer",
     "hologres-slow-query-analysis",
+    "hologres-schema-generator",
     "hologres-privileges",
     "hologres-uv-compute",
-    "hologres-schema-generator",
+    "hologres-bsi-profile-analysis",
 ]
 
 

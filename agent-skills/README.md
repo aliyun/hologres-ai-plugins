@@ -4,11 +4,17 @@ An interactive installer that distributes Hologres AI agent skills to various AI
 
 ## Included Skills
 
-| Skill | Description |
-|-------|-------------|
-| `hologres-cli` | Teaches AI agents how to use the Hologres CLI tool — command usage, safety features, output formats, and best practices |
-| `hologres-query-optimizer` | Enables AI agents to analyze and optimize Hologres SQL query execution plans |
-| `hologres-slow-query-analysis` | Equips AI agents to diagnose slow/failed queries using `hologres.hg_query_log` |
+| Skill | Depends on | Description |
+|-------|------------|-------------|
+| `hologres-cli` | — | Teaches AI agents how to use the Hologres CLI tool — command usage, safety features, output formats, and best practices |
+| `hologres-query-optimizer` | `hologres-cli` | Enables AI agents to analyze and optimize Hologres SQL query execution plans |
+| `hologres-slow-query-analysis` | `hologres-cli` | Equips AI agents to diagnose slow/failed queries using `hologres.hg_query_log` |
+| `hologres-schema-generator` | `hologres-cli` | Hologres DDL schema design and table creation expert — storage format selection, index configuration, partition design |
+| `hologres-privileges` | `hologres-cli` | Hologres privilege management using PostgreSQL standard GRANT/REVOKE authorization model |
+| `hologres-uv-compute` | `hologres-cli` | Real-time UV/PV computation pipelines using Dynamic Tables and RoaringBitmap |
+| `hologres-bsi-profile-analysis` | `hologres-cli` | BSI (Bit-Sliced Index) based user profile analysis — tag computation, crowd targeting, GMV analysis |
+
+> **Note:** All skills except `hologres-cli` depend on it as the foundational skill. SQL execution, GUC management, and data operations are performed through CLI commands. Install `hologres-cli` skill first.
 
 ## Supported AI Tools
 
@@ -65,6 +71,10 @@ $ hologres-agent-skills
   ● hologres-cli
   ● hologres-query-optimizer
   ● hologres-slow-query-analysis
+  ● hologres-schema-generator
+  ● hologres-privileges
+  ● hologres-uv-compute
+  ● hologres-bsi-profile-analysis
 
 ✨ Installation complete
 ```
@@ -124,7 +134,11 @@ agent-skills/
 ├── skills/                          # Source skills
 │   ├── hologres-cli/
 │   ├── hologres-query-optimizer/
-│   └── hologres-slow-query-analysis/
+│   ├── hologres-slow-query-analysis/
+│   ├── hologres-schema-generator/
+│   ├── hologres-privileges/
+│   ├── hologres-uv-compute/
+│   └── hologres-bsi-profile-analysis/
 ├── src/
 │   └── holo_plugin_installer/
 │       ├── __init__.py

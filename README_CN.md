@@ -13,7 +13,11 @@ hologres-ai-plugins/
     ├── skills/
     │   ├── hologres-cli/                  # CLI 使用技能
     │   ├── hologres-query-optimizer/      # 查询执行计划分析技能
-    │   └── hologres-slow-query-analysis/  # 慢查询诊断技能
+    │   ├── hologres-slow-query-analysis/  # 慢查询诊断技能
+    │   ├── hologres-schema-generator/     # DDL 建表专家技能
+    │   ├── hologres-privileges/           # 权限管理技能
+    │   ├── hologres-uv-compute/           # UV/PV 去重计算技能
+    │   └── hologres-bsi-profile-analysis/ # BSI 画像分析技能
     ├── pyproject.toml
     └── upload_to_pypi.py
 ```
@@ -154,6 +158,42 @@ uvx hologres-agent-skills
 - 识别失败查询和错误模式
 - 分析查询阶段瓶颈（优化 / 启动 / 执行）
 - 跨时间段对比查询性能
+
+#### hologres-schema-generator
+
+Hologres DDL 建表专家，生成优化的建表语句：
+
+- 存储格式选择（列存 / 行存 / 行列共存）
+- 索引配置（distribution_key、clustering_key、bitmap_columns、event_time_column）
+- 分区表设计（物理分区 / 逻辑分区）
+- 数据类型推荐和 Schema 优化
+
+#### hologres-privileges
+
+Hologres 权限管理技能，基于 PostgreSQL 标准授权模型（专家权限模型）：
+
+- 用户创建与角色管理
+- Schema / 表 / 列 / 视图级别细粒度授权
+- 默认权限配置（ALTER DEFAULT PRIVILEGES）
+- 权限问题诊断与排查
+
+#### hologres-uv-compute
+
+基于 Dynamic Table + RoaringBitmap 的实时 UV/PV 去重计算方案：
+
+- RoaringBitmap 位图去重（亿级用户秒级响应）
+- Dynamic Table 增量刷新流水线
+- 灵活时间范围 UV 聚合（`RB_OR_AGG` 跨天合并）
+- UID 字典编码（文本转整数）
+
+#### hologres-bsi-profile-analysis
+
+基于 BSI（位切片索引）的用户画像分析方案：
+
+- 属性标签 + 行为标签联合人群圈选
+- GMV 分析、标签分布统计、Top K 查询
+- 分桶并行计算
+- BSI 函数使用（bsi_build、bsi_sum、bsi_filter、bsi_stat、bsi_topk）
 
 ## 环境要求
 

@@ -13,7 +13,11 @@ hologres-ai-plugins/
     ├── skills/
     │   ├── hologres-cli/                  # CLI usage skill
     │   ├── hologres-query-optimizer/      # Query execution plan analysis skill
-    │   └── hologres-slow-query-analysis/  # Slow query diagnosis skill
+    │   ├── hologres-slow-query-analysis/  # Slow query diagnosis skill
+    │   ├── hologres-schema-generator/     # DDL schema design expert skill
+    │   ├── hologres-privileges/           # Privilege management skill
+    │   ├── hologres-uv-compute/           # UV/PV deduplication skill
+    │   └── hologres-bsi-profile-analysis/ # BSI profile analysis skill
     ├── pyproject.toml
     └── upload_to_pypi.py
 ```
@@ -154,6 +158,42 @@ Equips the AI agent to diagnose slow and failed queries using the `hologres.hg_q
 - Identify failed queries and error patterns
 - Analyze query phase bottlenecks (optimization / startup / execution)
 - Compare performance across time periods
+
+#### hologres-schema-generator
+
+Hologres DDL schema design and table creation expert:
+
+- Storage format selection (column / row / row-column)
+- Index configuration (distribution_key, clustering_key, bitmap_columns, event_time_column)
+- Partition table design (physical / logical partitions)
+- Data type recommendations and schema optimization
+
+#### hologres-privileges
+
+Hologres privilege management using PostgreSQL standard authorization model (expert permission model):
+
+- User creation and role management
+- Fine-grained GRANT/REVOKE at Schema / table / column / view level
+- Default privileges configuration (ALTER DEFAULT PRIVILEGES)
+- Permission issue diagnosis and troubleshooting
+
+#### hologres-uv-compute
+
+Real-time UV/PV deduplication pipelines using Dynamic Tables and RoaringBitmap:
+
+- RoaringBitmap bitmap deduplication (sub-second for billions of users)
+- Dynamic Table incremental refresh pipelines
+- Flexible time-range UV aggregation (`RB_OR_AGG` cross-day merge)
+- UID dictionary encoding (text-to-int)
+
+#### hologres-bsi-profile-analysis
+
+BSI (Bit-Sliced Index) based user profile analysis:
+
+- Attribute tags + behavior tags joint crowd targeting
+- GMV analysis, tag distribution statistics, Top K queries
+- Bucketed parallel computation
+- BSI function usage (bsi_build, bsi_sum, bsi_filter, bsi_stat, bsi_topk)
 
 ## Requirements
 
