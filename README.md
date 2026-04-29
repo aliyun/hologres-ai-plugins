@@ -17,7 +17,8 @@ hologres-ai-plugins/
     │   ├── hologres-schema-generator/     # DDL schema design expert skill
     │   ├── hologres-privileges/           # Privilege management skill
     │   ├── hologres-uv-compute/           # UV/PV deduplication skill
-    │   └── hologres-bsi-profile-analysis/ # BSI profile analysis skill
+    │   ├── hologres-bsi-profile-analysis/ # BSI profile analysis skill
+    │   └── hologres-ad-campaign/          # Ad creative generation & campaign analysis skill
     ├── pyproject.toml
     └── upload_to_pypi.py
 ```
@@ -194,6 +195,15 @@ BSI (Bit-Sliced Index) based user profile analysis:
 - GMV analysis, tag distribution statistics, Top K queries
 - Bucketed parallel computation
 - BSI function usage (bsi_build, bsi_sum, bsi_filter, bsi_stat, bsi_topk)
+
+#### hologres-ad-campaign
+
+AI-powered ad creative generation and campaign analysis using Hologres AI Function:
+
+- End-to-end SQL pipeline: material management → image generation → storyboard → video synthesis
+- Virtual delivery simulation across channels (WeChat, Douyin, Xiaohongshu, Bilibili)
+- Real-time ROI analysis via Dynamic Tables
+- AI-driven strategy recommendations (budget allocation, stop-loss suggestions)
 
 ## Requirements
 

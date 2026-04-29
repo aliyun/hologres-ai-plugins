@@ -13,6 +13,7 @@
 | `hologres-privileges` | `hologres-cli` | Hologres 权限管理 — 基于 PostgreSQL 标准 GRANT/REVOKE 授权模型的细粒度访问控制 |
 | `hologres-uv-compute` | `hologres-cli` | 基于 Dynamic Table + RoaringBitmap 的实时 UV/PV 去重计算方案 |
 | `hologres-bsi-profile-analysis` | `hologres-cli` | 基于 BSI（位切片索引）的用户画像分析 — 标签计算、人群圈选、GMV 分析 |
+| `hologres-ad-campaign` | `hologres-cli` | 基于 AI Function 的广告素材生成与投放分析 — 视频合成、虚拟投放模拟、Dynamic Table 实时 ROI 分析 |
 
 > **说明：** 除 `hologres-cli` 外，其他所有技能均依赖它作为基础技能。SQL 执行、GUC 参数管理、数据操作等均通过 CLI 命令完成。请优先安装 `hologres-cli` 技能。
 
@@ -75,6 +76,7 @@ $ hologres-agent-skills
   ● hologres-privileges
   ● hologres-uv-compute
   ● hologres-bsi-profile-analysis
+  ● hologres-ad-campaign
 
 ✨ Installation complete
 ```
@@ -138,7 +140,8 @@ agent-skills/
 │   ├── hologres-schema-generator/
 │   ├── hologres-privileges/
 │   ├── hologres-uv-compute/
-│   └── hologres-bsi-profile-analysis/
+│   ├── hologres-bsi-profile-analysis/
+│   └── hologres-ad-campaign/
 ├── src/
 │   └── holo_plugin_installer/
 │       ├── __init__.py

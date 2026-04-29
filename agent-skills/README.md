@@ -13,6 +13,7 @@ An interactive installer that distributes Hologres AI agent skills to various AI
 | `hologres-privileges` | `hologres-cli` | Hologres privilege management using PostgreSQL standard GRANT/REVOKE authorization model |
 | `hologres-uv-compute` | `hologres-cli` | Real-time UV/PV computation pipelines using Dynamic Tables and RoaringBitmap |
 | `hologres-bsi-profile-analysis` | `hologres-cli` | BSI (Bit-Sliced Index) based user profile analysis — tag computation, crowd targeting, GMV analysis |
+| `hologres-ad-campaign` | `hologres-cli` | AI-powered ad creative generation and campaign analysis — video synthesis, virtual delivery simulation, real-time ROI via Dynamic Tables |
 
 > **Note:** All skills except `hologres-cli` depend on it as the foundational skill. SQL execution, GUC management, and data operations are performed through CLI commands. Install `hologres-cli` skill first.
 
@@ -75,6 +76,7 @@ $ hologres-agent-skills
   ● hologres-privileges
   ● hologres-uv-compute
   ● hologres-bsi-profile-analysis
+  ● hologres-ad-campaign
 
 ✨ Installation complete
 ```
@@ -138,7 +140,8 @@ agent-skills/
 │   ├── hologres-schema-generator/
 │   ├── hologres-privileges/
 │   ├── hologres-uv-compute/
-│   └── hologres-bsi-profile-analysis/
+│   ├── hologres-bsi-profile-analysis/
+│   └── hologres-ad-campaign/
 ├── src/
 │   └── holo_plugin_installer/
 │       ├── __init__.py

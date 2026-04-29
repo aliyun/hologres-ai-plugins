@@ -43,6 +43,7 @@ AVAILABLE_SKILLS = [
     "hologres-privileges",
     "hologres-uv-compute",
     "hologres-bsi-profile-analysis",
+    "hologres-ad-campaign",
 ]
 
 
