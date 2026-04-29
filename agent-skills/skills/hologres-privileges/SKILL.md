@@ -8,6 +8,16 @@ description: |
   "hologres privileges", "hologres authorization", "default privileges", "角色权限", "授权"
 ---
 
+## Prerequisites
+
+This skill requires **hologres-cli** to be installed first:
+
+```bash
+pip install hologres-cli
+```
+
+All SQL execution depends on `hologres-cli` commands (`hologres sql run --write`).
+
 # Hologres Privilege Management (Expert Permission Model)
 
 Manage fine-grained access control in Hologres using standard PostgreSQL GRANT/REVOKE syntax.

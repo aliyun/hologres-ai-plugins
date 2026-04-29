@@ -10,6 +10,16 @@ description: |
   "行列共存", "分区表", "hologres table design", "表设计", "hologres数据类型"
 ---
 
+## Prerequisites
+
+This skill requires **hologres-cli** to be installed first:
+
+```bash
+pip install hologres-cli
+```
+
+All SQL execution depends on `hologres-cli` commands (`hologres sql run --write`, `hologres table create`).
+
 # Hologres Schema Design & Table Creation
 
 Generate optimized Hologres DDL statements with proper storage format, indexing, and distribution strategies.

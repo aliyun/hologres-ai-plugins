@@ -6,6 +6,16 @@ description: |
   Triggers: "hologres slow query", "hg_query_log", "query diagnosis", "慢Query分析", "Hologres性能诊断"
 ---
 
+## Prerequisites
+
+This skill requires **hologres-cli** to be installed first:
+
+```bash
+pip install hologres-cli
+```
+
+All SQL execution and GUC parameter operations depend on `hologres-cli` commands (`hologres sql run`, `hologres guc set`).
+
 # Hologres Slow Query Analysis
 
 Diagnose and analyze slow/failed queries in Alibaba Cloud Hologres using the `hologres.hg_query_log` system table.

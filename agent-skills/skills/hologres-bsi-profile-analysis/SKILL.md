@@ -9,6 +9,16 @@ description: |
   "标签圈人", "分桶计算"
 ---
 
+## Prerequisites
+
+This skill requires **hologres-cli** to be installed first:
+
+```bash
+pip install hologres-cli
+```
+
+All SQL execution depends on `hologres-cli` commands (`hologres sql run --write`).
+
 # Hologres BSI 画像分析
 
 > **参考文档**: [使用BSI进行画像分析中的标签计算](https://help.aliyun.com/zh/hologres/use-cases/profile-analysis-bsi-optimization-beta)

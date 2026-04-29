@@ -8,6 +8,16 @@ description: |
   "去重", "UV计算", "用户去重", "bitmap去重", "实时UV", "hg_id_encoding"
 ---
 
+## Prerequisites
+
+This skill requires **hologres-cli** to be installed first:
+
+```bash
+pip install hologres-cli
+```
+
+All SQL execution and Dynamic Table operations depend on `hologres-cli` commands (`hologres sql run --write`, `hologres dt create`).
+
 # Hologres UV/PV Computation with Dynamic Table & RoaringBitmap
 
 Build real-time, incremental UV/PV computation pipelines using Dynamic Tables and RoaringBitmap in Hologres. This approach supports flexible time-range aggregation over billions of records with low latency.

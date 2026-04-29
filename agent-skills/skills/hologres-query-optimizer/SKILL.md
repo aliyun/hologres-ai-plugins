@@ -8,6 +8,16 @@ description: |
   "hologres performance", "slow query", "query optimizer", "explain analyze"
 ---
 
+## Prerequisites
+
+This skill requires **hologres-cli** to be installed first:
+
+```bash
+pip install hologres-cli
+```
+
+All SQL execution and GUC parameter operations depend on `hologres-cli` commands (`hologres sql run`, `hologres guc show/set`).
+
 # Hologres Query Execution Plan Analyzer
 
 This skill helps analyze and optimize Hologres SQL query execution plans using `EXPLAIN` and `EXPLAIN ANALYZE` commands.

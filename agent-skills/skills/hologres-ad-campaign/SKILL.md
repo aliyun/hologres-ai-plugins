@@ -4,6 +4,16 @@ description: >
   通过 Hologres AI Function 生成广告素材并模拟投放效果分析。当用户提到广告视频生成、宣传视频制作、素材转视频、Hologres AI Function 生成视频、虚拟投放模拟、ROI 分析、投放效果分析、广告素材生成等场景时使用。全 SQL 链路覆盖从素材管理、主题图片生成、分镜脚本、视频合成、虚拟投放到实时 ROI 分析的完整闭环。
 ---
 
+## Prerequisites
+
+This skill requires **hologres-cli** to be installed first:
+
+```bash
+pip install hologres-cli
+```
+
+All SQL execution and Dynamic Table operations depend on `hologres-cli` commands (`hologres sql run --write`, `hologres dt create`).
+
 # Hologres 广告素材生成与投放分析
 
 全 SQL 链路：从 OSS 原始素材到广告视频生成、虚拟投放模拟和实时 ROI 分析。
