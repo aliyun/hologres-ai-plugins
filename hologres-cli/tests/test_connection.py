@@ -232,18 +232,24 @@ class TestHologresConnection:
         mock_psycopg["connect"].assert_called_once()
 
     def test_connection_read_only_default(self, mock_psycopg):
-        """Test default connection sets read-only mode."""
+        """Test default connection sets read-only mode and default GUCs."""
         conn = HologresConnection("hologres://user:pass@host:80/db")
         _ = conn.conn
-        mock_psycopg["conn"].execute.assert_called_once_with(
-            "SET default_transaction_read_only = ON"
-        )
+        calls = mock_psycopg["conn"].execute.call_args_list
+        assert any("hg_experimental_enable_adaptive_execution" in str(c) for c in calls)
+        assert any("hg_computing_resource" in str(c) for c in calls)
+        assert any("default_transaction_read_only" in str(c) for c in calls)
 
     def test_connection_read_only_false_no_set(self, mock_psycopg):
-        """Test read_only=False does NOT set read-only mode."""
+        """Test read_only=False does NOT set read-only mode but still sets default GUCs."""
         conn = HologresConnection("hologres://user:pass@host:80/db", read_only=False)
         _ = conn.conn
-        mock_psycopg["conn"].execute.assert_not_called()
+        calls = mock_psycopg["conn"].execute.call_args_list
+        # Default GUCs are still applied
+        assert any("hg_experimental_enable_adaptive_execution" in str(c) for c in calls)
+        assert any("hg_computing_resource" in str(c) for c in calls)
+        # But read-only is NOT set
+        assert not any("default_transaction_read_only" in str(c) for c in calls)
 
     def test_connection_reconnect(self, mock_psycopg):
         """Test reconnection when connection is closed."""
