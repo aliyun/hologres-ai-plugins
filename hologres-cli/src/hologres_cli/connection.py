@@ -23,6 +23,12 @@ DEFAULT_KEEPALIVES = {
     "keepalives_count": 15,
 }
 
+# Default session GUCs applied to every connection for safety and resource control
+DEFAULT_SESSION_GUCS = [
+    "SET hg_experimental_enable_adaptive_execution = on",  # Adaptive execution to prevent OOM
+    "SET hg_computing_resource = 'serverless'",  # Route queries to serverless computing pool
+]
+
 
 class ConnectionError(Exception):
     """Exception raised for connection errors."""
@@ -137,9 +143,16 @@ class HologresConnection:
         When read_only=True (default), the session is set to read-only mode
         via ``SET default_transaction_read_only = ON``.  This provides
         database-level protection against accidental writes.
+
+        All connections also set default session GUCs:
+        - hg_experimental_enable_adaptive_execution=on (prevent OOM)
+        - hg_computing_resource='serverless' (use serverless computing pool)
         """
         if self._conn is None or self._conn.closed:
             self._conn = psycopg.connect(**self._params, autocommit=self.autocommit)
+            # Apply default session GUCs for safety and resource control
+            for guc in DEFAULT_SESSION_GUCS:
+                self._conn.execute(guc)
             if self.read_only:
                 self._conn.execute("SET default_transaction_read_only = ON")
         return self._conn
