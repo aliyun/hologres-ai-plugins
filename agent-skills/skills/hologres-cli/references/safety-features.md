@@ -2,6 +2,51 @@
 
 Safety guardrails to prevent accidental data loss and ensure safe operations.
 
+## Default Session GUC Protection
+
+### Purpose
+Prevents OOM crashes and ensures queries use the serverless computing pool by automatically setting session-level GUC parameters on every connection.
+
+### Behavior
+- All connections execute the following GUCs immediately after creation:
+  ```sql
+  SET hg_experimental_enable_adaptive_execution = on;
+  SET hg_computing_resource = 'serverless';
+  ```
+- `hg_experimental_enable_adaptive_execution = on` — Enables the Adaptive Execution engine that dynamically adjusts parallelism and memory allocation at each execution stage, preventing OOM for complex queries.
+- `hg_computing_resource = 'serverless'` — Routes queries to the serverless computing pool, providing elastic compute resources and SQL-level isolation.
+- These GUCs are applied **before** the read-only mode setting, ensuring all connections (read-only or write) benefit from OOM protection and serverless execution.
+- No user action or flag is required; this is fully transparent.
+
+### Architecture
+```
+Connection Created
+    │
+    ▼
+┌─────────────────────────┐
+│ Default GUC Layer          │  ← SET adaptive_execution = on
+│ OOM prevention + Serverless│     SET computing_resource = serverless
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Read-Only Layer             │  ← SET default_transaction_read_only = ON
+│ (if read_only=True)         │     Database rejects writes
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ CLI Write Guard             │  ← --write flag check
+│ WRITE_GUARD_ERROR           │     CLI rejects writes
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Dangerous Write Block       │  ← WHERE clause check
+│ DANGEROUS_WRITE_BLOCKED     │     CLI rejects DELETE/UPDATE
+└─────────────────────────┘     without WHERE
+```
+
 ## Row Limit Protection
 
 ### Purpose
@@ -39,10 +84,10 @@ hologres sql run --no-limit-check "SELECT * FROM large_table"
 Provides database-level protection against accidental writes by setting all CLI connections to read-only mode by default.
 
 ### Behavior
-- All connections execute `SET default_transaction_read_only = ON` upon creation
+- All connections execute `SET default_transaction_read_only = ON` upon creation (after default GUCs)
 - Any write SQL (INSERT, UPDATE, DELETE, DDL) on a read-only connection is **rejected by the database engine**, not just the CLI
 - Write commands (sql --write, guc set/reset, dt create/alter/drop/refresh, data import, table create/drop/truncate/alter, partition drop/alter, extension create) explicitly use `read_only=False`
-- This is the **first layer** of write protection, enforced at the PostgreSQL protocol level
+- This is the **second layer** of write protection (after default GUC layer), enforced at the PostgreSQL protocol level
 
 ### Architecture
 ```
@@ -50,21 +95,27 @@ User Request
     │
     ▼
 ┌─────────────────────────┐
-│ Connection Layer         │  ← read_only=True (default)
-│ SET default_transaction  │     Database rejects writes
-│ _read_only = ON          │
+│ Default GUC Layer          │  ← adaptive_execution=on
+│ (always applied)           │     computing_resource=serverless
 └────────────┬────────────┘
              │
              ▼
 ┌─────────────────────────┐
-│ CLI Write Guard          │  ← --write flag check
-│ WRITE_GUARD_ERROR        │     CLI rejects writes
+│ Connection Layer            │  ← read_only=True (default)
+│ SET default_transaction     │     Database rejects writes
+│ _read_only = ON             │
 └────────────┬────────────┘
              │
              ▼
 ┌─────────────────────────┐
-│ Dangerous Write Block    │  ← WHERE clause check
-│ DANGEROUS_WRITE_BLOCKED  │     CLI rejects DELETE/UPDATE
+│ CLI Write Guard             │  ← --write flag check
+│ WRITE_GUARD_ERROR           │     CLI rejects writes
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Dangerous Write Block       │  ← WHERE clause check
+│ DANGEROUS_WRITE_BLOCKED     │     CLI rejects DELETE/UPDATE
 └─────────────────────────┘     without WHERE
 ```
 

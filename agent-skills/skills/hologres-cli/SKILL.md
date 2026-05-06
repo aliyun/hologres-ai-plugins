@@ -17,7 +17,7 @@ AI-agent-friendly command-line interface for Hologres with safety guardrails and
 pip install hologres-cli
 
 # Or install a specific version
-pip install hologres-cli==0.1.0
+pip install hologres-cli==0.2.0
 ```
 
 ## Configuration
@@ -247,6 +247,13 @@ hologres -f jsonl schema tables   # JSON Lines
 ```
 
 ## Safety Features
+
+### 0. Default Session GUC Protection
+All connections automatically set safety GUCs upon creation:
+- `SET hg_experimental_enable_adaptive_execution = on` — Enables adaptive execution to prevent OOM
+- `SET hg_computing_resource = 'serverless'` — Routes queries to the serverless computing pool
+
+These are applied transparently at the connection layer; no user action needed.
 
 ### 1. Row Limit Protection
 Queries without `LIMIT` returning >100 rows fail with `LIMIT_REQUIRED`.
