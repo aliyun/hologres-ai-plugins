@@ -570,13 +570,31 @@ Manage local volume configurations for OSS file storage. Volumes are stored in `
 hologres volume create my_vol \
   --endpoint oss-cn-hangzhou-internal.aliyuncs.com \
   --root oss://bucket/path/ \
-  --rolearn acs:ram::123456:role/AliyunHologresDefaultRole
+  --rolearn acs:ram::123456:role/AliyunHologresDefaultRole \
+  --access-key LTAI5tXxx --access-secret xxxx
 
 # List all volumes
 hologres volume list
 
 # Delete a volume
 hologres volume delete my_vol
+
+# List files in a volume
+hologres volume list-files --volume my_vol
+hologres volume list-files --volume my_vol --prefix data/ --max-count 50
+
+# Delete a file from volume (dry-run by default)
+hologres volume delete-file --volume my_vol --file data/report.csv
+hologres volume delete-file --volume my_vol --file data/report.csv --confirm
+
+# Download a file from volume
+hologres volume download-file --volume my_vol --file report.csv -d ./output
+
+# Upload a file to volume
+hologres volume upload-file --volume my_vol --local-file ./data.csv --target-file data/data.csv
+
+# Use intranet endpoint (for VPC/ECS)
+hologres volume list-files --volume my_vol --net intranet
 ```
 
 **Create Options:**
@@ -584,9 +602,18 @@ hologres volume delete my_vol
 | Option | Description |
 |--------|-------------|
 | `--type` | Volume type (default: `oss`, currently only `oss` supported) |
-| `--endpoint` | OSS internal endpoint (required, must contain `-internal`) |
+| `--endpoint` | OSS internal endpoint (required, must contain `-internal`). A public endpoint is auto-generated |
 | `--root` | OSS root path, e.g. `oss://bucket/path/` (required) |
 | `--rolearn` | RAM role ARN for Hologres service (required) |
+| `--access-key` | OSS AccessKey ID for SDK operations (required) |
+| `--access-secret` | OSS AccessKey Secret for SDK operations (required) |
+
+**File Operation Options (list-files, delete-file, download-file, upload-file):**
+
+| Option | Description |
+|--------|-------------|
+| `--volume` | Volume name (required) |
+| `--net` | Network type: `internet` (default, public endpoint) or `intranet` (internal endpoint) |
 
 **Naming Rules:**
 - Must start with a letter

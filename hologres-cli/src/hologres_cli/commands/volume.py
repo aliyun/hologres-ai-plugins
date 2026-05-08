@@ -2,13 +2,18 @@
 
 Manages local volume configurations stored in profile.
 Volumes are local-only (stored in config.json), not on Hologres server.
+OSS file operations (list-files, delete-file, download-file, upload-file)
+use oss2 SDK with access-key/access-secret stored in volume config.
 """
 
 from __future__ import annotations
 
+import os
 import re
+from urllib.parse import urlparse
 
 import click
+import oss2
 
 from ..config_store import (
     load_config,
@@ -19,6 +24,55 @@ from ..output import FORMAT_JSON, error, print_output, success, success_rows
 
 # Volume name: must start with letter, only letters/digits/underscores, max 64 chars
 VOLUME_NAME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]{0,63}$")
+
+# Common --net option for all OSS file operations
+_net_option = click.option(
+    "--net", type=click.Choice(["internet", "intranet"]),
+    default="internet",
+    help="Network type: internet (public, default) or intranet (internal)",
+)
+
+
+def _parse_oss_root(root: str) -> tuple[str, str]:
+    """Parse OSS root path into (bucket_name, prefix).
+
+    Example: 'oss://bucket1/your/path/' -> ('bucket1', 'your/path/')
+    """
+    parsed = urlparse(root)
+    bucket = parsed.hostname or ""
+    prefix = parsed.path.lstrip("/")
+    return bucket, prefix
+
+
+def _get_oss_client(volume: dict, net: str = "internet"):
+    """Create OSS Bucket client from volume config.
+
+    Args:
+        volume: volume config dict
+        net: "internet" uses public_endpoint, "intranet" uses endpoint
+
+    Returns: (oss2.Bucket, root_prefix)
+    """
+    ak = volume["access_key"]
+    sk = volume["access_secret"]
+    endpoint = volume.get("public_endpoint", "") if net == "internet" else volume["endpoint"]
+    auth = oss2.Auth(ak, sk)
+    bucket_name, prefix = _parse_oss_root(volume["root"])
+    bucket = oss2.Bucket(auth, endpoint, bucket_name)
+    return bucket, prefix
+
+
+def _find_volume(volumes: list[dict], volume_name: str, fmt: str) -> dict | None:
+    """Find a volume by name. Returns volume dict or None (prints error)."""
+    for v in volumes:
+        if v["name"] == volume_name:
+            return v
+    print_output(error(
+        "NOT_FOUND",
+        f"Volume '{volume_name}' not found.",
+        fmt,
+    ))
+    return None
 
 
 @click.group("volume")
@@ -37,6 +91,10 @@ def volume_cmd() -> None:
               help="OSS root path (e.g. oss://bucket/path/)")
 @click.option("--rolearn", required=True,
               help="RAM role ARN for Hologres service")
+@click.option("--access-key", required=True,
+              help="OSS AccessKey ID for SDK operations")
+@click.option("--access-secret", required=True,
+              help="OSS AccessKey Secret for SDK operations")
 @click.pass_context
 def create_cmd(
     ctx: click.Context,
@@ -45,6 +103,8 @@ def create_cmd(
     endpoint: str,
     root: str,
     rolearn: str,
+    access_key: str,
+    access_secret: str,
 ) -> None:
     """Create a volume configuration in current profile.
 
@@ -53,7 +113,8 @@ def create_cmd(
       hologres volume create my_vol --type oss \\
         --endpoint oss-cn-hangzhou-internal.aliyuncs.com \\
         --root oss://bucket/path/ \\
-        --rolearn acs:ram::123456:role/AliyunHologresDefaultRole
+        --rolearn acs:ram::123456:role/AliyunHologresDefaultRole \\
+        --access-key LTAI5tXxx --access-secret xxxx
     """
     profile_name = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
@@ -115,13 +176,19 @@ def create_cmd(
         ))
         return
 
+    # Auto-generate public endpoint from internal endpoint
+    public_endpoint = endpoint.replace("-internal", "")
+
     # Add volume and save
     volume_entry = {
         "name": volume_name,
         "type": vol_type,
         "endpoint": endpoint,
+        "public_endpoint": public_endpoint,
         "root": root,
         "rolearn": rolearn,
+        "access_key": access_key,
+        "access_secret": access_secret,
     }
     volumes.append(volume_entry)
     save_config(config)
@@ -194,6 +261,242 @@ def delete_cmd(ctx: click.Context, volume_name: str) -> None:
 
     save_config(config)
     print_output(success({"volume": volume_name, "deleted": True}, fmt))
+
+
+@volume_cmd.command("list-files")
+@click.option("--volume", "volume_name", required=True, help="Volume name")
+@click.option("--prefix", default="", help="Filter by prefix")
+@click.option("--max-count", default=100, type=int,
+              help="Max files to list (default: 100)")
+@_net_option
+@click.pass_context
+def list_files_cmd(
+    ctx: click.Context,
+    volume_name: str,
+    prefix: str,
+    max_count: int,
+    net: str,
+) -> None:
+    """List files in a volume via OSS SDK.
+
+    \b
+    Examples:
+      hologres volume list-files --volume my_vol
+      hologres volume list-files --volume my_vol --prefix data/
+      hologres volume list-files --volume my_vol --max-count 50
+      hologres volume list-files --volume my_vol --net intranet
+    """
+    profile_name = ctx.obj.get("profile")
+    fmt = ctx.obj.get("format", FORMAT_JSON)
+
+    config = load_config()
+    target_profile = _find_profile(config, profile_name, fmt)
+    if target_profile is None:
+        return
+
+    volumes = target_profile.get("volumes", [])
+    vol = _find_volume(volumes, volume_name, fmt)
+    if vol is None:
+        return
+
+    try:
+        bucket, root_prefix = _get_oss_client(vol, net)
+        full_prefix = root_prefix + prefix
+        rows = []
+        count = 0
+        for obj in oss2.ObjectIterator(bucket, prefix=full_prefix, max_keys=max_count):
+            if obj.key.endswith("/"):
+                continue
+            rel_name = obj.key
+            if rel_name.startswith(root_prefix):
+                rel_name = rel_name[len(root_prefix):]
+            rows.append({
+                "name": rel_name,
+                "size": obj.size,
+                "last_modified": obj.last_modified,
+            })
+            count += 1
+            if count >= max_count:
+                break
+    except oss2.exceptions.OssError as e:
+        print_output(error("OSS_ERROR", str(e), fmt))
+        return
+
+    print_output(success_rows(rows, fmt))
+
+
+@volume_cmd.command("delete-file")
+@click.option("--volume", "volume_name", required=True, help="Volume name")
+@click.option("--file", "file_name", required=True,
+              help="File path relative to volume root")
+@click.option("--confirm", is_flag=True,
+              help="Confirm deletion (dry-run without this)")
+@_net_option
+@click.pass_context
+def delete_file_cmd(
+    ctx: click.Context,
+    volume_name: str,
+    file_name: str,
+    confirm: bool,
+    net: str,
+) -> None:
+    """Delete a file from OSS volume.
+
+    Defaults to dry-run for safety. Use --confirm to actually delete.
+
+    \b
+    Examples:
+      hologres volume delete-file --volume my_vol --file data/report.csv
+      hologres volume delete-file --volume my_vol --file data/report.csv --confirm
+    """
+    profile_name = ctx.obj.get("profile")
+    fmt = ctx.obj.get("format", FORMAT_JSON)
+
+    config = load_config()
+    target_profile = _find_profile(config, profile_name, fmt)
+    if target_profile is None:
+        return
+
+    volumes = target_profile.get("volumes", [])
+    vol = _find_volume(volumes, volume_name, fmt)
+    if vol is None:
+        return
+
+    _, root_prefix = _parse_oss_root(vol["root"])
+    full_key = root_prefix + file_name
+
+    if not confirm:
+        print_output(success({
+            "action": f"DELETE oss://{_parse_oss_root(vol['root'])[0]}/{full_key}",
+            "dry_run": True,
+        }, fmt))
+        return
+
+    try:
+        bucket, _ = _get_oss_client(vol, net)
+        bucket.delete_object(full_key)
+    except oss2.exceptions.OssError as e:
+        print_output(error("OSS_ERROR", str(e), fmt))
+        return
+
+    print_output(success({
+        "file": file_name,
+        "deleted": True,
+    }, fmt))
+
+
+@volume_cmd.command("download-file")
+@click.option("--volume", "volume_name", required=True, help="Volume name")
+@click.option("--file", "file_name", required=True,
+              help="File path relative to volume root")
+@click.option("--download-dir", "-d", required=True,
+              help="Local directory to save file")
+@_net_option
+@click.pass_context
+def download_file_cmd(
+    ctx: click.Context,
+    volume_name: str,
+    file_name: str,
+    download_dir: str,
+    net: str,
+) -> None:
+    """Download a file from OSS volume to local directory.
+
+    \b
+    Examples:
+      hologres volume download-file --volume my_vol --file report.csv -d ./output
+    """
+    profile_name = ctx.obj.get("profile")
+    fmt = ctx.obj.get("format", FORMAT_JSON)
+
+    config = load_config()
+    target_profile = _find_profile(config, profile_name, fmt)
+    if target_profile is None:
+        return
+
+    volumes = target_profile.get("volumes", [])
+    vol = _find_volume(volumes, volume_name, fmt)
+    if vol is None:
+        return
+
+    # Ensure download dir exists
+    os.makedirs(download_dir, exist_ok=True)
+
+    _, root_prefix = _parse_oss_root(vol["root"])
+    full_key = root_prefix + file_name
+    local_filename = os.path.basename(file_name)
+    local_path = os.path.join(download_dir, local_filename)
+
+    try:
+        bucket, _ = _get_oss_client(vol, net)
+        bucket.get_object_to_file(full_key, local_path)
+    except oss2.exceptions.OssError as e:
+        print_output(error("OSS_ERROR", str(e), fmt))
+        return
+
+    print_output(success({
+        "file": file_name,
+        "local_path": local_path,
+        "downloaded": True,
+    }, fmt))
+
+
+@volume_cmd.command("upload-file")
+@click.option("--volume", "volume_name", required=True, help="Volume name")
+@click.option("--local-file", required=True, help="Local file path to upload")
+@click.option("--target-file", required=True,
+              help="Target file path relative to volume root")
+@_net_option
+@click.pass_context
+def upload_file_cmd(
+    ctx: click.Context,
+    volume_name: str,
+    local_file: str,
+    target_file: str,
+    net: str,
+) -> None:
+    """Upload a local file to OSS volume.
+
+    \b
+    Examples:
+      hologres volume upload-file --volume my_vol --local-file ./data.csv --target-file data/data.csv
+    """
+    profile_name = ctx.obj.get("profile")
+    fmt = ctx.obj.get("format", FORMAT_JSON)
+
+    if not os.path.isfile(local_file):
+        print_output(error(
+            "FILE_NOT_FOUND",
+            f"Local file '{local_file}' not found.",
+            fmt,
+        ))
+        return
+
+    config = load_config()
+    target_profile = _find_profile(config, profile_name, fmt)
+    if target_profile is None:
+        return
+
+    volumes = target_profile.get("volumes", [])
+    vol = _find_volume(volumes, volume_name, fmt)
+    if vol is None:
+        return
+
+    _, root_prefix = _parse_oss_root(vol["root"])
+    full_key = root_prefix + target_file
+
+    try:
+        bucket, _ = _get_oss_client(vol, net)
+        bucket.put_object_from_file(full_key, local_file)
+    except oss2.exceptions.OssError as e:
+        print_output(error("OSS_ERROR", str(e), fmt))
+        return
+
+    print_output(success({
+        "local_file": local_file,
+        "target_file": target_file,
+        "uploaded": True,
+    }, fmt))
 
 
 def _find_profile(

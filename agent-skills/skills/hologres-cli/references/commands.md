@@ -1327,7 +1327,7 @@ SELECT ai_gen('qwen-image-2.0', '{"prompt": "...", "parameters": {...}}');
 
 ## volume
 
-Manage local volume configurations for OSS file storage. Volumes are stored in `~/.hologres/config.json` under the current profile, not on the Hologres server.
+Manage local volume configurations for OSS file storage. Volumes are stored in `~/.hologres/config.json` under the current profile, not on the Hologres server. File operations (list-files, delete-file, download-file, upload-file) use OSS SDK with access-key/access-secret.
 
 ### volume create
 
@@ -1337,13 +1337,8 @@ Create a volume configuration in the current profile.
 hologres volume create my_vol \
   --endpoint oss-cn-hangzhou-internal.aliyuncs.com \
   --root oss://bucket/path/ \
-  --rolearn acs:ram::123456:role/AliyunHologresDefaultRole
-
-# With explicit type (default is oss)
-hologres volume create my_vol --type oss \
-  --endpoint oss-cn-hangzhou-internal.aliyuncs.com \
-  --root oss://bucket/path/ \
-  --rolearn acs:ram::123456:role/AliyunHologresDefaultRole
+  --rolearn acs:ram::123456:role/AliyunHologresDefaultRole \
+  --access-key LTAI5tXxx --access-secret xxxx
 ```
 
 **Arguments:**
@@ -1357,9 +1352,11 @@ hologres volume create my_vol --type oss \
 | Option | Description |
 |--------|-------------|
 | `--type` | Volume type (default: `oss`, currently only `oss` supported) |
-| `--endpoint` | OSS internal endpoint (required, must contain `-internal`) |
+| `--endpoint` | OSS internal endpoint (required, must contain `-internal`). A public endpoint is auto-generated |
 | `--root` | OSS root path, e.g. `oss://bucket/path/` (required, must start with `oss://`) |
 | `--rolearn` | RAM role ARN for Hologres service (required) |
+| `--access-key` | OSS AccessKey ID for SDK operations (required) |
+| `--access-secret` | OSS AccessKey Secret for SDK operations (required) |
 
 **Output:**
 ```json
@@ -1426,6 +1423,146 @@ hologres volume delete my_vol
 {
   "ok": false,
   "error": {"code": "NOT_FOUND", "message": "Volume 'my_vol' not found in profile 'default'."}
+}
+```
+
+### volume list-files
+
+List files in a volume via OSS SDK.
+
+```bash
+hologres volume list-files --volume my_vol
+hologres volume list-files --volume my_vol --prefix data/ --max-count 50
+hologres volume list-files --volume my_vol --net intranet
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--volume` | Volume name (required) |
+| `--prefix` | Filter files by prefix (default: empty) |
+| `--max-count` | Max files to list (default: 100) |
+| `--net` | Network type: `internet` (default, public endpoint) or `intranet` (internal endpoint) |
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "rows": [
+      {"name": "report.csv", "size": 1024, "last_modified": "2026-05-01T10:00:00Z"}
+    ],
+    "count": 1
+  }
+}
+```
+
+### volume delete-file
+
+Delete a file from OSS volume. **Defaults to dry-run for safety.**
+
+```bash
+hologres volume delete-file --volume my_vol --file data/report.csv
+hologres volume delete-file --volume my_vol --file data/report.csv --confirm
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--volume` | Volume name (required) |
+| `--file` | File path relative to volume root (required) |
+| `--confirm` | Confirm deletion. Without this, only dry-run is shown |
+| `--net` | Network type: `internet` (default) or `intranet` |
+
+**Dry-run output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "action": "DELETE oss://bucket/path/data/report.csv",
+    "dry_run": true
+  }
+}
+```
+
+**Executed output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "file": "data/report.csv",
+    "deleted": true
+  }
+}
+```
+
+### volume download-file
+
+Download a file from OSS volume to local directory.
+
+```bash
+hologres volume download-file --volume my_vol --file report.csv -d ./output
+hologres volume download-file --volume my_vol --file data/file.csv -d /tmp --net intranet
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--volume` | Volume name (required) |
+| `--file` | File path relative to volume root (required) |
+| `--download-dir, -d` | Local directory to save file (required, auto-created if missing) |
+| `--net` | Network type: `internet` (default) or `intranet` |
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "file": "report.csv",
+    "local_path": "./output/report.csv",
+    "downloaded": true
+  }
+}
+```
+
+### volume upload-file
+
+Upload a local file to OSS volume.
+
+```bash
+hologres volume upload-file --volume my_vol --local-file ./data.csv --target-file data/data.csv
+hologres volume upload-file --volume my_vol --local-file ./img.png --target-file images/img.png --net intranet
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--volume` | Volume name (required) |
+| `--local-file` | Local file path to upload (required) |
+| `--target-file` | Target file path relative to volume root (required) |
+| `--net` | Network type: `internet` (default) or `intranet` |
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "local_file": "./data.csv",
+    "target_file": "data/data.csv",
+    "uploaded": true
+  }
+}
+```
+
+**Error (local file not found):**
+```json
+{
+  "ok": false,
+  "error": {"code": "FILE_NOT_FOUND", "message": "Local file './nonexistent.csv' not found."}
 }
 ```
 

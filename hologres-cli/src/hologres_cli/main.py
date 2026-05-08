@@ -84,9 +84,13 @@ Use `--profile <name>` to switch profiles.
 - `hologres data import <table> -f <file>` - Import from CSV
 - `hologres data count <table>` - Count rows
 - `hologres status` - Connection status
-- `hologres volume create <name> --endpoint <ep> --root <root> --rolearn <arn>` - Create volume config
+- `hologres volume create <name> --endpoint <ep> --root <root> --rolearn <arn> --access-key <ak> --access-secret <sk>` - Create volume config
 - `hologres volume list` - List volumes
 - `hologres volume delete <name>` - Delete volume config
+- `hologres volume list-files --volume <name> [--prefix P] [--max-count N] [--net internet|intranet]` - List files in volume
+- `hologres volume delete-file --volume <name> --file <path> [--confirm] [--net internet|intranet]` - Delete file from volume
+- `hologres volume download-file --volume <name> --file <path> -d <dir> [--net internet|intranet]` - Download file
+- `hologres volume upload-file --volume <name> --local-file <path> --target-file <path> [--net internet|intranet]` - Upload file
 
 ## Safety: LIMIT required for >100 rows, --write for mutations, no DELETE/UPDATE without WHERE.
 ## Output: --format json|table|csv|jsonl. Default: json with {ok: true/false}.

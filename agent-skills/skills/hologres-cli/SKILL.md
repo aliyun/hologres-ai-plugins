@@ -89,9 +89,13 @@ hologres dt list                                   # List Dynamic Tables
 | `hologres ai-guide` | Generate AI agent guide |
 | `hologres ai gen "<prompt>" [--model]` | Generate text using AI function |
 | `hologres ai image-gen "<prompt>" -d DIR [options]` | Generate images using AI function |
-| `hologres volume create <name> --endpoint <ep> --root <root> --rolearn <arn>` | Create a local volume config |
+| `hologres volume create <name> --endpoint <ep> --root <root> --rolearn <arn> --access-key <ak> --access-secret <sk>` | Create a local volume config |
 | `hologres volume list` | List all volumes in current profile |
 | `hologres volume delete <name>` | Delete a volume config |
+| `hologres volume list-files --volume <name> [--prefix P] [--max-count N] [--net internet\|intranet]` | List files in volume |
+| `hologres volume delete-file --volume <name> --file <path> [--confirm] [--net internet\|intranet]` | Delete file from volume (dry-run by default) |
+| `hologres volume download-file --volume <name> --file <path> -d <dir> [--net internet\|intranet]` | Download file from volume |
+| `hologres volume upload-file --volume <name> --local-file <path> --target-file <path> [--net internet\|intranet]` | Upload file to volume |
 
 ## Dynamic Table Commands (V3.1+)
 

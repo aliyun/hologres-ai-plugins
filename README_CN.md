@@ -94,9 +94,13 @@ hologres-ai-plugins/
 | `hologres ai-guide` | 生成 AI Agent 使用指南 |
 | `hologres ai gen "<prompt>" [--model]` | 使用 AI 函数生成文本 |
 | `hologres ai image-gen "<prompt>" -d DIR [选项]` | 使用 AI 函数生成图片 |
-| `hologres volume create <name> --endpoint <ep> --root <root> --rolearn <arn>` | 创建本地 Volume 配置 |
+| `hologres volume create <name> --endpoint <ep> --root <root> --rolearn <arn> --access-key <ak> --access-secret <sk>` | 创建本地 Volume 配置 |
 | `hologres volume list` | 列出当前 Profile 下所有 Volume |
 | `hologres volume delete <name>` | 删除 Volume 配置 |
+| `hologres volume list-files --volume <name> [--prefix P] [--max-count N] [--net internet\|intranet]` | 列出 Volume 下的文件 |
+| `hologres volume delete-file --volume <name> --file <path> [--confirm] [--net internet\|intranet]` | 删除 Volume 中的文件 |
+| `hologres volume download-file --volume <name> --file <path> -d <dir> [--net internet\|intranet]` | 从 Volume 下载文件 |
+| `hologres volume upload-file --volume <name> --local-file <path> --target-file <path> [--net internet\|intranet]` | 上传文件到 Volume |
 
 **快速开始：**
 
