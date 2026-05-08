@@ -1,0 +1,11 @@
+{
+  "name": "hologres-ad-campaign",
+  "version": "1.0.1",
+  "description": "通过 Hologres AI Function 生成广告素材并模拟投放效果分析。当用户提到广告视频生成、宣传视频制作、素材转视频、Hologres AI Function 生成视频、虚拟投放模拟、ROI 分析、投放效果分析、广告素材生成等场景时使用。全 SQL 链路覆盖从素材管理、主题图片生成、分镜脚本、视频合成、虚拟投放到实时 ROI 分析的完整闭环。",
+  "publishConfig": {
+    "registry": "https://contextlab.alibaba-inc.com/skill"
+  },
+  "aoneKit": {
+    "generated": true
+  }
+}

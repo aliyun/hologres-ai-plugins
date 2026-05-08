@@ -1,0 +1,11 @@
+{
+  "name": "hologres-privileges",
+  "version": "1.0.1",
+  "description": "Hologres privilege management using PostgreSQL standard authorization model (expert permission model). Use for creating users, granting/revoking Schema/table/column/view privileges, configuring default privileges for future objects, diagnosing permission issues, and planning role-based access control. Triggers: \"hologres权限\", \"hologres grant\", \"hologres revoke\", \"permission denied\", \"权限管理\", \"hologres privileges\", \"hologres authorization\", \"default privileges\", \"角色权限\", \"授权\"",
+  "publishConfig": {
+    "registry": "https://contextlab.alibaba-inc.com/skill"
+  },
+  "aoneKit": {
+    "generated": true
+  }
+}

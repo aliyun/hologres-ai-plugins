@@ -1,0 +1,11 @@
+{
+  "name": "hologres-uv-compute",
+  "version": "1.0.1",
+  "description": "Hologres UV/PV computation using Dynamic Tables and RoaringBitmap for real-time deduplication at scale. Use for building incremental UV/PV pipelines, RoaringBitmap-based user deduplication, flexible time-range UV aggregation, and text-to-int UID encoding for bitmap compatibility. Triggers: \"hologres uv\", \"hologres pv\", \"roaringbitmap\", \"rb_build_agg\", \"rb_or_agg\", \"去重\", \"UV计算\", \"用户去重\", \"bitmap去重\", \"实时UV\", \"hg_id_encoding\"",
+  "publishConfig": {
+    "registry": "https://contextlab.alibaba-inc.com/skill"
+  },
+  "aoneKit": {
+    "generated": true
+  }
+}

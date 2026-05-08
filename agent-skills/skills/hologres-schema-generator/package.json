@@ -1,0 +1,11 @@
+{
+  "name": "hologres-schema-generator",
+  "version": "1.0.1",
+  "description": "Hologres DDL schema design and table creation expert. Use for generating CREATE TABLE statements, choosing storage formats (column/row/row-column), configuring table properties (distribution_key, clustering_key, bitmap_columns, event_time_column), designing partition tables, selecting data types, and optimizing table schemas for different query patterns. Triggers: \"hologres建表\", \"hologres create table\", \"hologres schema\", \"hologres DDL\", \"distribution_key\", \"clustering_key\", \"bitmap_columns\", \"event_time_column\", \"列存\", \"行存\", \"行列共存\", \"分区表\", \"hologres table design\", \"表设计\", \"hologres数据类型\"",
+  "publishConfig": {
+    "registry": "https://contextlab.alibaba-inc.com/skill"
+  },
+  "aoneKit": {
+    "generated": true
+  }
+}
