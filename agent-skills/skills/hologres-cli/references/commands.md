@@ -1196,6 +1196,67 @@ Generate AI agent guide.
 hologres ai-guide
 ```
 
+## ai
+
+AI commands (text generation, etc.).
+
+### ai gen
+
+Generate text using Hologres AI function `ai_gen()`.
+
+```bash
+# Use server default model
+hologres ai gen "介绍下 hologres"
+
+# Specify a model
+hologres ai gen "写一首关于数据库的诗" --model qwen-max
+hologres ai gen "hello" -m qwen-plus
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `PROMPT` | The text prompt to send to the AI function (required) |
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--model, -m` | AI model name (optional, uses server default if not specified) |
+
+**Output (JSON, no model specified):**
+```json
+{
+  "ok": true,
+  "data": {
+    "text": "Hologres 是一款实时数仓..."
+  }
+}
+```
+
+**Output (JSON, with --model):**
+```json
+{
+  "ok": true,
+  "data": {
+    "text": "Hologres 是一款实时数仓...",
+    "model": "qwen-max"
+  }
+}
+```
+
+Non-JSON formats (table/csv/jsonl) output the generated text directly.
+
+**Underlying SQL:**
+```sql
+-- Without model
+SELECT ai_gen('<prompt>');
+
+-- With model
+SELECT ai_gen('<model>', '<prompt>');
+```
+
 ## dt (Dynamic Table V3.1+)
 
 Full lifecycle management for Hologres Dynamic Tables using V3.1+ new syntax.

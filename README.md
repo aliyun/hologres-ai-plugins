@@ -92,6 +92,7 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres dt convert [table]` | Convert from V3.0 to V3.1 syntax |
 | `hologres history` | Show recent command history |
 | `hologres ai-guide` | Generate AI agent guide |
+| `hologres ai gen "<prompt>" [--model]` | Generate text using AI function |
 
 **Quick Start:**
 

@@ -92,6 +92,7 @@ hologres-ai-plugins/
 | `hologres dt convert [table]` | 从 V3.0 转换为 V3.1 语法 |
 | `hologres history` | 查看最近的命令历史 |
 | `hologres ai-guide` | 生成 AI Agent 使用指南 |
+| `hologres ai gen "<prompt>" [--model]` | 使用 AI 函数生成文本 |
 
 **快速开始：**
 

@@ -495,6 +495,31 @@ hologres history -n 50    # Show last 50 entries
 hologres ai-guide         # Generate AI agent guide
 ```
 
+### AI
+
+```bash
+# Generate text using Hologres AI function (uses server default model)
+hologres ai gen "介绍下 hologres"
+
+# Specify a model
+hologres ai gen "写一首关于数据库的诗" --model qwen-max
+hologres ai gen "hello" -m qwen-plus
+```
+
+**Output (JSON):**
+```json
+{
+  "ok": true,
+  "data": {
+    "text": "Hologres 是一款..."
+  }
+}
+```
+
+When `--model` is specified, the response also includes `"model": "qwen-max"`.
+
+Non-JSON formats (table/csv/jsonl) output plain text directly.
+
 ## Output Formats
 
 ```bash
