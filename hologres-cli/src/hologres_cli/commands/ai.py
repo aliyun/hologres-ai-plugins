@@ -191,6 +191,10 @@ def image_gen_cmd(ctx: click.Context, prompt: str, download_dir: str,
         except (json_mod.JSONDecodeError, TypeError):
             pass
 
+        # Close connection before downloading to free file descriptors
+        conn.close()
+        conn = None
+
         if image_urls:
             # Download images to local directory
             os.makedirs(download_dir, exist_ok=True)
@@ -203,7 +207,10 @@ def image_gen_cmd(ctx: click.Context, prompt: str, download_dir: str,
                     filename = f"image_{i}.png"
                 filepath = os.path.join(download_dir, filename)
                 try:
-                    urllib.request.urlretrieve(url, filepath)
+                    req = urllib.request.Request(url)
+                    with urllib.request.urlopen(req, timeout=60) as resp, \
+                         open(filepath, "wb") as f:
+                        f.write(resp.read())
                     local_paths.append(filepath)
                 except Exception as dl_err:
                     local_paths.append(None)
@@ -231,7 +238,7 @@ def image_gen_cmd(ctx: click.Context, prompt: str, download_dir: str,
         duration_ms = (time.time() - start_time) * 1000
         log_operation(
             "ai.image-gen",
-            dsn_masked=conn.masked_dsn,
+            dsn_masked=getattr(conn, "masked_dsn", "unknown") if conn else "unknown",
             success=False,
             error_code="QUERY_ERROR",
             error_message=str(e),
@@ -239,4 +246,5 @@ def image_gen_cmd(ctx: click.Context, prompt: str, download_dir: str,
         )
         print_output(query_error(str(e), fmt))
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()

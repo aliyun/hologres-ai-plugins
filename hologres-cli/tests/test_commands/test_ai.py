@@ -144,10 +144,24 @@ class TestAiImageGenCmd:
         "image_oss_paths": []
     })
 
+    @staticmethod
+    def _mock_urlopen(mocker, side_effect=None):
+        """Helper to mock urllib.request.urlopen with a context-manager response."""
+        mock_resp = mocker.MagicMock()
+        mock_resp.read.return_value = b"\x89PNG fake image data"
+        mock_resp.__enter__ = mocker.MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = mocker.MagicMock(return_value=False)
+        mock_open = mocker.patch("urllib.request.urlopen")
+        if side_effect:
+            mock_open.side_effect = side_effect
+        else:
+            mock_open.return_value = mock_resp
+        return mock_open
+
     def test_image_gen_minimal(self, mock_get_connection, tmp_path, mocker):
         """image-gen downloads image and returns local path with filename from URL."""
         mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
-        mocker.patch("urllib.request.urlretrieve")
+        self._mock_urlopen(mocker)
         runner = CliRunner()
         result = runner.invoke(cli, ["ai", "image-gen", "生成一只猫", "-d", str(tmp_path)])
         assert result.exit_code == 0
@@ -168,7 +182,7 @@ class TestAiImageGenCmd:
     def test_image_gen_with_model(self, mock_get_connection, tmp_path, mocker):
         """image-gen with --model uses two-param ai_gen()."""
         mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
-        mocker.patch("urllib.request.urlretrieve")
+        self._mock_urlopen(mocker)
         runner = CliRunner()
         result = runner.invoke(cli, ["ai", "image-gen", "猫", "-m", "qwen-image-2.0", "-d", str(tmp_path)])
         assert result.exit_code == 0
@@ -182,7 +196,7 @@ class TestAiImageGenCmd:
     def test_image_gen_multiple_images(self, mock_get_connection, tmp_path, mocker):
         """image-gen with n>1 downloads multiple images with filenames from URLs."""
         mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE_MULTI}]
-        mocker.patch("urllib.request.urlretrieve")
+        self._mock_urlopen(mocker)
         runner = CliRunner()
         result = runner.invoke(cli, ["ai", "image-gen", "猫", "-n", "2", "-d", str(tmp_path)])
         assert result.exit_code == 0
@@ -195,7 +209,7 @@ class TestAiImageGenCmd:
     def test_image_gen_download_creates_dir(self, mock_get_connection, tmp_path, mocker):
         """image-gen creates download dir if not exists."""
         mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
-        mocker.patch("urllib.request.urlretrieve")
+        self._mock_urlopen(mocker)
         new_dir = str(tmp_path / "subdir" / "images")
         runner = CliRunner()
         result = runner.invoke(cli, ["ai", "image-gen", "猫", "-d", new_dir])
@@ -206,8 +220,13 @@ class TestAiImageGenCmd:
     def test_image_gen_download_failure(self, mock_get_connection, tmp_path, mocker):
         """image-gen handles download failure gracefully."""
         mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE_MULTI}]
-        mock_dl = mocker.patch("urllib.request.urlretrieve")
-        mock_dl.side_effect = [None, Exception("Network error")]
+        # First call succeeds, second raises
+        mock_resp = mocker.MagicMock()
+        mock_resp.read.return_value = b"\x89PNG fake"
+        mock_resp.__enter__ = mocker.MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = mocker.MagicMock(return_value=False)
+        mock_open = mocker.patch("urllib.request.urlopen")
+        mock_open.side_effect = [mock_resp, Exception("Network error")]
         runner = CliRunner()
         result = runner.invoke(cli, ["ai", "image-gen", "猫", "-d", str(tmp_path)])
         assert result.exit_code == 0
@@ -221,7 +240,7 @@ class TestAiImageGenCmd:
     def test_image_gen_with_all_options(self, mock_get_connection, tmp_path, mocker):
         """image-gen with all options builds complete JSON."""
         mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
-        mocker.patch("urllib.request.urlretrieve")
+        self._mock_urlopen(mocker)
         runner = CliRunner()
         result = runner.invoke(cli, [
             "ai", "image-gen", "猫",
@@ -248,7 +267,7 @@ class TestAiImageGenCmd:
     def test_image_gen_partial_options(self, mock_get_connection, tmp_path, mocker):
         """image-gen with partial options only includes specified params."""
         mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
-        mocker.patch("urllib.request.urlretrieve")
+        self._mock_urlopen(mocker)
         runner = CliRunner()
         result = runner.invoke(cli, ["ai", "image-gen", "猫", "--size", "1280*720", "-n", "3", "-d", str(tmp_path)])
         assert result.exit_code == 0
@@ -263,7 +282,7 @@ class TestAiImageGenCmd:
     def test_image_gen_negative_prompt_only(self, mock_get_connection, tmp_path, mocker):
         """negative_prompt is at top level, not inside parameters."""
         mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
-        mocker.patch("urllib.request.urlretrieve")
+        self._mock_urlopen(mocker)
         runner = CliRunner()
         result = runner.invoke(cli, ["ai", "image-gen", "猫", "--negative-prompt", "模糊", "-d", str(tmp_path)])
         assert result.exit_code == 0
@@ -275,7 +294,7 @@ class TestAiImageGenCmd:
     def test_image_gen_table_format(self, mock_get_connection, tmp_path, mocker):
         """image-gen with table format outputs local paths, one per line."""
         mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE_MULTI}]
-        mocker.patch("urllib.request.urlretrieve")
+        self._mock_urlopen(mocker)
         runner = CliRunner()
         result = runner.invoke(cli, ["-f", "table", "ai", "image-gen", "猫", "-d", str(tmp_path)])
         assert result.exit_code == 0
@@ -346,7 +365,7 @@ class TestAiImageGenCmd:
     def test_image_gen_parameterized_query(self, mock_get_connection, tmp_path, mocker):
         """image-gen uses parameterized query to prevent SQL injection."""
         mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
-        mocker.patch("urllib.request.urlretrieve")
+        self._mock_urlopen(mocker)
         runner = CliRunner()
         result = runner.invoke(cli, ["ai", "image-gen", "'; DROP TABLE users; --", "-d", str(tmp_path)])
         assert result.exit_code == 0
@@ -368,7 +387,7 @@ class TestAiImageGenCmd:
     def test_image_gen_prompt_extend_case_insensitive(self, mock_get_connection, tmp_path, mocker):
         """--prompt-extend accepts True/False case-insensitively."""
         mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
-        mocker.patch("urllib.request.urlretrieve")
+        self._mock_urlopen(mocker)
         runner = CliRunner()
         result = runner.invoke(cli, ["ai", "image-gen", "猫", "--prompt-extend", "True", "-d", str(tmp_path)])
         assert result.exit_code == 0
