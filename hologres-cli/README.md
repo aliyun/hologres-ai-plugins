@@ -561,6 +561,50 @@ When `--model` is specified, the response also includes `"model": "qwen-image-2.
 
 Non-JSON formats output local file paths, one per line.
 
+### Volume (Local Storage Configuration)
+
+Manage local volume configurations for OSS file storage. Volumes are stored in `~/.hologres/config.json` under the current profile.
+
+```bash
+# Create a volume
+hologres volume create my_vol \
+  --endpoint oss-cn-hangzhou-internal.aliyuncs.com \
+  --root oss://bucket/path/ \
+  --rolearn acs:ram::123456:role/AliyunHologresDefaultRole
+
+# List all volumes
+hologres volume list
+
+# Delete a volume
+hologres volume delete my_vol
+```
+
+**Create Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--type` | Volume type (default: `oss`, currently only `oss` supported) |
+| `--endpoint` | OSS internal endpoint (required, must contain `-internal`) |
+| `--root` | OSS root path, e.g. `oss://bucket/path/` (required) |
+| `--rolearn` | RAM role ARN for Hologres service (required) |
+
+**Naming Rules:**
+- Must start with a letter
+- Only letters, digits, and underscores allowed
+- Maximum 64 characters
+- Must be unique within the profile
+
+**Output (JSON):**
+```json
+{
+  "ok": true,
+  "data": {
+    "volume": "my_vol",
+    "created": true
+  }
+}
+```
+
 ## Output Formats
 
 ```bash

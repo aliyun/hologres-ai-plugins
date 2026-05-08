@@ -94,6 +94,9 @@ hologres-ai-plugins/
 | `hologres ai-guide` | 生成 AI Agent 使用指南 |
 | `hologres ai gen "<prompt>" [--model]` | 使用 AI 函数生成文本 |
 | `hologres ai image-gen "<prompt>" -d DIR [选项]` | 使用 AI 函数生成图片 |
+| `hologres volume create <name> --endpoint <ep> --root <root> --rolearn <arn>` | 创建本地 Volume 配置 |
+| `hologres volume list` | 列出当前 Profile 下所有 Volume |
+| `hologres volume delete <name>` | 删除 Volume 配置 |
 
 **快速开始：**
 

@@ -29,7 +29,7 @@ def cli(ctx: click.Context, profile: Optional[str], format: str) -> None:
 
 
 
-from .commands import schema, sql, data, status, instance, warehouse, dt, config, table, view, extension, guc, partition, ai  # noqa: E402
+from .commands import schema, sql, data, status, instance, warehouse, dt, config, table, view, extension, guc, partition, ai, volume  # noqa: E402
 cli.add_command(schema.schema_cmd)
 cli.add_command(sql.sql_cmd)
 cli.add_command(data.data_cmd)
@@ -44,6 +44,7 @@ cli.add_command(extension.extension_cmd)
 cli.add_command(guc.guc_cmd)
 cli.add_command(partition.partition_cmd)
 cli.add_command(ai.ai_cmd)
+cli.add_command(volume.volume_cmd)
 
 
 @cli.command("ai-guide")
@@ -83,6 +84,9 @@ Use `--profile <name>` to switch profiles.
 - `hologres data import <table> -f <file>` - Import from CSV
 - `hologres data count <table>` - Count rows
 - `hologres status` - Connection status
+- `hologres volume create <name> --endpoint <ep> --root <root> --rolearn <arn>` - Create volume config
+- `hologres volume list` - List volumes
+- `hologres volume delete <name>` - Delete volume config
 
 ## Safety: LIMIT required for >100 rows, --write for mutations, no DELETE/UPDATE without WHERE.
 ## Output: --format json|table|csv|jsonl. Default: json with {ok: true/false}.

@@ -1325,6 +1325,110 @@ SELECT ai_gen('{"prompt": "...", "parameters": {"size": "1280*720", "n": 2}}');
 SELECT ai_gen('qwen-image-2.0', '{"prompt": "...", "parameters": {...}}');
 ```
 
+## volume
+
+Manage local volume configurations for OSS file storage. Volumes are stored in `~/.hologres/config.json` under the current profile, not on the Hologres server.
+
+### volume create
+
+Create a volume configuration in the current profile.
+
+```bash
+hologres volume create my_vol \
+  --endpoint oss-cn-hangzhou-internal.aliyuncs.com \
+  --root oss://bucket/path/ \
+  --rolearn acs:ram::123456:role/AliyunHologresDefaultRole
+
+# With explicit type (default is oss)
+hologres volume create my_vol --type oss \
+  --endpoint oss-cn-hangzhou-internal.aliyuncs.com \
+  --root oss://bucket/path/ \
+  --rolearn acs:ram::123456:role/AliyunHologresDefaultRole
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `VOLUME_NAME` | Volume name (required). Must start with a letter, only letters/digits/underscores, max 64 chars |
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--type` | Volume type (default: `oss`, currently only `oss` supported) |
+| `--endpoint` | OSS internal endpoint (required, must contain `-internal`) |
+| `--root` | OSS root path, e.g. `oss://bucket/path/` (required, must start with `oss://`) |
+| `--rolearn` | RAM role ARN for Hologres service (required) |
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "volume": "my_vol",
+    "created": true
+  }
+}
+```
+
+**Error (duplicate name):**
+```json
+{
+  "ok": false,
+  "error": {"code": "ALREADY_EXISTS", "message": "Volume 'my_vol' already exists in profile 'default'."}
+}
+```
+
+### volume list
+
+List all volumes in the current profile.
+
+```bash
+hologres volume list
+hologres -f table volume list
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "rows": [
+      {"name": "my_vol", "type": "oss", "endpoint": "oss-cn-hangzhou-internal.aliyuncs.com", "root": "oss://bucket/path/"}
+    ],
+    "count": 1
+  }
+}
+```
+
+### volume delete
+
+Delete a volume from the current profile.
+
+```bash
+hologres volume delete my_vol
+```
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "volume": "my_vol",
+    "deleted": true
+  }
+}
+```
+
+**Error (not found):**
+```json
+{
+  "ok": false,
+  "error": {"code": "NOT_FOUND", "message": "Volume 'my_vol' not found in profile 'default'."}
+}
+```
+
 ## dt (Dynamic Table V3.1+)
 
 Full lifecycle management for Hologres Dynamic Tables using V3.1+ new syntax.
