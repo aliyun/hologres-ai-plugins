@@ -16,6 +16,7 @@ This skill requires **hologres-cli** to be installed first:
 
 ```bash
 pip install hologres-cli
+export HOLOGRES_SKILL=hologres-schema-generator
 ```
 
 All SQL execution depends on `hologres-cli` commands (`hologres sql run --write`, `hologres table create`).

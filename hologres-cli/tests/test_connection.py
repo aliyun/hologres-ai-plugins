@@ -142,6 +142,24 @@ class TestParseDsn:
         assert result["application_name"] == "hologres-cli/custom"
         assert result["connect_timeout"] == "30"
 
+    def test_parse_dsn_application_name_with_skill_env(self, monkeypatch):
+        """Test HOLOGRES_SKILL env var is included in application_name."""
+        monkeypatch.setenv("HOLOGRES_SKILL", "hologres-uv-compute")
+        result = parse_dsn("hologres://user:pass@host:80/db")
+        assert result["application_name"] == "hologres-cli/hologres-uv-compute"
+
+    def test_parse_dsn_application_name_with_skill_and_user_defined(self, monkeypatch):
+        """Test both HOLOGRES_SKILL and DSN application_name combined."""
+        monkeypatch.setenv("HOLOGRES_SKILL", "hologres-query-optimizer")
+        result = parse_dsn("hologres://user:pass@host:80/db?application_name=my-app")
+        assert result["application_name"] == "hologres-cli/hologres-query-optimizer/my-app"
+
+    def test_parse_dsn_application_name_without_skill_env(self, monkeypatch):
+        """Test without HOLOGRES_SKILL env var keeps default."""
+        monkeypatch.delenv("HOLOGRES_SKILL", raising=False)
+        result = parse_dsn("hologres://user:pass@host:80/db")
+        assert result["application_name"] == "hologres-cli"
+
 
 class TestMaskDsnPassword:
     """Tests for mask_dsn_password function."""

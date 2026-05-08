@@ -6,6 +6,7 @@ DSN format: hologres://[user[:password]@]host[:port]/database[?options]
 
 from __future__ import annotations
 
+import os
 import re
 from typing import Any, Optional
 from urllib.parse import parse_qs, unquote, urlparse
@@ -16,6 +17,7 @@ from psycopg.rows import dict_row
 from .config_store import ConfigError, build_dsn_from_profile, get_current_profile, get_profile
 
 DEFAULT_PORT = 80
+SKILL_ENV_VAR = "HOLOGRES_SKILL"
 DEFAULT_KEEPALIVES = {
     "keepalives": 1,
     "keepalives_idle": 130,
@@ -108,14 +110,20 @@ def parse_dsn(dsn: str) -> dict[str, Any]:
             elif key in ("connect_timeout", "options", "application_name"):
                 params[key] = value
 
-    # application_name: 始终以 "hologres-cli" 为前缀
-    # - DSN 未指定 -> "hologres-cli"
-    # - DSN 已指定 -> "hologres-cli/<user_defined>"
+    # application_name 格式: hologres-cli[/skill_name][/user_defined]
+    # - 无 skill, 无自定义: "hologres-cli"
+    # - 有 skill, 无自定义: "hologres-cli/hologres-query-optimizer"
+    # - 有 skill, 有自定义: "hologres-cli/hologres-query-optimizer/my-app"
+    # - 无 skill, 有自定义: "hologres-cli/my-app"
     user_app_name = params.pop("application_name", None)
+    skill_name = os.environ.get(SKILL_ENV_VAR, "")
+
+    parts = ["hologres-cli"]
+    if skill_name:
+        parts.append(skill_name)
     if user_app_name:
-        params["application_name"] = f"hologres-cli/{user_app_name}"
-    else:
-        params["application_name"] = "hologres-cli"
+        parts.append(user_app_name)
+    params["application_name"] = "/".join(parts)
 
     return params
 

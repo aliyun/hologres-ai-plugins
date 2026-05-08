@@ -330,3 +330,28 @@ Disable: `hologres sql run --no-mask "SELECT * FROM users LIMIT 10"`
 5. Use JSON output for automation/scripting
 6. Check `hologres status` before batch operations
 7. Use `hologres dt lineage` to understand DT dependencies before altering
+
+## SQL Tracking
+
+Set `HOLOGRES_SKILL` environment variable before calling CLI to tag queries with skill origin:
+
+```bash
+export HOLOGRES_SKILL=hologres-query-optimizer
+hologres sql run "SELECT * FROM orders LIMIT 10"
+```
+
+Queries will appear in `hg_query_log` with `application_name = "hologres-cli/hologres-query-optimizer"`.
+
+This enables per-skill SQL statistics on the Hologres server:
+
+```sql
+SELECT
+  split_part(application_name, '/', 2) AS skill,
+  COUNT(*) AS query_count,
+  AVG(duration) AS avg_duration_ms
+FROM hologres.hg_query_log
+WHERE query_start > now() - interval '1 hour'
+  AND application_name LIKE 'hologres-cli/%'
+GROUP BY 1
+ORDER BY 2 DESC;
+```

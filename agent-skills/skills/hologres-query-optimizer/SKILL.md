@@ -14,6 +14,7 @@ This skill requires **hologres-cli** to be installed first:
 
 ```bash
 pip install hologres-cli
+export HOLOGRES_SKILL=hologres-query-optimizer
 ```
 
 All SQL execution and GUC parameter operations depend on `hologres-cli` commands (`hologres sql run`, `hologres guc show/set`).

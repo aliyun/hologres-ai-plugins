@@ -10,6 +10,7 @@ This skill requires **hologres-cli** to be installed first:
 
 ```bash
 pip install hologres-cli
+export HOLOGRES_SKILL=hologres-ad-campaign
 ```
 
 All SQL execution and Dynamic Table operations depend on `hologres-cli` commands (`hologres sql run --write`, `hologres dt create`).

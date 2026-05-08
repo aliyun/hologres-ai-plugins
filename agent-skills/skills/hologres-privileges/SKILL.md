@@ -14,6 +14,7 @@ This skill requires **hologres-cli** to be installed first:
 
 ```bash
 pip install hologres-cli
+export HOLOGRES_SKILL=hologres-privileges
 ```
 
 All SQL execution depends on `hologres-cli` commands (`hologres sql run --write`).
