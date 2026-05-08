@@ -121,3 +121,263 @@ class TestAiGenCmd:
         runner = CliRunner()
         result = runner.invoke(cli, ["ai", "gen"])
         assert result.exit_code != 0
+
+
+@pytest.mark.unit
+class TestAiImageGenCmd:
+    """Tests for 'hologres ai image-gen' command."""
+
+    MOCK_RESPONSE = json.dumps({
+        "requestId": "6dace24e-7f2d-4ec2-a8ac-aa73415a35a8",
+        "usage": {"height": 720, "image_count": 1, "width": 1280},
+        "image_urls": ["https://dashscope-xxx.oss.aliyuncs.com/7d/69/c58b7714-b147.png?Expires=123"],
+        "image_oss_paths": []
+    })
+
+    MOCK_RESPONSE_MULTI = json.dumps({
+        "requestId": "abc-123",
+        "usage": {"height": 720, "image_count": 2, "width": 1280},
+        "image_urls": [
+            "https://dashscope-xxx.oss.aliyuncs.com/7d/69/img-aaa.png?Expires=123",
+            "https://dashscope-xxx.oss.aliyuncs.com/7d/69/img-bbb.png?Expires=456",
+        ],
+        "image_oss_paths": []
+    })
+
+    def test_image_gen_minimal(self, mock_get_connection, tmp_path, mocker):
+        """image-gen downloads image and returns local path with filename from URL."""
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        mocker.patch("urllib.request.urlretrieve")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "生成一只猫", "-d", str(tmp_path)])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert len(output["data"]["images"]) == 1
+        assert output["data"]["images"][0].endswith("c58b7714-b147.png")
+        assert str(tmp_path) in output["data"]["images"][0]
+        assert output["data"]["usage"] == {"height": 720, "image_count": 1, "width": 1280}
+        assert "model" not in output["data"]
+        call_args = mock_get_connection.execute.call_args
+        assert call_args[0][0] == "SELECT ai_gen(%s)"
+        request = json.loads(call_args[0][1][0])
+        assert request["prompt"] == "生成一只猫"
+        assert "parameters" not in request
+        mock_get_connection.close.assert_called_once()
+
+    def test_image_gen_with_model(self, mock_get_connection, tmp_path, mocker):
+        """image-gen with --model uses two-param ai_gen()."""
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        mocker.patch("urllib.request.urlretrieve")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "-m", "qwen-image-2.0", "-d", str(tmp_path)])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["data"]["model"] == "qwen-image-2.0"
+        assert len(output["data"]["images"]) == 1
+        call_args = mock_get_connection.execute.call_args
+        assert call_args[0][0] == "SELECT ai_gen(%s, %s)"
+        assert call_args[0][1][0] == "qwen-image-2.0"
+
+    def test_image_gen_multiple_images(self, mock_get_connection, tmp_path, mocker):
+        """image-gen with n>1 downloads multiple images with filenames from URLs."""
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE_MULTI}]
+        mocker.patch("urllib.request.urlretrieve")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "-n", "2", "-d", str(tmp_path)])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert len(output["data"]["images"]) == 2
+        assert output["data"]["images"][0].endswith("img-aaa.png")
+        assert output["data"]["images"][1].endswith("img-bbb.png")
+        assert output["data"]["usage"]["image_count"] == 2
+
+    def test_image_gen_download_creates_dir(self, mock_get_connection, tmp_path, mocker):
+        """image-gen creates download dir if not exists."""
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        mocker.patch("urllib.request.urlretrieve")
+        new_dir = str(tmp_path / "subdir" / "images")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "-d", new_dir])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert new_dir in output["data"]["images"][0]
+
+    def test_image_gen_download_failure(self, mock_get_connection, tmp_path, mocker):
+        """image-gen handles download failure gracefully."""
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE_MULTI}]
+        mock_dl = mocker.patch("urllib.request.urlretrieve")
+        mock_dl.side_effect = [None, Exception("Network error")]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "-d", str(tmp_path)])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["images"][0] is not None
+        assert output["data"]["images"][1] is None
+        assert len(output["data"]["errors"]) == 1
+        assert output["data"]["errors"][0]["index"] == 2
+
+    def test_image_gen_with_all_options(self, mock_get_connection, tmp_path, mocker):
+        """image-gen with all options builds complete JSON."""
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        mocker.patch("urllib.request.urlretrieve")
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "image-gen", "猫",
+            "--model", "qwen-image-2.0",
+            "--negative-prompt", "低画质",
+            "--size", "1280*720",
+            "-n", "2",
+            "--prompt-extend", "false",
+            "--watermark", "true",
+            "--seed", "42",
+            "-d", str(tmp_path),
+        ])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        request = json.loads(call_args[0][1][1])
+        assert request["prompt"] == "猫"
+        assert request["negative_prompt"] == "低画质"
+        assert request["parameters"]["size"] == "1280*720"
+        assert request["parameters"]["n"] == 2
+        assert request["parameters"]["prompt_extend"] is False
+        assert request["parameters"]["watermark"] is True
+        assert request["parameters"]["seed"] == 42
+
+    def test_image_gen_partial_options(self, mock_get_connection, tmp_path, mocker):
+        """image-gen with partial options only includes specified params."""
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        mocker.patch("urllib.request.urlretrieve")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "--size", "1280*720", "-n", "3", "-d", str(tmp_path)])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        request = json.loads(call_args[0][1][0])
+        assert request["prompt"] == "猫"
+        assert request["parameters"]["size"] == "1280*720"
+        assert request["parameters"]["n"] == 3
+        assert "negative_prompt" not in request
+        assert "prompt_extend" not in request["parameters"]
+
+    def test_image_gen_negative_prompt_only(self, mock_get_connection, tmp_path, mocker):
+        """negative_prompt is at top level, not inside parameters."""
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        mocker.patch("urllib.request.urlretrieve")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "--negative-prompt", "模糊", "-d", str(tmp_path)])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        request = json.loads(call_args[0][1][0])
+        assert request["negative_prompt"] == "模糊"
+        assert "parameters" not in request
+
+    def test_image_gen_table_format(self, mock_get_connection, tmp_path, mocker):
+        """image-gen with table format outputs local paths, one per line."""
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE_MULTI}]
+        mocker.patch("urllib.request.urlretrieve")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["-f", "table", "ai", "image-gen", "猫", "-d", str(tmp_path)])
+        assert result.exit_code == 0
+        assert str(tmp_path) in result.output
+        assert "img-aaa.png" in result.output
+        assert "img-bbb.png" in result.output
+
+    def test_image_gen_json_parse_failure_fallback(self, mock_get_connection, tmp_path):
+        """image-gen falls back to raw_result when response is not valid JSON."""
+        mock_get_connection.execute.return_value = [{"ai_gen": "not-json-response"}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "-d", str(tmp_path)])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["raw_result"] == "not-json-response"
+        assert "images" not in output["data"]
+
+    def test_image_gen_no_image_urls_field_fallback(self, mock_get_connection, tmp_path):
+        """image-gen falls back when JSON has no image_urls field."""
+        mock_get_connection.execute.return_value = [{"ai_gen": '{"requestId": "abc", "other": 1}'}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "-d", str(tmp_path)])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["data"]["raw_result"] == '{"requestId": "abc", "other": 1}'
+
+    def test_image_gen_connection_error(self, mocker, tmp_path):
+        """image-gen handles connection error gracefully."""
+        from hologres_cli.connection import DSNError
+        mocker.patch("hologres_cli.commands.ai.get_connection",
+                     side_effect=DSNError("No profile configured"))
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "-d", str(tmp_path)])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_image_gen_query_error(self, mock_get_connection, tmp_path):
+        """image-gen handles SQL execution error."""
+        mock_get_connection.execute.side_effect = Exception("model not supported")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "-d", str(tmp_path)])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+        mock_get_connection.close.assert_called_once()
+
+    def test_image_gen_empty_result(self, mock_get_connection, tmp_path):
+        """image-gen handles empty result."""
+        mock_get_connection.execute.return_value = []
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "-d", str(tmp_path)])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["raw_result"] == ""
+
+    def test_image_gen_null_result(self, mock_get_connection, tmp_path):
+        """image-gen handles NULL return."""
+        mock_get_connection.execute.return_value = [{"ai_gen": None}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "-d", str(tmp_path)])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["data"]["raw_result"] == ""
+
+    def test_image_gen_parameterized_query(self, mock_get_connection, tmp_path, mocker):
+        """image-gen uses parameterized query to prevent SQL injection."""
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        mocker.patch("urllib.request.urlretrieve")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "'; DROP TABLE users; --", "-d", str(tmp_path)])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        assert call_args[0][0] == "SELECT ai_gen(%s)"
+
+    def test_image_gen_missing_prompt(self, tmp_path):
+        """image-gen shows error when prompt is missing."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "-d", str(tmp_path)])
+        assert result.exit_code != 0
+
+    def test_image_gen_missing_download_dir(self):
+        """image-gen shows error when --download-dir is missing."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫"])
+        assert result.exit_code != 0
+
+    def test_image_gen_prompt_extend_case_insensitive(self, mock_get_connection, tmp_path, mocker):
+        """--prompt-extend accepts True/False case-insensitively."""
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        mocker.patch("urllib.request.urlretrieve")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "--prompt-extend", "True", "-d", str(tmp_path)])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        request = json.loads(call_args[0][1][0])
+        assert request["parameters"]["prompt_extend"] is True
+
+    def test_image_gen_invalid_n_type(self, tmp_path):
+        """-n with non-integer value should fail."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "-n", "abc", "-d", str(tmp_path)])
+        assert result.exit_code != 0

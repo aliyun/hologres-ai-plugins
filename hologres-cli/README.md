@@ -520,6 +520,47 @@ When `--model` is specified, the response also includes `"model": "qwen-max"`.
 
 Non-JSON formats (table/csv/jsonl) output plain text directly.
 
+### AI Image Generation
+
+```bash
+# Generate an image (download to local directory)
+hologres ai image-gen "生成一只可爱的猫" -d ./images
+
+# Specify a model
+hologres ai image-gen "生成一只猫" --model qwen-image-2.0 -d /tmp/images
+
+# With options
+hologres ai image-gen "短剧男主" --negative-prompt "低画质" -n 2 --size "1280*720" -d ./output
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--download-dir, -d` | Directory to save downloaded images (required) |
+| `--model, -m` | AI model name (e.g. qwen-image-2.0) |
+| `--negative-prompt` | Negative prompt, max 500 chars |
+| `--size` | Output image size, e.g. `1280*720` |
+| `-n` | Number of images to generate (1-6) |
+| `--prompt-extend` | Enable/disable prompt rewriting (`true`/`false`) |
+| `--watermark` | Add watermark to image (`true`/`false`) |
+| `--seed` | Random seed [0, 2147483647] |
+
+**Output (JSON):**
+```json
+{
+  "ok": true,
+  "data": {
+    "images": ["/tmp/images/c58b7714-b147.png"],
+    "usage": {"height": 720, "image_count": 1, "width": 1280}
+  }
+}
+```
+
+When `--model` is specified, the response also includes `"model": "qwen-image-2.0"`.
+
+Non-JSON formats output local file paths, one per line.
+
 ## Output Formats
 
 ```bash

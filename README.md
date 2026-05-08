@@ -93,6 +93,7 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres history` | Show recent command history |
 | `hologres ai-guide` | Generate AI agent guide |
 | `hologres ai gen "<prompt>" [--model]` | Generate text using AI function |
+| `hologres ai image-gen "<prompt>" -d DIR [options]` | Generate images using AI function |
 
 **Quick Start:**
 

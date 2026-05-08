@@ -88,6 +88,7 @@ hologres dt list                                   # List Dynamic Tables
 | `hologres history [-n <count>]` | Show command history |
 | `hologres ai-guide` | Generate AI agent guide |
 | `hologres ai gen "<prompt>" [--model]` | Generate text using AI function |
+| `hologres ai image-gen "<prompt>" -d DIR [options]` | Generate images using AI function |
 
 ## Dynamic Table Commands (V3.1+)
 

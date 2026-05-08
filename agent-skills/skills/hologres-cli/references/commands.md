@@ -1257,6 +1257,74 @@ SELECT ai_gen('<prompt>');
 SELECT ai_gen('<model>', '<prompt>');
 ```
 
+### ai image-gen
+
+Generate images using Hologres AI function `ai_gen()` with a JSON request body.
+
+```bash
+# Generate an image (download to local directory)
+hologres ai image-gen "生成一只可爱的猫" -d ./images
+
+# Specify a model
+hologres ai image-gen "生成一只猫" --model qwen-image-2.0 -d /tmp/images
+
+# With options
+hologres ai image-gen "短剧男主" --negative-prompt "低画质" -n 2 --size "1280*720" -d ./output
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `PROMPT` | The text prompt for image generation (required) |
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--download-dir, -d` | Directory to save downloaded images (required) |
+| `--model, -m` | AI model name (e.g. qwen-image-2.0) |
+| `--negative-prompt` | Negative prompt, max 500 chars |
+| `--size` | Output image size, e.g. `1280*720` |
+| `-n` | Number of images to generate (1-6) |
+| `--prompt-extend` | Enable/disable prompt rewriting (`true`/`false`) |
+| `--watermark` | Add watermark to image (`true`/`false`) |
+| `--seed` | Random seed [0, 2147483647] |
+
+**Output (JSON, success):**
+```json
+{
+  "ok": true,
+  "data": {
+    "images": ["/tmp/images/c58b7714-b147.png"],
+    "usage": {"height": 720, "image_count": 1, "width": 1280}
+  }
+}
+```
+
+When `--model` is specified, the response also includes `"model": "qwen-image-2.0"`.
+
+When response JSON cannot be parsed or has no `image_urls`, falls back to:
+```json
+{
+  "ok": true,
+  "data": {
+    "raw_result": "..."
+  }
+}
+```
+
+Non-JSON formats output local file paths, one per line.
+
+**Underlying SQL:**
+```sql
+-- Without model (JSON request as single param)
+SELECT ai_gen('{"prompt": "...", "parameters": {"size": "1280*720", "n": 2}}');
+
+-- With model
+SELECT ai_gen('qwen-image-2.0', '{"prompt": "...", "parameters": {...}}');
+```
+
 ## dt (Dynamic Table V3.1+)
 
 Full lifecycle management for Hologres Dynamic Tables using V3.1+ new syntax.
