@@ -81,7 +81,9 @@ def stage_sync_skills() -> None:
     if not SKILLS_SRC.exists():
         print("ERROR: skills/ directory not found.")
         sys.exit(1)
-    if SKILLS_DST.exists():
+    if SKILLS_DST.is_symlink():
+        SKILLS_DST.unlink()
+    elif SKILLS_DST.exists():
         shutil.rmtree(SKILLS_DST)
     shutil.copytree(SKILLS_SRC, SKILLS_DST, ignore=shutil.ignore_patterns("__pycache__"))
     print("Synced skills/ -> src/holo_plugin_installer/skills/")
@@ -89,7 +91,10 @@ def stage_sync_skills() -> None:
 
 def stage_cleanup_skills() -> None:
     """Remove copied skills from package source tree."""
-    if SKILLS_DST.exists():
+    if SKILLS_DST.is_symlink():
+        SKILLS_DST.unlink()
+        print("Removed src/holo_plugin_installer/skills/ (symlink)")
+    elif SKILLS_DST.exists():
         shutil.rmtree(SKILLS_DST)
         print("Removed src/holo_plugin_installer/skills/")
 
@@ -149,7 +154,10 @@ def stage_publish(uv: str, token: str | None, test_pypi: bool) -> None:
         cmd += ["--publish-url", "https://test.pypi.org/legacy/"]
     cmd += ["--token", token]
 
-    dist_files = sorted(DIST.glob("*"))
+    dist_files = sorted(
+        f for f in DIST.glob("*")
+        if f.suffix in (".whl", ".gz")  # Only .whl and .tar.gz
+    )
     cmd += [str(f) for f in dist_files]
 
     run(cmd, cwd=ROOT)

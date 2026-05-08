@@ -186,12 +186,8 @@ def main():
             selected_skills = questionary.checkbox(
                 "Select skills (use ↑↓ to navigate, Space to select, Enter to confirm, Ctrl+C to cancel):",
                 choices=[
-                    questionary.Choice("hologres-cli", checked=True),
-                    "hologres-query-optimizer",
-                    "hologres-slow-query-analysis",
-                    "hologres-privileges",
-                    "hologres-uv-compute",
-                    "hologres-schema-generator",
+                    questionary.Choice(skill, checked=(skill == "hologres-cli"))
+                    for skill in AVAILABLE_SKILLS
                 ],
                 instruction="(Select multiple with Space)",
                 style=_NO_BG_STYLE,
