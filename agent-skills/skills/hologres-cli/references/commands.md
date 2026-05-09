@@ -1464,7 +1464,7 @@ hologres volume list-files --volume my_vol --net intranet
   "ok": true,
   "data": {
     "rows": [
-      {"name": "report.csv", "volume_path": "volume://my_vol/report.csv", "oss_path": "oss://bucket/path/report.csv", "size": 1024, "last_modified": "2026-05-01T10:00:00Z"}
+      {"name": "report.csv", "volume_path": "volume://my_vol/report.csv", "oss_path": "oss://bucket/path/report.csv", "size": 1024, "last_modified": "2026-05-01T18:00:00+08:00"}
     ],
     "count": 1
   }

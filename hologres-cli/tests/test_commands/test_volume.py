@@ -521,12 +521,12 @@ class TestVolumeListFilesCmd:
         mock_obj1 = MagicMock()
         mock_obj1.key = "path/report.csv"
         mock_obj1.size = 1024
-        mock_obj1.last_modified = "2026-05-01T10:00:00Z"
+        mock_obj1.last_modified = 1746093600  # Unix timestamp
 
         mock_obj2 = MagicMock()
         mock_obj2.key = "path/data.json"
         mock_obj2.size = 512
-        mock_obj2.last_modified = "2026-05-02T11:00:00Z"
+        mock_obj2.last_modified = 1746183600  # Unix timestamp
 
         with patch("hologres_cli.commands.volume.oss2") as mock_oss2:
             mock_bucket = MagicMock()
@@ -544,6 +544,10 @@ class TestVolumeListFilesCmd:
         assert output["data"]["rows"][0]["name"] == "report.csv"
         assert output["data"]["rows"][0]["volume_path"] == "volume://my_vol/report.csv"
         assert output["data"]["rows"][0]["oss_path"] == "oss://bucket/path/report.csv"
+        # last_modified should be local time ISO8601 string
+        from datetime import datetime
+        datetime.fromisoformat(output["data"]["rows"][0]["last_modified"])
+        datetime.fromisoformat(output["data"]["rows"][1]["last_modified"])
         assert output["data"]["rows"][1]["name"] == "data.json"
         assert output["data"]["rows"][1]["volume_path"] == "volume://my_vol/data.json"
         assert output["data"]["rows"][1]["oss_path"] == "oss://bucket/path/data.json"
@@ -554,7 +558,7 @@ class TestVolumeListFilesCmd:
         mock_obj = MagicMock()
         mock_obj.key = "path/sub/file.txt"
         mock_obj.size = 100
-        mock_obj.last_modified = "2026-05-01"
+        mock_obj.last_modified = 1746093600  # Unix timestamp
 
         with patch("hologres_cli.commands.volume.oss2") as mock_oss2:
             mock_oss2.Auth.return_value = MagicMock()
@@ -652,7 +656,7 @@ class TestVolumeListFilesCmd:
             o = MagicMock()
             o.key = f"path/file{i}.txt"
             o.size = 100
-            o.last_modified = "2026-05-01"
+            o.last_modified = 1746093600  # Unix timestamp
             objs.append(o)
 
         with patch("hologres_cli.commands.volume.oss2") as mock_oss2:
@@ -951,3 +955,25 @@ class TestBuildPaths:
         result = _build_paths("vol1", "dir/sub/file.csv", vol)
         assert result["volume_path"] == "volume://vol1/dir/sub/file.csv"
         assert result["oss_path"] == "oss://bucket1/a/b/dir/sub/file.csv"
+
+
+class TestFormatLocalTime:
+    """Tests for _format_local_time helper."""
+
+    def test_int_timestamp(self):
+        from datetime import datetime
+        from hologres_cli.commands.volume import _format_local_time
+        result = _format_local_time(1746093600)
+        parsed = datetime.fromisoformat(result)
+        assert parsed.tzinfo is not None
+
+    def test_float_timestamp(self):
+        from datetime import datetime
+        from hologres_cli.commands.volume import _format_local_time
+        result = _format_local_time(1746093600.5)
+        parsed = datetime.fromisoformat(result)
+        assert parsed.tzinfo is not None
+
+    def test_string_passthrough(self):
+        from hologres_cli.commands.volume import _format_local_time
+        assert _format_local_time("2026-05-01") == "2026-05-01"

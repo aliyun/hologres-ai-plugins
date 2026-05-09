@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import datetime
 from urllib.parse import urlparse
 
 import click
@@ -60,6 +61,13 @@ def _get_oss_client(volume: dict, net: str = "internet"):
     bucket_name, prefix = _parse_oss_root(volume["root"])
     bucket = oss2.Bucket(auth, endpoint, bucket_name)
     return bucket, prefix
+
+
+def _format_local_time(ts):
+    """Convert Unix timestamp to local time ISO8601 string."""
+    if isinstance(ts, (int, float)):
+        return datetime.fromtimestamp(ts).astimezone().isoformat()
+    return str(ts)
 
 
 def _build_paths(volume_name: str, file_name: str, vol: dict) -> dict:
@@ -343,7 +351,7 @@ def list_files_cmd(
                 "volume_path": paths["volume_path"],
                 "oss_path": paths["oss_path"],
                 "size": obj.size,
-                "last_modified": obj.last_modified,
+                "last_modified": _format_local_time(obj.last_modified),
             })
             count += 1
             if count >= max_count:
