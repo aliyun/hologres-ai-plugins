@@ -1,5 +1,6 @@
 """Tests for AI commands."""
 
+import copy
 import json
 
 import pytest
@@ -248,15 +249,15 @@ class TestAiImageGenCmd:
         assert img["volume_path"] == "volume://test_vol/images/c58b7714-b147.png"
         assert output["data"]["usage"] == {"height": 720, "image_count": 1, "width": 1280}
         assert "model" not in output["data"]
-        # Verify SQL: no model -> ai_gen(json, to_file(...))
+        # Verify SQL: no model -> ai_gen(json, to_file(...)) with rolearn inlined
         call_args = mock_get_connection.execute.call_args
-        assert call_args[0][0] == "SELECT ai_gen(%s, to_file(%s, %s, %s))"
+        assert "to_file(%s, %s, 'acs:ram::123456:role/AliyunHologresDefaultRole')" in call_args[0][0]
         request = json.loads(call_args[0][1][0])
         assert request["prompt"] == "生成一只猫"
         assert request["output_dir"] == "oss://mybucket/data/images"
         assert call_args[0][1][1] == "oss://mybucket/data/"
         assert call_args[0][1][2] == "oss-cn-hangzhou-internal.aliyuncs.com"
-        assert call_args[0][1][3] == "acs:ram::123456:role/AliyunHologresDefaultRole"
+        assert len(call_args[0][1]) == 3  # rolearn not in params
         mock_get_connection.close.assert_called_once()
 
     def test_image_gen_with_model(self, mock_get_connection, mocker):
@@ -272,8 +273,9 @@ class TestAiImageGenCmd:
         assert output["data"]["model"] == "qwen-image-2.0"
         assert len(output["data"]["images"]) == 1
         call_args = mock_get_connection.execute.call_args
-        assert call_args[0][0] == "SELECT ai_gen(%s, %s, to_file(%s, %s, %s))"
+        assert call_args[0][0].startswith("SELECT ai_gen(%s, %s, to_file(%s, %s, '")
         assert call_args[0][1][0] == "qwen-image-2.0"
+        assert len(call_args[0][1]) == 4  # model, json, root, endpoint
 
     def test_image_gen_multiple_images(self, mock_get_connection, mocker):
         """image-gen returns multiple images with oss_path and volume_path."""
@@ -452,7 +454,8 @@ class TestAiImageGenCmd:
         ])
         assert result.exit_code == 0
         call_args = mock_get_connection.execute.call_args
-        assert call_args[0][0] == "SELECT ai_gen(%s, to_file(%s, %s, %s))"
+        # rolearn inlined, prompt still parameterized
+        assert "to_file(%s, %s, '" in call_args[0][0]
 
     def test_image_gen_missing_prompt(self):
         """image-gen shows error when prompt is missing."""
@@ -543,8 +546,22 @@ class TestAiImageGenCmd:
         result = runner.invoke(cli, ["ai", "image-gen", "猫", "-o", "volume://test_vol"])
         assert result.exit_code == 0
         call_args = mock_get_connection.execute.call_args
-        # to_file params: root, endpoint, rolearn
+        sql = call_args[0][0]
+        # to_file params: root, endpoint as bind params; rolearn inlined in SQL
         params = call_args[0][1]
         assert params[1] == "oss://mybucket/data/"
         assert params[2] == "oss-cn-hangzhou-internal.aliyuncs.com"
-        assert params[3] == "acs:ram::123456:role/AliyunHologresDefaultRole"
+        assert "acs:ram::123456:role/AliyunHologresDefaultRole" in sql
+
+    def test_image_gen_rolearn_single_quote_escaped(self, mock_get_connection, mocker):
+        """rolearn with single quote is escaped in SQL literal."""
+        config = copy.deepcopy(SAMPLE_VOLUME_CONFIG)
+        config["profiles"][0]["volumes"][0]["rolearn"] = "acs:ram::123:role/test'role"
+        _patch_load_config(mocker, config)
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "image-gen", "猫", "-o", "volume://test_vol"])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        sql = call_args[0][0]
+        assert "test''role" in sql

@@ -231,13 +231,17 @@ def image_gen_cmd(ctx: click.Context, prompt: str, output_dir: str,
 
         request_json = json_mod.dumps(request, ensure_ascii=False)
 
-        # Build SQL: model and to_file are orthogonal
+        # Build SQL: model and to_file are orthogonal.
+        # rolearn is inlined as a SQL literal instead of a bind parameter because
+        # Hologres to_file() does not support PBE (Parse/Bind/Execute) protocol
+        # for the rolearn argument.
+        rolearn_literal = volume["rolearn"].replace("'", "''")
         if model:
-            query = "SELECT ai_gen(%s, %s, to_file(%s, %s, %s))"
-            params = (model, request_json, volume["root"], volume["endpoint"], volume["rolearn"])
+            query = f"SELECT ai_gen(%s, %s, to_file(%s, %s, '{rolearn_literal}'))"
+            params = (model, request_json, volume["root"], volume["endpoint"])
         else:
-            query = "SELECT ai_gen(%s, to_file(%s, %s, %s))"
-            params = (request_json, volume["root"], volume["endpoint"], volume["rolearn"])
+            query = f"SELECT ai_gen(%s, to_file(%s, %s, '{rolearn_literal}'))"
+            params = (request_json, volume["root"], volume["endpoint"])
 
         rows = conn.execute(query, params)
 
