@@ -616,6 +616,9 @@ hologres volume download-file --volume my_vol --file report.csv -d ./output
 # Upload a file to volume
 hologres volume upload-file --volume my_vol --local-file ./data.csv --target-file data/data.csv
 
+# View a file (download to temp dir and open with system viewer)
+hologres volume view volume://my_vol/images/photo.png
+
 # Use intranet endpoint (for VPC/ECS)
 hologres volume list-files --volume my_vol --net intranet
 ```

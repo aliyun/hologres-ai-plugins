@@ -9,7 +9,10 @@ use oss2 SDK with access-key/access-secret stored in volume config.
 from __future__ import annotations
 
 import os
+import platform
 import re
+import subprocess
+import tempfile
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -90,6 +93,42 @@ def _find_volume(volumes: list[dict], volume_name: str, fmt: str) -> dict | None
         fmt,
     ))
     return None
+
+
+def _parse_volume_uri(uri: str) -> tuple[str, str]:
+    """Parse volume://volume_name/sub_path -> (volume_name, sub_path).
+
+    Raises ValueError if format is invalid.
+    """
+    if not uri.startswith("volume://"):
+        raise ValueError(
+            f"Invalid volume URI: {uri}. Expected format: volume://volume_name[/sub_path]"
+        )
+    path = uri[len("volume://"):]
+    parts = path.split("/", 1)
+    volume_name = parts[0]
+    if not volume_name:
+        raise ValueError("Volume name cannot be empty.")
+    sub_path = parts[1] if len(parts) > 1 else ""
+    return volume_name, sub_path
+
+
+def _open_file(path: str) -> str | None:
+    """Open a file with the system default application.
+
+    Returns None on success, error message string on failure.
+    """
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            subprocess.Popen(["open", path])
+        elif system == "Windows":
+            os.startfile(path)  # type: ignore[attr-defined]
+        else:  # Linux and others
+            subprocess.Popen(["xdg-open", path])
+        return None
+    except (OSError, FileNotFoundError) as e:
+        return str(e)
 
 
 @click.group("volume")
@@ -486,6 +525,80 @@ def download_file_cmd(
         "local_path": local_path,
         "downloaded": True,
     }, fmt))
+
+
+@volume_cmd.command("view")
+@click.argument("uri")
+@_net_option
+@click.pass_context
+def view_cmd(
+    ctx: click.Context,
+    uri: str,
+    net: str,
+) -> None:
+    """Download a file from volume to temp dir and open with system viewer.
+
+    \b
+    URI format: volume://volume_name/path/to/file
+    Examples:
+      hologres volume view volume://my_vol/images/photo.png
+      hologres volume view volume://my_vol/data/report.csv
+    """
+    profile_name = ctx.obj.get("profile")
+    fmt = ctx.obj.get("format", FORMAT_JSON)
+
+    try:
+        volume_name, file_path = _parse_volume_uri(uri)
+    except ValueError as e:
+        print_output(error("INVALID_INPUT", str(e), fmt))
+        return
+
+    if not file_path:
+        print_output(error(
+            "INVALID_INPUT",
+            "File path is required. Format: volume://volume_name/path/to/file",
+            fmt,
+        ))
+        return
+
+    config = load_config()
+    target_profile = _find_profile(config, profile_name, fmt)
+    if target_profile is None:
+        return
+
+    volumes = target_profile.get("volumes", [])
+    vol = _find_volume(volumes, volume_name, fmt)
+    if vol is None:
+        return
+
+    _, root_prefix = _parse_oss_root(vol["root"])
+    full_key = root_prefix + file_path
+    local_filename = os.path.basename(file_path)
+
+    tmp_dir = tempfile.mkdtemp(prefix="hologres_view_")
+    local_path = os.path.join(tmp_dir, local_filename)
+
+    try:
+        bucket, _ = _get_oss_client(vol, net)
+        bucket.get_object_to_file(full_key, local_path)
+    except oss2.exceptions.OssError as e:
+        print_output(error("OSS_ERROR", str(e), fmt))
+        return
+
+    open_error = _open_file(local_path)
+
+    paths = _build_paths(volume_name, file_path, vol)
+    result = {
+        "file": file_path,
+        "volume_path": paths["volume_path"],
+        "oss_path": paths["oss_path"],
+        "local_path": local_path,
+        "opened": open_error is None,
+    }
+    if open_error:
+        result["open_error"] = open_error
+
+    print_output(success(result, fmt))
 
 
 @volume_cmd.command("upload-file")

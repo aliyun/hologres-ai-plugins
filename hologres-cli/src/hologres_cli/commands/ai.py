@@ -18,24 +18,7 @@ from ..output import (
     query_error,
     success,
 )
-
-
-def _parse_volume_uri(uri: str) -> tuple[str, str]:
-    """Parse volume://volume_name/sub_path -> (volume_name, sub_path).
-
-    Raises ValueError if format is invalid.
-    """
-    if not uri.startswith("volume://"):
-        raise ValueError(
-            f"Invalid volume URI: {uri}. Expected format: volume://volume_name[/sub_path]"
-        )
-    path = uri[len("volume://"):]
-    parts = path.split("/", 1)
-    volume_name = parts[0]
-    if not volume_name:
-        raise ValueError("Volume name cannot be empty.")
-    sub_path = parts[1] if len(parts) > 1 else ""
-    return volume_name, sub_path
+from .volume import _parse_volume_uri
 
 
 def _get_volume_config(profile_name: str | None, volume_name: str) -> dict | None:

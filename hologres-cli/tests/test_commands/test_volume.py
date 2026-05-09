@@ -828,6 +828,181 @@ class TestVolumeDownloadFileCmd:
         assert call_args[0][1] == "oss-cn-hangzhou-internal.aliyuncs.com"
 
 
+class TestVolumeViewCmd:
+    """Tests for volume view command."""
+
+    def _invoke(self, mocker, config, uri="volume://my_vol/images/photo.png",
+                extra_args=None):
+        mocker.patch("hologres_cli.commands.volume.load_config", return_value=config)
+        runner = CliRunner()
+        args = ["volume", "view", uri]
+        if extra_args:
+            args.extend(extra_args)
+        return runner.invoke(cli, args)
+
+    def test_view_success(self, mocker):
+        config = _make_config(volumes=[_vol_entry()])
+        mocker.patch("hologres_cli.commands.volume.tempfile.mkdtemp",
+                     return_value="/tmp/hologres_view_test")
+        mocker.patch("hologres_cli.commands.volume._open_file", return_value=None)
+
+        with patch("hologres_cli.commands.volume.oss2") as mock_oss2:
+            mock_bucket = MagicMock()
+            mock_oss2.Auth.return_value = MagicMock()
+            mock_oss2.Bucket.return_value = mock_bucket
+            mock_oss2.exceptions.OssError = Exception
+
+            result = self._invoke(mocker, config)
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["opened"] is True
+        assert output["data"]["file"] == "images/photo.png"
+        assert output["data"]["local_path"] == "/tmp/hologres_view_test/photo.png"
+        assert output["data"]["volume_path"] == "volume://my_vol/images/photo.png"
+        assert output["data"]["oss_path"] == "oss://bucket/path/images/photo.png"
+        assert "open_error" not in output["data"]
+        mock_bucket.get_object_to_file.assert_called_once()
+
+    def test_view_invalid_uri(self, mocker):
+        config = _make_config(volumes=[_vol_entry()])
+        result = self._invoke(mocker, config, uri="http://example.com/file.png")
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_INPUT"
+
+    def test_view_missing_file_path(self, mocker):
+        config = _make_config(volumes=[_vol_entry()])
+        result = self._invoke(mocker, config, uri="volume://my_vol")
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_INPUT"
+        assert "File path is required" in output["error"]["message"]
+
+    def test_view_volume_not_found(self, mocker):
+        config = _make_config(volumes=[])
+        result = self._invoke(mocker, config)
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "NOT_FOUND"
+
+    def test_view_oss_error(self, mocker):
+        config = _make_config(volumes=[_vol_entry()])
+        mocker.patch("hologres_cli.commands.volume.tempfile.mkdtemp",
+                     return_value="/tmp/hologres_view_test")
+
+        with patch("hologres_cli.commands.volume.oss2") as mock_oss2:
+            oss_exc = type("OssError", (Exception,), {})
+            mock_oss2.exceptions.OssError = oss_exc
+            mock_oss2.Auth.return_value = MagicMock()
+            mock_bucket = MagicMock()
+            mock_bucket.get_object_to_file.side_effect = oss_exc("Not found")
+            mock_oss2.Bucket.return_value = mock_bucket
+
+            result = self._invoke(mocker, config)
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "OSS_ERROR"
+
+    def test_view_open_failure(self, mocker):
+        config = _make_config(volumes=[_vol_entry()])
+        mocker.patch("hologres_cli.commands.volume.tempfile.mkdtemp",
+                     return_value="/tmp/hologres_view_test")
+        mocker.patch("hologres_cli.commands.volume._open_file",
+                     return_value="xdg-open: not found")
+
+        with patch("hologres_cli.commands.volume.oss2") as mock_oss2:
+            mock_oss2.Auth.return_value = MagicMock()
+            mock_oss2.Bucket.return_value = MagicMock()
+            mock_oss2.exceptions.OssError = Exception
+
+            result = self._invoke(mocker, config)
+
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["opened"] is False
+        assert output["data"]["open_error"] == "xdg-open: not found"
+        assert output["data"]["local_path"] == "/tmp/hologres_view_test/photo.png"
+
+    def test_view_net_intranet(self, mocker):
+        config = _make_config(volumes=[_vol_entry()])
+        mocker.patch("hologres_cli.commands.volume.tempfile.mkdtemp",
+                     return_value="/tmp/hologres_view_test")
+        mocker.patch("hologres_cli.commands.volume._open_file", return_value=None)
+
+        with patch("hologres_cli.commands.volume.oss2") as mock_oss2:
+            mock_oss2.Auth.return_value = MagicMock()
+            mock_oss2.Bucket.return_value = MagicMock()
+            mock_oss2.exceptions.OssError = Exception
+
+            result = self._invoke(mocker, config, extra_args=["--net", "intranet"])
+
+        assert result.exit_code == 0
+        call_args = mock_oss2.Bucket.call_args
+        assert call_args[0][1] == "oss-cn-hangzhou-internal.aliyuncs.com"
+
+
+class TestOpenFile:
+    """Tests for _open_file helper."""
+
+    def test_open_file_darwin(self, mocker):
+        from hologres_cli.commands.volume import _open_file
+        mocker.patch("hologres_cli.commands.volume.platform.system",
+                     return_value="Darwin")
+        mock_popen = mocker.patch("hologres_cli.commands.volume.subprocess.Popen")
+
+        result = _open_file("/tmp/test.png")
+        assert result is None
+        mock_popen.assert_called_once_with(["open", "/tmp/test.png"])
+
+    def test_open_file_linux(self, mocker):
+        from hologres_cli.commands.volume import _open_file
+        mocker.patch("hologres_cli.commands.volume.platform.system",
+                     return_value="Linux")
+        mock_popen = mocker.patch("hologres_cli.commands.volume.subprocess.Popen")
+
+        result = _open_file("/tmp/test.png")
+        assert result is None
+        mock_popen.assert_called_once_with(["xdg-open", "/tmp/test.png"])
+
+    def test_open_file_error(self, mocker):
+        from hologres_cli.commands.volume import _open_file
+        mocker.patch("hologres_cli.commands.volume.platform.system",
+                     return_value="Linux")
+        mocker.patch("hologres_cli.commands.volume.subprocess.Popen",
+                     side_effect=FileNotFoundError("xdg-open not found"))
+
+        result = _open_file("/tmp/test.png")
+        assert result == "xdg-open not found"
+
+
+class TestParseVolumeUri:
+    """Tests for _parse_volume_uri helper."""
+
+    def test_basic(self):
+        from hologres_cli.commands.volume import _parse_volume_uri
+        name, path = _parse_volume_uri("volume://my_vol/images/a.png")
+        assert name == "my_vol"
+        assert path == "images/a.png"
+
+    def test_no_subpath(self):
+        from hologres_cli.commands.volume import _parse_volume_uri
+        name, path = _parse_volume_uri("volume://my_vol")
+        assert name == "my_vol"
+        assert path == ""
+
+    def test_invalid_prefix(self):
+        from hologres_cli.commands.volume import _parse_volume_uri
+        import pytest
+        with pytest.raises(ValueError, match="Invalid volume URI"):
+            _parse_volume_uri("http://example.com")
+
+
 class TestVolumeUploadFileCmd:
     """Tests for volume upload-file command."""
 

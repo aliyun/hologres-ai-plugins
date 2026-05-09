@@ -96,6 +96,7 @@ hologres dt list                                   # List Dynamic Tables
 | `hologres volume delete-file --volume <name> --file <path> [--confirm] [--net internet\|intranet]` | Delete file from volume (dry-run by default) |
 | `hologres volume download-file --volume <name> --file <path> -d <dir> [--net internet\|intranet]` | Download file from volume |
 | `hologres volume upload-file --volume <name> --local-file <path> --target-file <path> [--net internet\|intranet]` | Upload file to volume |
+| `hologres volume view volume://<name>/path/file [--net internet\|intranet]` | Download file to temp dir and open with system viewer |
 
 ## Dynamic Table Commands (V3.1+)
 

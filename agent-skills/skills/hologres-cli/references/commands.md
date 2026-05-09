@@ -1594,6 +1594,61 @@ hologres volume upload-file --volume my_vol --local-file ./img.png --target-file
 }
 ```
 
+### volume view
+
+Download a file from volume to a temp directory and open it with the system default viewer. Supports any file type (images, CSV, PDF, etc.).
+
+```bash
+hologres volume view volume://my_vol/images/photo.png
+hologres volume view volume://my_vol/data/report.csv --net intranet
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `URI` | Volume file URI in `volume://volume_name/path/to/file` format (required) |
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--net` | Network type: `internet` (default) or `intranet` |
+
+**Output (success):**
+```json
+{
+  "ok": true,
+  "data": {
+    "file": "images/photo.png",
+    "volume_path": "volume://my_vol/images/photo.png",
+    "oss_path": "oss://bucket/path/images/photo.png",
+    "local_path": "/tmp/hologres_view_xxx/photo.png",
+    "opened": true
+  }
+}
+```
+
+**Output (open failed, e.g. headless server):**
+```json
+{
+  "ok": true,
+  "data": {
+    "file": "images/photo.png",
+    "volume_path": "volume://my_vol/images/photo.png",
+    "oss_path": "oss://bucket/path/images/photo.png",
+    "local_path": "/tmp/hologres_view_xxx/photo.png",
+    "opened": false,
+    "open_error": "xdg-open: not found"
+  }
+}
+```
+
+**Cross-platform behavior:**
+- macOS: uses `open`
+- Linux: uses `xdg-open`
+- Windows: uses `os.startfile()`
+
 ## dt (Dynamic Table V3.1+)
 
 Full lifecycle management for Hologres Dynamic Tables using V3.1+ new syntax.
