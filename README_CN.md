@@ -94,6 +94,10 @@ hologres-ai-plugins/
 | `hologres ai-guide` | 生成 AI Agent 使用指南 |
 | `hologres ai gen "<prompt>" [--model]` | 使用 AI 函数生成文本 |
 | `hologres ai image-gen "<prompt>" -o volume://vol/path [选项]` | 使用 AI 函数生成图片到 OSS Volume |
+| `hologres ai t2v "<prompt>" -o volume://vol/path [选项]` | 文生视频（text-to-video） |
+| `hologres ai i2v "<prompt>" --img-url <url> -o volume://vol/path [选项]` | 图生视频（image-to-video） |
+| `hologres ai r2v "<prompt>" --reference-url <url> -o volume://vol/path [选项]` | 参考生视频（reference-to-video） |
+| `hologres ai video-edit "<prompt>" --video <url> -o volume://vol/path [选项]` | 视频编辑 |
 | `hologres volume create <name> --endpoint <ep> --root <root> --rolearn <arn> --access-key <ak> --access-secret <sk>` | 创建本地 Volume 配置（同时在 OSS 上创建目录占位文件） |
 | `hologres volume list` | 列出当前 Profile 下所有 Volume |
 | `hologres volume delete <name>` | 删除 Volume 配置 |

@@ -1337,6 +1337,147 @@ SELECT ai_gen('<json_request>', to_file('<volume_root>', '<endpoint>', '<rolearn
 SELECT ai_gen('qwen-image-2.0', '<json_request>', to_file('<volume_root>', '<endpoint>', '<rolearn>'));
 ```
 
+### ai t2v
+
+Generate video from text prompt using HappyHorse model. Video generation is asynchronous and typically takes 1-5 minutes.
+
+```bash
+hologres ai t2v "一只猫在草地上奔跑" -o volume://my_vol/output
+hologres ai t2v "日落" --resolution 720P --ratio 9:16 --duration 10 -o volume://my_vol/output
+hologres ai t2v "一只猫" --model happyhorse-2.0-t2v -o volume://my_vol/output
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `PROMPT` | Text prompt for video generation (required) |
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--output-dir, -o` | Output directory in `volume://volume_name[/sub_path]` format (required) |
+| `--model, -m` | AI model name (default: `happyhorse-1.0-t2v`) |
+| `--resolution` | Video resolution: `720P` / `1080P` (default: 1080P) |
+| `--ratio` | Aspect ratio: `16:9` (default), `9:16`, `1:1`, `4:3`, `3:4` |
+| `--duration` | Video duration in seconds, 3-15 (default: 5) |
+| `--watermark` | Add watermark: `true` (default) / `false` |
+| `--seed` | Random seed [0, 2147483647] |
+
+### ai i2v
+
+Generate video from a first-frame image.
+
+```bash
+hologres ai i2v "一只猫在奔跑" --img-url volume://my_vol/frame.png -o volume://my_vol/output
+hologres ai i2v "猫" --img-url oss://bucket/frame.png --resolution 720P -o volume://my_vol/output
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `PROMPT` | Text prompt for video generation (required) |
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--img-url` | First-frame image URL, `volume://` or `oss://` (required) |
+| `--output-dir, -o` | Output directory (required) |
+| `--model, -m` | AI model name (default: `happyhorse-1.0-i2v`) |
+| `--resolution` | Video resolution: `720P` / `1080P` (default: 1080P) |
+| `--duration` | Video duration in seconds, 3-15 (default: 5) |
+| `--watermark` | Add watermark: `true` / `false` |
+| `--seed` | Random seed [0, 2147483647] |
+
+Note: No `--ratio` option — aspect ratio follows the first-frame image.
+
+### ai r2v
+
+Generate video from reference images. Prompt can embed `oss://` paths to reference materials.
+
+```bash
+hologres ai r2v "女性在花园漫步" --reference-url volume://my_vol/girl.png -o volume://my_vol/output
+hologres ai r2v "人物oss://b/girl.png在跑步" \
+  --reference-url oss://b/girl.png --reference-url volume://my_vol/fan.png \
+  -o volume://my_vol/output
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `PROMPT` | Text prompt (required). Can embed `oss://` paths or index references (e.g. `图片1`) |
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--reference-url` | Reference image URL (1-9 images), `volume://` or `oss://`. Repeatable. (required) |
+| `--output-dir, -o` | Output directory (required) |
+| `--model, -m` | AI model name (default: `happyhorse-1.0-r2v`) |
+| `--resolution` | Video resolution: `720P` / `1080P` |
+| `--ratio` | Aspect ratio: `16:9` (default), `9:16`, `1:1`, `4:3`, `3:4` |
+| `--duration` | Video duration in seconds, 3-15 |
+| `--watermark` | Add watermark: `true` / `false` |
+| `--seed` | Random seed [0, 2147483647] |
+
+### ai video-edit
+
+Edit video with text instructions. Supports style transfer, local replacement, etc.
+
+```bash
+hologres ai video-edit "转为动漫风格" --video volume://my_vol/input.mp4 -o volume://my_vol/output
+hologres ai video-edit "让人物骑马" --video oss://b/train.mp4 \
+  --reference-url volume://my_vol/char.png -o volume://my_vol/output
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `PROMPT` | Text instructions for video editing (required) |
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--video` | Input video URL, `volume://` or `oss://` (required) |
+| `--output-dir, -o` | Output directory (required) |
+| `--model, -m` | AI model name (default: `happyhorse-1.0-video-edit`) |
+| `--reference-url` | Reference image URL (0-5 images). Repeatable. |
+| `--resolution` | Video resolution: `720P` / `1080P` |
+| `--watermark` | Add watermark: `true` / `false` |
+| `--seed` | Random seed [0, 2147483647] |
+| `--audio-setting` | Audio control: `auto` (default) / `origin` (keep original audio) |
+
+Note: No `--ratio` or `--duration` options for video editing.
+
+**Video Generation Output (all 4 subcommands):**
+```json
+{
+  "ok": true,
+  "data": {
+    "video": {
+      "oss_path": "oss://bucket/output/xxx.mp4",
+      "volume_path": "volume://my_vol/output/xxx.mp4"
+    },
+    "task_status": "SUCCEEDED",
+    "usage": {"duration": 5, "output_video_duration": 5, "video_count": 1},
+    "model": "happyhorse-1.0-t2v"
+  }
+}
+```
+
+Non-JSON formats output the volume path directly.
+
+**Underlying SQL:**
+```sql
+SELECT ai_gen('<model>', '<json_request>'::text, to_file('<volume_root>', '<endpoint>', '<rolearn>'));
+```
+
 ## volume
 
 Manage local volume configurations for OSS file storage. Volumes are stored in `~/.hologres/config.json` under the current profile, not on the Hologres server. File operations (list-files, delete-file, download-file, upload-file) use OSS SDK with access-key/access-secret.

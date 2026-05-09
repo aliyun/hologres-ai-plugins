@@ -8,6 +8,7 @@ from click.testing import CliRunner
 
 from hologres_cli.commands.ai import (
     _build_oss_output_dir,
+    _build_video_params,
     _oss_to_volume_path,
     _parse_volume_uri,
 )
@@ -711,3 +712,513 @@ class TestAiImageGenCmd:
         request = json.loads(call_args[0][1][1])
         assert request["reference_urls"] == ["oss://mybucket/data/ref.png"]
         assert request["prompt"] == "Q版人物"
+
+
+# ---------------------------------------------------------------------------
+# Video generation tests — shared constants
+# ---------------------------------------------------------------------------
+
+MOCK_VIDEO_RESPONSE = json.dumps({
+    "output": {
+        "task_status": "SUCCEEDED",
+        "task_id": "0385dc79-5ff8-4d82-bcb6-xxxxx",
+        "video_url": "https://dashscope-result-sh.oss-cn-shanghai.aliyuncs.com/xxx.mp4",
+        "video_oss_path": "oss://mybucket/data/output/generated.mp4",
+    },
+    "usage": {
+        "duration": 5,
+        "output_video_duration": 5,
+        "video_count": 1,
+        "SR": 720,
+        "ratio": "16:9",
+    },
+    "request_id": "4909100c-7b5a-9f92-bfe5-xxxxx",
+})
+
+MOCK_VIDEO_FAILED_RESPONSE = json.dumps({
+    "output": {
+        "task_status": "FAILED",
+        "code": "InvalidParameter",
+        "message": "prompt is required",
+    },
+    "request_id": "xxxx",
+})
+
+
+@pytest.mark.unit
+class TestBuildVideoParams:
+    """Tests for _build_video_params helper."""
+
+    def test_empty(self):
+        assert _build_video_params() == {}
+
+    def test_all_params(self):
+        result = _build_video_params(
+            resolution="720P", ratio="16:9", duration=10,
+            watermark="true", seed=42, audio_setting="origin",
+        )
+        assert result == {
+            "resolution": "720P", "ratio": "16:9", "duration": 10,
+            "watermark": True, "seed": 42, "audio_setting": "origin",
+        }
+
+    def test_watermark_false(self):
+        assert _build_video_params(watermark="false") == {"watermark": False}
+
+
+@pytest.mark.unit
+class TestAiT2vCmd:
+    """Tests for 'hologres ai t2v' command."""
+
+    def test_t2v_minimal(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "一只猫在跑", "-o", "volume://test_vol/output"])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["video"]["oss_path"] == "oss://mybucket/data/output/generated.mp4"
+        assert output["data"]["video"]["volume_path"] == "volume://test_vol/output/generated.mp4"
+        assert output["data"]["model"] == "happyhorse-1.0-t2v"
+        assert output["data"]["task_status"] == "SUCCEEDED"
+        assert output["data"]["usage"]["duration"] == 5
+        # Verify SQL structure
+        call_args = mock_get_connection.execute.call_args
+        sql = call_args[0][0]
+        assert "ai_gen(%s, %s, to_file(%s, %s," in sql
+        assert call_args[0][1][0] == "happyhorse-1.0-t2v"
+        request = json.loads(call_args[0][1][1])
+        assert request["prompt"] == "一只猫在跑"
+        assert request["output_dir"] == "oss://mybucket/data/output"
+        mock_get_connection.close.assert_called_once()
+
+    def test_t2v_with_all_params(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "t2v", "猫", "-o", "volume://test_vol/out",
+            "--resolution", "720P", "--ratio", "9:16",
+            "--duration", "10", "--watermark", "false", "--seed", "42",
+        ])
+        assert result.exit_code == 0
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["parameters"]["resolution"] == "720P"
+        assert request["parameters"]["ratio"] == "9:16"
+        assert request["parameters"]["duration"] == 10
+        assert request["parameters"]["watermark"] is False
+        assert request["parameters"]["seed"] == 42
+
+    def test_t2v_custom_model(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "t2v", "猫", "-m", "happyhorse-2.0-t2v", "-o", "volume://test_vol",
+        ])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        assert call_args[0][1][0] == "happyhorse-2.0-t2v"
+        output = json.loads(result.output)
+        assert output["data"]["model"] == "happyhorse-2.0-t2v"
+
+    def test_t2v_table_format(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["-f", "table", "ai", "t2v", "猫", "-o", "volume://test_vol/output"])
+        assert result.exit_code == 0
+        assert "volume://test_vol/output/generated.mp4" in result.output
+
+    def test_t2v_task_failed(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_FAILED_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "猫", "-o", "volume://test_vol"])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert "QUERY_ERROR" == output["error"]["code"]
+        assert "prompt is required" in output["error"]["message"]
+
+    def test_t2v_json_parse_failure(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": "not-json"}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "猫", "-o", "volume://test_vol"])
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["raw_result"] == "not-json"
+
+    def test_t2v_missing_prompt(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "-o", "volume://test_vol"])
+        assert result.exit_code != 0
+
+    def test_t2v_missing_output_dir(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "猫"])
+        assert result.exit_code != 0
+
+    def test_t2v_connection_error(self, mocker):
+        _patch_load_config(mocker)
+        from hologres_cli.connection import DSNError
+        mocker.patch("hologres_cli.commands.ai.get_connection",
+                     side_effect=DSNError("No profile"))
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "猫", "-o", "volume://test_vol"])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_t2v_query_error(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.side_effect = Exception("timeout")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "猫", "-o", "volume://test_vol"])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+        mock_get_connection.close.assert_called_once()
+
+    def test_t2v_volume_not_found(self, mock_get_connection, mocker):
+        _patch_load_config(mocker, {
+            "current": "default",
+            "profiles": [{"name": "default", "volumes": []}],
+        })
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "猫", "-o", "volume://nonexistent"])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "NOT_FOUND"
+
+    def test_t2v_parameterized_query(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "'; DROP TABLE x; --", "-o", "volume://test_vol"])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        assert "to_file(%s, %s, '" in call_args[0][0]
+
+    def test_t2v_rolearn_escaped(self, mock_get_connection, mocker):
+        config = copy.deepcopy(SAMPLE_VOLUME_CONFIG)
+        config["profiles"][0]["volumes"][0]["rolearn"] = "role/test'role"
+        _patch_load_config(mocker, config)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "猫", "-o", "volume://test_vol"])
+        assert result.exit_code == 0
+        sql = mock_get_connection.execute.call_args[0][0]
+        assert "test''role" in sql
+
+    def test_t2v_empty_result(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = []
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "猫", "-o", "volume://test_vol"])
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["raw_result"] == ""
+
+    def test_t2v_null_result(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": None}]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "猫", "-o", "volume://test_vol"])
+        output = json.loads(result.output)
+        assert output["data"]["raw_result"] == ""
+
+    def test_t2v_no_video_oss_path(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [
+            {"ai_gen": '{"output": {"task_status": "SUCCEEDED"}, "usage": {}}'}
+        ]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "猫", "-o", "volume://test_vol"])
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert "raw_result" in output["data"]
+
+    def test_t2v_invalid_volume_uri(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "t2v", "猫", "-o", "/tmp/output"])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_ARGS"
+
+
+@pytest.mark.unit
+class TestAiI2vCmd:
+    """Tests for 'hologres ai i2v' command."""
+
+    def test_i2v_minimal(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "i2v", "猫在跑", "--img-url", "volume://test_vol/frame.png",
+            "-o", "volume://test_vol/output",
+        ])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["model"] == "happyhorse-1.0-i2v"
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["prompt"] == "猫在跑"
+        assert request["img_url"] == "oss://mybucket/data/frame.png"
+
+    def test_i2v_img_url_oss_passthrough(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "i2v", "猫", "--img-url", "oss://other/frame.png",
+            "-o", "volume://test_vol",
+        ])
+        assert result.exit_code == 0
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["img_url"] == "oss://other/frame.png"
+
+    def test_i2v_with_params(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "i2v", "猫", "--img-url", "oss://b/f.png",
+            "-o", "volume://test_vol",
+            "--resolution", "720P", "--duration", "8",
+            "--watermark", "false", "--seed", "99",
+        ])
+        assert result.exit_code == 0
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["parameters"]["resolution"] == "720P"
+        assert request["parameters"]["duration"] == 8
+        assert request["parameters"]["watermark"] is False
+        assert request["parameters"]["seed"] == 99
+
+    def test_i2v_missing_img_url(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "i2v", "猫", "-o", "volume://test_vol"])
+        assert result.exit_code != 0
+
+    def test_i2v_img_url_volume_not_found(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "i2v", "猫", "--img-url", "volume://nonexistent/f.png",
+            "-o", "volume://test_vol",
+        ])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "NOT_FOUND"
+
+    def test_i2v_img_url_invalid_prefix(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "i2v", "猫", "--img-url", "http://example.com/f.png",
+            "-o", "volume://test_vol",
+        ])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_ARGS"
+
+
+@pytest.mark.unit
+class TestAiR2vCmd:
+    """Tests for 'hologres ai r2v' command."""
+
+    def test_r2v_minimal(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "r2v", "女性在花园", "--reference-url", "volume://test_vol/girl.png",
+            "-o", "volume://test_vol/output",
+        ])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["data"]["model"] == "happyhorse-1.0-r2v"
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["reference_urls"] == ["oss://mybucket/data/girl.png"]
+
+    def test_r2v_multiple_refs(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "r2v", "融合", "-o", "volume://test_vol/out",
+            "--reference-url", "volume://test_vol/a.png",
+            "--reference-url", "volume://test_vol/b.png",
+        ])
+        assert result.exit_code == 0
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["reference_urls"] == [
+            "oss://mybucket/data/a.png",
+            "oss://mybucket/data/b.png",
+        ]
+
+    def test_r2v_reference_url_mixed(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "r2v", "融合", "-o", "volume://test_vol/out",
+            "--reference-url", "volume://test_vol/a.png",
+            "--reference-url", "oss://ext/b.png",
+        ])
+        assert result.exit_code == 0
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["reference_urls"] == [
+            "oss://mybucket/data/a.png",
+            "oss://ext/b.png",
+        ]
+
+    def test_r2v_with_all_params(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "r2v", "猫", "-o", "volume://test_vol",
+            "--reference-url", "oss://b/r.png",
+            "--resolution", "1080P", "--ratio", "1:1",
+            "--duration", "15", "--watermark", "true", "--seed", "7",
+        ])
+        assert result.exit_code == 0
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        p = request["parameters"]
+        assert p["resolution"] == "1080P"
+        assert p["ratio"] == "1:1"
+        assert p["duration"] == 15
+        assert p["watermark"] is True
+        assert p["seed"] == 7
+
+    def test_r2v_missing_reference_url(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["ai", "r2v", "猫", "-o", "volume://test_vol"])
+        assert result.exit_code != 0
+
+    def test_r2v_ref_volume_not_found(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "r2v", "猫", "-o", "volume://test_vol",
+            "--reference-url", "volume://nonexistent/r.png",
+        ])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "NOT_FOUND"
+
+    def test_r2v_prompt_with_oss_url_unmodified(self, mock_get_connection, mocker):
+        """prompt containing oss:// paths should not be modified."""
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        prompt_with_url = "人物oss://b/girl.png在跑步"
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "r2v", prompt_with_url, "-o", "volume://test_vol",
+            "--reference-url", "oss://b/girl.png",
+        ])
+        assert result.exit_code == 0
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["prompt"] == prompt_with_url
+
+
+@pytest.mark.unit
+class TestAiVideoEditCmd:
+    """Tests for 'hologres ai video-edit' command."""
+
+    def test_video_edit_minimal(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "video-edit", "转为动漫风格",
+            "--video", "volume://test_vol/input.mp4",
+            "-o", "volume://test_vol/output",
+        ])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["data"]["model"] == "happyhorse-1.0-video-edit"
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["prompt"] == "转为动漫风格"
+        assert request["video"] == "oss://mybucket/data/input.mp4"
+
+    def test_video_edit_with_refs(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "video-edit", "让人物骑马",
+            "--video", "oss://b/train.mp4",
+            "--reference-url", "volume://test_vol/char.png",
+            "-o", "volume://test_vol/out",
+        ])
+        assert result.exit_code == 0
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["video"] == "oss://b/train.mp4"
+        assert request["reference_urls"] == ["oss://mybucket/data/char.png"]
+
+    def test_video_edit_video_oss_passthrough(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "video-edit", "编辑",
+            "--video", "oss://other/v.mp4",
+            "-o", "volume://test_vol",
+        ])
+        assert result.exit_code == 0
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["video"] == "oss://other/v.mp4"
+
+    def test_video_edit_audio_setting(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "video-edit", "编辑",
+            "--video", "oss://b/v.mp4", "-o", "volume://test_vol",
+            "--audio-setting", "origin",
+        ])
+        assert result.exit_code == 0
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["parameters"]["audio_setting"] == "origin"
+
+    def test_video_edit_with_all_params(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "video-edit", "编辑", "--video", "oss://b/v.mp4",
+            "-o", "volume://test_vol",
+            "--resolution", "720P", "--watermark", "false",
+            "--seed", "123", "--audio-setting", "auto",
+        ])
+        assert result.exit_code == 0
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        p = request["parameters"]
+        assert p["resolution"] == "720P"
+        assert p["watermark"] is False
+        assert p["seed"] == 123
+        assert p["audio_setting"] == "auto"
+
+    def test_video_edit_missing_video(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "video-edit", "编辑", "-o", "volume://test_vol",
+        ])
+        assert result.exit_code != 0
+
+    def test_video_edit_video_volume_not_found(self, mock_get_connection, mocker):
+        _patch_load_config(mocker)
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "video-edit", "编辑",
+            "--video", "volume://nonexistent/v.mp4",
+            "-o", "volume://test_vol",
+        ])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "NOT_FOUND"

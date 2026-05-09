@@ -132,6 +132,389 @@ def gen_cmd(ctx: click.Context, prompt: str, model: str | None) -> None:
         conn.close()
 
 
+def _resolve_media_url(
+    uri: str, profile: str | None, fmt: str,
+) -> str | None:
+    """Resolve volume:// or oss:// URI to OSS path.
+
+    Returns the resolved OSS path, or None on error (error already printed).
+    """
+    if uri.startswith("oss://"):
+        return uri
+    if uri.startswith("volume://"):
+        try:
+            vol_name, rel_path = _parse_volume_uri(uri)
+        except ValueError as e:
+            print_output(error("INVALID_ARGS", str(e), fmt))
+            return None
+        vol = _get_volume_config(profile, vol_name)
+        if not vol:
+            print_output(error(
+                "NOT_FOUND",
+                f"Volume '{vol_name}' not found. Run 'hologres volume create' first.",
+                fmt,
+            ))
+            return None
+        return _build_oss_output_dir(vol["root"], rel_path).rstrip("/")
+    print_output(error(
+        "INVALID_ARGS",
+        f"Invalid URL: '{uri}'. Expected volume:// or oss:// prefix.",
+        fmt,
+    ))
+    return None
+
+
+def _execute_video_gen(
+    ctx: click.Context,
+    *,
+    prompt: str,
+    model: str,
+    output_dir: str,
+    op_name: str,
+    img_url: str | None = None,
+    video: str | None = None,
+    reference_urls: tuple[str, ...] = (),
+    parameters_dict: dict | None = None,
+) -> None:
+    """Shared implementation for video generation subcommands."""
+    profile = ctx.obj.get("profile")
+    fmt = ctx.obj.get("format", FORMAT_JSON)
+    start_time = time.time()
+
+    # Parse output volume URI
+    try:
+        volume_name, sub_path = _parse_volume_uri(output_dir)
+    except ValueError as e:
+        print_output(error("INVALID_ARGS", str(e), fmt))
+        return
+
+    volume = _get_volume_config(profile, volume_name)
+    if not volume:
+        print_output(error(
+            "NOT_FOUND",
+            f"Volume '{volume_name}' not found. Run 'hologres volume create' first.",
+            fmt,
+        ))
+        return
+
+    # Resolve media URLs
+    resolved_img_url: str | None = None
+    if img_url:
+        resolved_img_url = _resolve_media_url(img_url, profile, fmt)
+        if resolved_img_url is None:
+            return
+
+    resolved_video: str | None = None
+    if video:
+        resolved_video = _resolve_media_url(video, profile, fmt)
+        if resolved_video is None:
+            return
+
+    resolved_refs: list[str] = []
+    for ref_uri in reference_urls:
+        resolved = _resolve_media_url(ref_uri, profile, fmt)
+        if resolved is None:
+            return
+        resolved_refs.append(resolved)
+
+    try:
+        conn = get_connection(profile=profile, read_only=True)
+    except DSNError as e:
+        print_output(connection_error(str(e), fmt))
+        return
+
+    try:
+        # Build JSON request body
+        request: dict = {"prompt": prompt}
+        if resolved_img_url:
+            request["img_url"] = resolved_img_url
+        if resolved_video:
+            request["video"] = resolved_video
+        if resolved_refs:
+            request["reference_urls"] = resolved_refs
+        if parameters_dict:
+            request["parameters"] = parameters_dict
+
+        oss_output_dir = _build_oss_output_dir(volume["root"], sub_path)
+        request["output_dir"] = oss_output_dir
+
+        request_json = json_mod.dumps(request, ensure_ascii=False)
+
+        rolearn_literal = volume["rolearn"].replace("'", "''")
+        query = f"SELECT ai_gen(%s, %s, to_file(%s, %s, '{rolearn_literal}'))"
+        params = (model, request_json, volume["root"], volume["endpoint"])
+
+        rows = conn.execute(query, params)
+
+        duration_ms = (time.time() - start_time) * 1000
+
+        result_text = ""
+        if rows:
+            first_row = rows[0]
+            result_text = list(first_row.values())[0] or ""
+
+        log_operation(
+            op_name,
+            sql=f"SELECT ai_gen('{model}', '<video-gen-request>')",
+            dsn_masked=conn.masked_dsn,
+            success=True,
+            duration_ms=duration_ms,
+        )
+
+        # Parse response JSON
+        result_obj = None
+        video_oss_path: str | None = None
+        task_status: str | None = None
+        usage = None
+        try:
+            result_obj = json_mod.loads(result_text)
+            output_obj = result_obj.get("output", {})
+            task_status = output_obj.get("task_status")
+            video_oss_path = output_obj.get("video_oss_path")
+            usage = result_obj.get("usage")
+        except (json_mod.JSONDecodeError, TypeError):
+            pass
+
+        # Handle task failure
+        if task_status == "FAILED" and result_obj:
+            fail_output = result_obj.get("output", {})
+            fail_msg = fail_output.get("message", "Unknown error")
+            fail_code = fail_output.get("code", "QUERY_ERROR")
+            print_output(error(
+                "QUERY_ERROR",
+                f"Video generation failed ({fail_code}): {fail_msg}",
+                fmt,
+            ))
+            return
+
+        if fmt == FORMAT_JSON:
+            if video_oss_path:
+                data: dict = {
+                    "video": {
+                        "oss_path": video_oss_path,
+                        "volume_path": _oss_to_volume_path(
+                            video_oss_path, volume["root"], volume_name,
+                        ),
+                    },
+                }
+                if task_status:
+                    data["task_status"] = task_status
+                if usage:
+                    data["usage"] = usage
+            else:
+                data = {"raw_result": result_text}
+            data["model"] = model
+            print_output(success(data))
+        else:
+            if video_oss_path:
+                print_output(_oss_to_volume_path(
+                    video_oss_path, volume["root"], volume_name,
+                ))
+            else:
+                print_output(result_text)
+
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation(
+            op_name,
+            dsn_masked=getattr(conn, "masked_dsn", "unknown") if conn else "unknown",
+            success=False,
+            error_code="QUERY_ERROR",
+            error_message=str(e),
+            duration_ms=duration_ms,
+        )
+        print_output(query_error(str(e), fmt))
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Video generation subcommands
+# ---------------------------------------------------------------------------
+
+def _build_video_params(
+    *,
+    resolution: str | None = None,
+    ratio: str | None = None,
+    duration: int | None = None,
+    watermark: str | None = None,
+    seed: int | None = None,
+    audio_setting: str | None = None,
+) -> dict:
+    """Build the 'parameters' dict for video gen request body."""
+    params: dict = {}
+    if resolution is not None:
+        params["resolution"] = resolution
+    if ratio is not None:
+        params["ratio"] = ratio
+    if duration is not None:
+        params["duration"] = duration
+    if watermark is not None:
+        params["watermark"] = watermark.lower() == "true"
+    if seed is not None:
+        params["seed"] = seed
+    if audio_setting is not None:
+        params["audio_setting"] = audio_setting
+    return params
+
+
+@ai_cmd.command("t2v")
+@click.argument("prompt")
+@click.option("--output-dir", "-o", required=True,
+              help="Output directory. volume://volume_name[/sub_path]")
+@click.option("--model", "-m", default="happyhorse-1.0-t2v",
+              help="AI model name (default: happyhorse-1.0-t2v)")
+@click.option("--resolution", type=click.Choice(["720P", "1080P"], case_sensitive=False),
+              default=None, help="Video resolution (default: 1080P)")
+@click.option("--ratio", default=None,
+              help="Aspect ratio: 16:9 (default), 9:16, 1:1, 4:3, 3:4")
+@click.option("--duration", type=int, default=None,
+              help="Video duration in seconds, 3-15 (default: 5)")
+@click.option("--watermark", type=click.Choice(["true", "false"], case_sensitive=False),
+              default=None, help="Add watermark (default: true)")
+@click.option("--seed", type=int, default=None, help="Random seed [0, 2147483647]")
+@click.pass_context
+def t2v_cmd(ctx: click.Context, prompt: str, output_dir: str, model: str,
+            resolution: str | None, ratio: str | None, duration: int | None,
+            watermark: str | None, seed: int | None) -> None:
+    """Generate video from text prompt (text-to-video).
+
+    \b
+    Examples:
+      hologres ai t2v "一只猫在草地上奔跑" -o volume://my_vol/output
+      hologres ai t2v "日落" --resolution 720P --ratio 9:16 --duration 10 -o volume://my_vol/output
+    """
+    params = _build_video_params(
+        resolution=resolution, ratio=ratio, duration=duration,
+        watermark=watermark, seed=seed,
+    )
+    _execute_video_gen(
+        ctx, prompt=prompt, model=model, output_dir=output_dir,
+        op_name="ai.t2v", parameters_dict=params or None,
+    )
+
+
+@ai_cmd.command("i2v")
+@click.argument("prompt")
+@click.option("--img-url", required=True,
+              help="First-frame image URL (volume://vol/path or oss://path)")
+@click.option("--output-dir", "-o", required=True,
+              help="Output directory. volume://volume_name[/sub_path]")
+@click.option("--model", "-m", default="happyhorse-1.0-i2v",
+              help="AI model name (default: happyhorse-1.0-i2v)")
+@click.option("--resolution", type=click.Choice(["720P", "1080P"], case_sensitive=False),
+              default=None, help="Video resolution (default: 1080P)")
+@click.option("--duration", type=int, default=None,
+              help="Video duration in seconds, 3-15 (default: 5)")
+@click.option("--watermark", type=click.Choice(["true", "false"], case_sensitive=False),
+              default=None, help="Add watermark (default: true)")
+@click.option("--seed", type=int, default=None, help="Random seed [0, 2147483647]")
+@click.pass_context
+def i2v_cmd(ctx: click.Context, prompt: str, img_url: str, output_dir: str,
+            model: str, resolution: str | None, duration: int | None,
+            watermark: str | None, seed: int | None) -> None:
+    """Generate video from first-frame image (image-to-video).
+
+    \b
+    Examples:
+      hologres ai i2v "一只猫在草地上奔跑" --img-url volume://my_vol/frame.png -o volume://my_vol/output
+      hologres ai i2v "猫" --img-url oss://bucket/frame.png -o volume://my_vol/output
+    """
+    params = _build_video_params(
+        resolution=resolution, duration=duration,
+        watermark=watermark, seed=seed,
+    )
+    _execute_video_gen(
+        ctx, prompt=prompt, model=model, output_dir=output_dir,
+        op_name="ai.i2v", img_url=img_url, parameters_dict=params or None,
+    )
+
+
+@ai_cmd.command("r2v")
+@click.argument("prompt")
+@click.option("--reference-url", multiple=True, required=True,
+              help="Reference image URL (1-9), volume://vol/path or oss://path. Repeatable.")
+@click.option("--output-dir", "-o", required=True,
+              help="Output directory. volume://volume_name[/sub_path]")
+@click.option("--model", "-m", default="happyhorse-1.0-r2v",
+              help="AI model name (default: happyhorse-1.0-r2v)")
+@click.option("--resolution", type=click.Choice(["720P", "1080P"], case_sensitive=False),
+              default=None, help="Video resolution (default: 1080P)")
+@click.option("--ratio", default=None,
+              help="Aspect ratio: 16:9 (default), 9:16, 1:1, 4:3, 3:4")
+@click.option("--duration", type=int, default=None,
+              help="Video duration in seconds, 3-15 (default: 5)")
+@click.option("--watermark", type=click.Choice(["true", "false"], case_sensitive=False),
+              default=None, help="Add watermark (default: true)")
+@click.option("--seed", type=int, default=None, help="Random seed [0, 2147483647]")
+@click.pass_context
+def r2v_cmd(ctx: click.Context, prompt: str, reference_url: tuple[str, ...],
+            output_dir: str, model: str, resolution: str | None,
+            ratio: str | None, duration: int | None,
+            watermark: str | None, seed: int | None) -> None:
+    """Generate video from reference images (reference-to-video).
+
+    \b
+    Prompt can embed oss:// paths to reference materials. CLI does not
+    modify prompt content.
+
+    \b
+    Examples:
+      hologres ai r2v "女性在花园漫步" --reference-url volume://my_vol/girl.png -o volume://my_vol/output
+      hologres ai r2v "人物oss://b/girl.png在跑步" --reference-url oss://b/girl.png -o volume://my_vol/output
+    """
+    params = _build_video_params(
+        resolution=resolution, ratio=ratio, duration=duration,
+        watermark=watermark, seed=seed,
+    )
+    _execute_video_gen(
+        ctx, prompt=prompt, model=model, output_dir=output_dir,
+        op_name="ai.r2v", reference_urls=reference_url,
+        parameters_dict=params or None,
+    )
+
+
+@ai_cmd.command("video-edit")
+@click.argument("prompt")
+@click.option("--video", required=True,
+              help="Input video URL (volume://vol/path or oss://path)")
+@click.option("--output-dir", "-o", required=True,
+              help="Output directory. volume://volume_name[/sub_path]")
+@click.option("--model", "-m", default="happyhorse-1.0-video-edit",
+              help="AI model name (default: happyhorse-1.0-video-edit)")
+@click.option("--reference-url", multiple=True, default=(),
+              help="Reference image URL (0-5), volume://vol/path or oss://path. Repeatable.")
+@click.option("--resolution", type=click.Choice(["720P", "1080P"], case_sensitive=False),
+              default=None, help="Video resolution (default: 1080P)")
+@click.option("--watermark", type=click.Choice(["true", "false"], case_sensitive=False),
+              default=None, help="Add watermark (default: true)")
+@click.option("--seed", type=int, default=None, help="Random seed [0, 2147483647]")
+@click.option("--audio-setting", type=click.Choice(["auto", "origin"], case_sensitive=False),
+              default=None, help="Audio control: auto (default) or origin (keep original)")
+@click.pass_context
+def video_edit_cmd(ctx: click.Context, prompt: str, video: str,
+                   output_dir: str, model: str,
+                   reference_url: tuple[str, ...],
+                   resolution: str | None, watermark: str | None,
+                   seed: int | None, audio_setting: str | None) -> None:
+    """Edit video with text instructions (video editing).
+
+    \b
+    Examples:
+      hologres ai video-edit "转为动漫风格" --video volume://my_vol/input.mp4 -o volume://my_vol/output
+      hologres ai video-edit "让人物骑马" --video oss://b/train.mp4 --reference-url volume://my_vol/char.png -o volume://my_vol/out
+    """
+    params = _build_video_params(
+        resolution=resolution, watermark=watermark,
+        seed=seed, audio_setting=audio_setting,
+    )
+    _execute_video_gen(
+        ctx, prompt=prompt, model=model, output_dir=output_dir,
+        op_name="ai.video-edit", video=video, reference_urls=reference_url,
+        parameters_dict=params or None,
+    )
+
+
 @ai_cmd.command("image-gen")
 @click.argument("prompt")
 @click.option("--output-dir", "-o", required=True,
