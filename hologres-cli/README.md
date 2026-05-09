@@ -533,6 +533,12 @@ hologres ai image-gen "生成一只猫" --model qwen-image-2.0 -o volume://my_vo
 
 # With options
 hologres ai image-gen "短剧男主" --negative-prompt "低画质" -n 2 --size "1280*720" -o volume://my_vol/output
+
+# With reference image
+hologres ai image-gen "参照人物风格生成Q版" --reference-url volume://my_vol/images/ref.png -o volume://my_vol/output
+
+# Multiple reference images (mixed volume:// and oss://)
+hologres ai image-gen "融合两张参考图" --reference-url volume://my_vol/img1.png --reference-url oss://bucket/path/img2.png -o volume://my_vol/output
 ```
 
 **Options:**
@@ -547,6 +553,7 @@ hologres ai image-gen "短剧男主" --negative-prompt "低画质" -n 2 --size "
 | `--prompt-extend` | Enable/disable prompt rewriting (`true`/`false`) |
 | `--watermark` | Add watermark to image (`true`/`false`) |
 | `--seed` | Random seed [0, 2147483647] |
+| `--reference-url` | Reference image URL (`volume://vol/path` or `oss://path`). Repeatable for multiple images |
 
 **Output (JSON):**
 ```json

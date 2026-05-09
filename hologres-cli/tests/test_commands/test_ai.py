@@ -565,3 +565,149 @@ class TestAiImageGenCmd:
         call_args = mock_get_connection.execute.call_args
         sql = call_args[0][0]
         assert "test''role" in sql
+
+    def test_image_gen_single_reference_url(self, mock_get_connection, mocker):
+        """--reference-url resolves volume URI to OSS path in request body."""
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "image-gen", "参照风格", "-o", "volume://test_vol/output",
+            "--reference-url", "volume://test_vol/images/ref.png",
+        ])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        request = json.loads(call_args[0][1][0])
+        assert request["reference_urls"] == ["oss://mybucket/data/images/ref.png"]
+
+    def test_image_gen_multiple_reference_urls(self, mock_get_connection, mocker):
+        """Multiple --reference-url options produce an array."""
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "image-gen", "融合", "-o", "volume://test_vol/output",
+            "--reference-url", "volume://test_vol/img1.png",
+            "--reference-url", "volume://test_vol/img2.png",
+        ])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        request = json.loads(call_args[0][1][0])
+        assert request["reference_urls"] == [
+            "oss://mybucket/data/img1.png",
+            "oss://mybucket/data/img2.png",
+        ]
+
+    def test_image_gen_reference_url_oss_passthrough(self, mock_get_connection, mocker):
+        """oss:// reference URLs are passed through without resolution."""
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "image-gen", "猫", "-o", "volume://test_vol",
+            "--reference-url", "oss://other-bucket/ref.png",
+        ])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        request = json.loads(call_args[0][1][0])
+        assert request["reference_urls"] == ["oss://other-bucket/ref.png"]
+
+    def test_image_gen_reference_url_mixed(self, mock_get_connection, mocker):
+        """Mixed volume:// and oss:// reference URLs."""
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "image-gen", "融合", "-o", "volume://test_vol/out",
+            "--reference-url", "volume://test_vol/ref.png",
+            "--reference-url", "oss://ext/other.png",
+        ])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        request = json.loads(call_args[0][1][0])
+        assert request["reference_urls"] == [
+            "oss://mybucket/data/ref.png",
+            "oss://ext/other.png",
+        ]
+
+    def test_image_gen_reference_url_different_volume(self, mock_get_connection, mocker):
+        """--reference-url can use a different volume than --output-dir."""
+        config = copy.deepcopy(SAMPLE_VOLUME_CONFIG)
+        config["profiles"][0]["volumes"].append({
+            "name": "ref_vol",
+            "type": "oss",
+            "endpoint": "oss-cn-shanghai-internal.aliyuncs.com",
+            "public_endpoint": "oss-cn-shanghai.aliyuncs.com",
+            "root": "oss://refbucket/refs/",
+            "rolearn": "acs:ram::789:role/RefRole",
+            "access_key": "AK2",
+            "access_secret": "SK2",
+        })
+        _patch_load_config(mocker, config)
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "image-gen", "融合", "-o", "volume://test_vol/out",
+            "--reference-url", "volume://ref_vol/person.png",
+        ])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        request = json.loads(call_args[0][1][0])
+        assert request["reference_urls"] == ["oss://refbucket/refs/person.png"]
+
+    def test_image_gen_no_reference_url(self, mock_get_connection, mocker):
+        """No --reference-url means no reference_urls field in request."""
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "image-gen", "猫", "-o", "volume://test_vol",
+        ])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        request = json.loads(call_args[0][1][0])
+        assert "reference_urls" not in request
+
+    def test_image_gen_reference_url_invalid_prefix(self, mocker):
+        """--reference-url with invalid prefix returns INVALID_ARGS."""
+        _patch_load_config(mocker)
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "image-gen", "猫", "-o", "volume://test_vol",
+            "--reference-url", "http://example.com/img.png",
+        ])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_ARGS"
+
+    def test_image_gen_reference_url_volume_not_found(self, mocker):
+        """--reference-url referencing non-existent volume returns NOT_FOUND."""
+        _patch_load_config(mocker)
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "image-gen", "猫", "-o", "volume://test_vol",
+            "--reference-url", "volume://nonexistent/img.png",
+        ])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "NOT_FOUND"
+        assert "nonexistent" in output["error"]["message"]
+
+    def test_image_gen_reference_url_with_model(self, mock_get_connection, mocker):
+        """--reference-url works correctly together with --model."""
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": self.MOCK_RESPONSE}]
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "image-gen", "Q版人物", "-m", "wan2.7-image-pro",
+            "-o", "volume://test_vol/output",
+            "--reference-url", "volume://test_vol/ref.png",
+        ])
+        assert result.exit_code == 0
+        call_args = mock_get_connection.execute.call_args
+        assert call_args[0][1][0] == "wan2.7-image-pro"
+        request = json.loads(call_args[0][1][1])
+        assert request["reference_urls"] == ["oss://mybucket/data/ref.png"]
+        assert request["prompt"] == "Q版人物"

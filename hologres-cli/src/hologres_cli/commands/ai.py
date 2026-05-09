@@ -162,12 +162,14 @@ def gen_cmd(ctx: click.Context, prompt: str, model: str | None) -> None:
 @click.option("--watermark", type=click.Choice(["true", "false"], case_sensitive=False),
               default=None, help="Add watermark to image")
 @click.option("--seed", type=int, default=None, help="Random seed [0, 2147483647]")
+@click.option("--reference-url", multiple=True, default=(),
+              help="Reference image URL (volume://vol/path or oss://path). Repeatable.")
 @click.pass_context
 def image_gen_cmd(ctx: click.Context, prompt: str, output_dir: str,
                   model: str | None, negative_prompt: str | None,
                   size: str | None, num_images: int | None,
                   prompt_extend: str | None, watermark: str | None,
-                  seed: int | None) -> None:
+                  seed: int | None, reference_url: tuple[str, ...]) -> None:
     """Generate images using Hologres AI function and save to OSS volume.
 
     \b
@@ -175,6 +177,7 @@ def image_gen_cmd(ctx: click.Context, prompt: str, output_dir: str,
       hologres ai image-gen "生成一只可爱的猫" -o volume://my_vol/images
       hologres ai image-gen "生成一只猫" --model qwen-image-2.0 -o volume://my_vol
       hologres ai image-gen "短剧男主" --negative-prompt "低画质" -n 2 -o volume://my_vol/output
+      hologres ai image-gen "参照人物风格生成Q版" --reference-url volume://my_vol/ref.png -o volume://my_vol/output
     """
     profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
@@ -197,6 +200,36 @@ def image_gen_cmd(ctx: click.Context, prompt: str, output_dir: str,
         ))
         return
 
+    # Resolve reference URLs to OSS paths (before DB connection)
+    resolved_refs: list[str] = []
+    for ref_uri in reference_url:
+        if ref_uri.startswith("oss://"):
+            resolved_refs.append(ref_uri)
+        elif ref_uri.startswith("volume://"):
+            try:
+                ref_vol_name, ref_rel_path = _parse_volume_uri(ref_uri)
+            except ValueError as e:
+                print_output(error("INVALID_ARGS", str(e), fmt))
+                return
+            ref_vol = _get_volume_config(profile, ref_vol_name)
+            if not ref_vol:
+                print_output(error(
+                    "NOT_FOUND",
+                    f"Volume '{ref_vol_name}' not found (from --reference-url '{ref_uri}'). "
+                    f"Run 'hologres volume create' first.",
+                    fmt,
+                ))
+                return
+            ref_oss = _build_oss_output_dir(ref_vol["root"], ref_rel_path)
+            resolved_refs.append(ref_oss.rstrip("/"))
+        else:
+            print_output(error(
+                "INVALID_ARGS",
+                f"Invalid reference URL: '{ref_uri}'. Expected volume:// or oss:// prefix.",
+                fmt,
+            ))
+            return
+
     try:
         conn = get_connection(profile=profile, read_only=True)
     except DSNError as e:
@@ -209,6 +242,9 @@ def image_gen_cmd(ctx: click.Context, prompt: str, output_dir: str,
 
         if negative_prompt is not None:
             request["negative_prompt"] = negative_prompt
+
+        if resolved_refs:
+            request["reference_urls"] = resolved_refs
 
         parameters: dict = {}
         if size is not None:
