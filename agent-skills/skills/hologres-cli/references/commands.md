@@ -1339,7 +1339,7 @@ SELECT ai_gen('qwen-image-2.0', '<json_request>', to_file('<volume_root>', '<end
 
 ### ai t2v
 
-Generate video from text prompt using HappyHorse model. Video generation is asynchronous and typically takes 1-5 minutes.
+Generate video from text prompt. Video generation is asynchronous and typically takes 1-5 minutes.
 
 ```bash
 hologres ai t2v "一只猫在草地上奔跑" -o volume://my_vol/output
