@@ -1259,17 +1259,17 @@ SELECT ai_gen('<model>', '<prompt>');
 
 ### ai image-gen
 
-Generate images using Hologres AI function `ai_gen()` with a JSON request body.
+Generate images using Hologres AI function `ai_gen()` with a JSON request body. Images are saved directly to an OSS volume via `to_file()`. A volume must be configured first (see `hologres volume create`).
 
 ```bash
-# Generate an image (download to local directory)
-hologres ai image-gen "生成一只可爱的猫" -d ./images
+# Generate an image (save to OSS volume)
+hologres ai image-gen "生成一只可爱的猫" -o volume://my_vol/images
 
 # Specify a model
-hologres ai image-gen "生成一只猫" --model qwen-image-2.0 -d /tmp/images
+hologres ai image-gen "生成一只猫" --model qwen-image-2.0 -o volume://my_vol/images
 
 # With options
-hologres ai image-gen "短剧男主" --negative-prompt "低画质" -n 2 --size "1280*720" -d ./output
+hologres ai image-gen "短剧男主" --negative-prompt "低画质" -n 2 --size "1280*720" -o volume://my_vol/output
 ```
 
 **Arguments:**
@@ -1282,7 +1282,7 @@ hologres ai image-gen "短剧男主" --negative-prompt "低画质" -n 2 --size "
 
 | Option | Description |
 |--------|-------------|
-| `--download-dir, -d` | Directory to save downloaded images (required) |
+| `--output-dir, -o` | Output directory in `volume://volume_name[/sub_path]` format (required) |
 | `--model, -m` | AI model name (e.g. qwen-image-2.0) |
 | `--negative-prompt` | Negative prompt, max 500 chars |
 | `--size` | Output image size, e.g. `1280*720` |
@@ -1296,7 +1296,12 @@ hologres ai image-gen "短剧男主" --negative-prompt "低画质" -n 2 --size "
 {
   "ok": true,
   "data": {
-    "images": ["/tmp/images/c58b7714-b147.png"],
+    "images": [
+      {
+        "oss_path": "oss://bucket/path/images/c58b7714-b147.png",
+        "volume_path": "volume://my_vol/images/c58b7714-b147.png"
+      }
+    ],
     "usage": {"height": 720, "image_count": 1, "width": 1280}
   }
 }
@@ -1304,7 +1309,7 @@ hologres ai image-gen "短剧男主" --negative-prompt "低画质" -n 2 --size "
 
 When `--model` is specified, the response also includes `"model": "qwen-image-2.0"`.
 
-When response JSON cannot be parsed or has no `image_urls`, falls back to:
+When response JSON cannot be parsed or has no `image_oss_paths`, falls back to:
 ```json
 {
   "ok": true,
@@ -1314,15 +1319,15 @@ When response JSON cannot be parsed or has no `image_urls`, falls back to:
 }
 ```
 
-Non-JSON formats output local file paths, one per line.
+Non-JSON formats output volume paths, one per line.
 
 **Underlying SQL:**
 ```sql
--- Without model (JSON request as single param)
-SELECT ai_gen('{"prompt": "...", "parameters": {"size": "1280*720", "n": 2}}');
+-- Without model
+SELECT ai_gen('<json_request>', to_file('<volume_root>', '<endpoint>', '<rolearn>'));
 
 -- With model
-SELECT ai_gen('qwen-image-2.0', '{"prompt": "...", "parameters": {...}}');
+SELECT ai_gen('qwen-image-2.0', '<json_request>', to_file('<volume_root>', '<endpoint>', '<rolearn>'));
 ```
 
 ## volume

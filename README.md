@@ -93,7 +93,7 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres history` | Show recent command history |
 | `hologres ai-guide` | Generate AI agent guide |
 | `hologres ai gen "<prompt>" [--model]` | Generate text using AI function |
-| `hologres ai image-gen "<prompt>" -d DIR [options]` | Generate images using AI function |
+| `hologres ai image-gen "<prompt>" -o volume://vol/path [options]` | Generate images to OSS volume using AI function |
 | `hologres volume create <name> --endpoint <ep> --root <root> --rolearn <arn> --access-key <ak> --access-secret <sk>` | Create a local volume configuration |
 | `hologres volume list` | List all volumes in current profile |
 | `hologres volume delete <name>` | Delete a volume configuration |

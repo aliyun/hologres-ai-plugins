@@ -88,7 +88,7 @@ hologres dt list                                   # List Dynamic Tables
 | `hologres history [-n <count>]` | Show command history |
 | `hologres ai-guide` | Generate AI agent guide |
 | `hologres ai gen "<prompt>" [--model]` | Generate text using AI function |
-| `hologres ai image-gen "<prompt>" -d DIR [options]` | Generate images using AI function |
+| `hologres ai image-gen "<prompt>" -o volume://vol/path [options]` | Generate images to OSS volume using AI function |
 | `hologres volume create <name> --endpoint <ep> --root <root> --rolearn <arn> --access-key <ak> --access-secret <sk>` | Create a local volume config |
 | `hologres volume list` | List all volumes in current profile |
 | `hologres volume delete <name>` | Delete a volume config |
