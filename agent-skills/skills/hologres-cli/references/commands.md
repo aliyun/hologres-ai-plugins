@@ -1790,6 +1790,45 @@ hologres volume view volume://my_vol/data/report.csv --net intranet
 - Linux: uses `xdg-open`
 - Windows: uses `os.startfile()`
 
+## model
+
+AI model management commands.
+
+### model list
+
+List registered external AI models via `list_external_models()`.
+
+```bash
+hologres model list
+hologres model list --task embedding
+hologres model list --model-type qwen3-vl-embedding
+hologres -f table model list
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--task, -t` | Filter by task type (e.g. `embedding`, `video-generation`) |
+| `--model-type` | Filter by model type (e.g. `qwen3-vl-embedding`) |
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "rows": [
+      {"model_name": "embed11", "model_type": "qwen3-vl-embedding", "model_provider": "bailian", "task": "embedding"}
+    ],
+    "count": 1
+  }
+}
+```
+
+**Notes:**
+- Filtering is done client-side since `list_external_models()` does not support WHERE clauses
+- Both filters can be combined
+
 ## dt (Dynamic Table V3.1+)
 
 Full lifecycle management for Hologres Dynamic Tables using V3.1+ new syntax.

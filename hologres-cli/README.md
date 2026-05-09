@@ -775,6 +775,22 @@ hologres volume list-files --volume my_vol --net intranet
 }
 ```
 
+### Model Management
+
+```bash
+# List all registered external AI models
+hologres model list
+
+# Filter by task type
+hologres model list --task embedding
+
+# Filter by model type
+hologres model list --model-type qwen3-vl-embedding
+
+# Table format
+hologres -f table model list
+```
+
 ## Output Formats
 
 ```bash

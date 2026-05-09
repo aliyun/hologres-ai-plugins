@@ -29,7 +29,7 @@ def cli(ctx: click.Context, profile: Optional[str], format: str) -> None:
 
 
 
-from .commands import schema, sql, data, status, instance, warehouse, dt, config, table, view, extension, guc, partition, ai, volume  # noqa: E402
+from .commands import schema, sql, data, status, instance, warehouse, dt, config, table, view, extension, guc, partition, ai, volume, model  # noqa: E402
 cli.add_command(schema.schema_cmd)
 cli.add_command(sql.sql_cmd)
 cli.add_command(data.data_cmd)
@@ -45,6 +45,7 @@ cli.add_command(guc.guc_cmd)
 cli.add_command(partition.partition_cmd)
 cli.add_command(ai.ai_cmd)
 cli.add_command(volume.volume_cmd)
+cli.add_command(model.model_cmd)
 
 
 @cli.command("ai-guide")
@@ -91,6 +92,7 @@ Use `--profile <name>` to switch profiles.
 - `hologres volume delete-file --volume <name> --file <path> [--confirm] [--net internet|intranet]` - Delete file from volume
 - `hologres volume download-file --volume <name> --file <path> -d <dir> [--net internet|intranet]` - Download file
 - `hologres volume upload-file --volume <name> --local-file <path> --target-file <path> [--net internet|intranet]` - Upload file
+- `hologres model list [--task T] [--model-type T]` - List registered external AI models
 
 ## Safety: LIMIT required for >100 rows, --write for mutations, no DELETE/UPDATE without WHERE.
 ## Output: --format json|table|csv|jsonl. Default: json with {ok: true/false}.

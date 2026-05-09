@@ -106,6 +106,7 @@ hologres-ai-plugins/
 | `hologres volume download-file --volume <name> --file <path> -d <dir> [--net internet\|intranet]` | 从 Volume 下载文件 |
 | `hologres volume upload-file --volume <name> --local-file <path> --target-file <path> [--net internet\|intranet]` | 上传文件到 Volume |
 | `hologres volume view volume://<name>/path/file [--net internet\|intranet]` | 下载文件到临时目录并用系统默认程序打开 |
+| `hologres model list [--task T] [--model-type T]` | 列出已注册的外部 AI 模型 |
 
 **快速开始：**
 
