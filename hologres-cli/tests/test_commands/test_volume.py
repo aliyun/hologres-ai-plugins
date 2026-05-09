@@ -477,7 +477,11 @@ class TestVolumeListFilesCmd:
         assert output["ok"] is True
         assert output["data"]["count"] == 2
         assert output["data"]["rows"][0]["name"] == "report.csv"
+        assert output["data"]["rows"][0]["volume_path"] == "volume://my_vol/report.csv"
+        assert output["data"]["rows"][0]["oss_path"] == "oss://bucket/path/report.csv"
         assert output["data"]["rows"][1]["name"] == "data.json"
+        assert output["data"]["rows"][1]["volume_path"] == "volume://my_vol/data.json"
+        assert output["data"]["rows"][1]["oss_path"] == "oss://bucket/path/data.json"
 
     def test_list_files_with_prefix(self, mocker):
         config = _make_config(volumes=[_vol_entry()])
@@ -499,6 +503,8 @@ class TestVolumeListFilesCmd:
         output = json.loads(result.output)
         assert output["ok"] is True
         assert output["data"]["rows"][0]["name"] == "sub/file.txt"
+        assert output["data"]["rows"][0]["volume_path"] == "volume://my_vol/sub/file.txt"
+        assert output["data"]["rows"][0]["oss_path"] == "oss://bucket/path/sub/file.txt"
 
     def test_list_files_empty(self, mocker):
         config = _make_config(volumes=[_vol_entry()])
@@ -616,6 +622,8 @@ class TestVolumeDeleteFileCmd:
         output = json.loads(result.output)
         assert output["ok"] is True
         assert output["data"]["dry_run"] is True
+        assert output["data"]["volume_path"] == "volume://my_vol/report.csv"
+        assert output["data"]["oss_path"] == "oss://bucket/path/report.csv"
 
     def test_delete_file_confirm(self, mocker):
         config = _make_config(volumes=[_vol_entry()])
@@ -632,6 +640,8 @@ class TestVolumeDeleteFileCmd:
         output = json.loads(result.output)
         assert output["ok"] is True
         assert output["data"]["deleted"] is True
+        assert output["data"]["volume_path"] == "volume://my_vol/report.csv"
+        assert output["data"]["oss_path"] == "oss://bucket/path/report.csv"
         mock_bucket.delete_object.assert_called_once_with("path/report.csv")
 
     def test_delete_file_volume_not_found(self, mocker):
@@ -703,6 +713,8 @@ class TestVolumeDownloadFileCmd:
         assert output["ok"] is True
         assert output["data"]["downloaded"] is True
         assert output["data"]["file"] == "report.csv"
+        assert output["data"]["volume_path"] == "volume://my_vol/report.csv"
+        assert output["data"]["oss_path"] == "oss://bucket/path/report.csv"
         mock_bucket.get_object_to_file.assert_called_once()
 
     def test_download_file_volume_not_found(self, mocker):
@@ -776,6 +788,8 @@ class TestVolumeUploadFileCmd:
         assert output["ok"] is True
         assert output["data"]["uploaded"] is True
         assert output["data"]["target_file"] == "data/data.csv"
+        assert output["data"]["volume_path"] == "volume://my_vol/data/data.csv"
+        assert output["data"]["oss_path"] == "oss://bucket/path/data/data.csv"
         mock_bucket.put_object_from_file.assert_called_once_with(
             "path/data/data.csv", "/tmp/data.csv"
         )
@@ -854,3 +868,21 @@ class TestParseOssRoot:
         bucket, prefix = _parse_oss_root("oss://mybucket/a/b/c/")
         assert bucket == "mybucket"
         assert prefix == "a/b/c/"
+
+
+class TestBuildPaths:
+    """Tests for _build_paths helper."""
+
+    def test_basic(self):
+        from hologres_cli.commands.volume import _build_paths
+        vol = {"root": "oss://bucket1/prefix/"}
+        result = _build_paths("my_vol", "file.csv", vol)
+        assert result["volume_path"] == "volume://my_vol/file.csv"
+        assert result["oss_path"] == "oss://bucket1/prefix/file.csv"
+
+    def test_nested_path(self):
+        from hologres_cli.commands.volume import _build_paths
+        vol = {"root": "oss://bucket1/a/b/"}
+        result = _build_paths("vol1", "dir/sub/file.csv", vol)
+        assert result["volume_path"] == "volume://vol1/dir/sub/file.csv"
+        assert result["oss_path"] == "oss://bucket1/a/b/dir/sub/file.csv"

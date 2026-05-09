@@ -1456,7 +1456,7 @@ hologres volume list-files --volume my_vol --net intranet
   "ok": true,
   "data": {
     "rows": [
-      {"name": "report.csv", "size": 1024, "last_modified": "2026-05-01T10:00:00Z"}
+      {"name": "report.csv", "volume_path": "volume://my_vol/report.csv", "oss_path": "oss://bucket/path/report.csv", "size": 1024, "last_modified": "2026-05-01T10:00:00Z"}
     ],
     "count": 1
   }
@@ -1487,6 +1487,8 @@ hologres volume delete-file --volume my_vol --file data/report.csv --confirm
   "ok": true,
   "data": {
     "action": "DELETE oss://bucket/path/data/report.csv",
+    "volume_path": "volume://my_vol/data/report.csv",
+    "oss_path": "oss://bucket/path/data/report.csv",
     "dry_run": true
   }
 }
@@ -1498,6 +1500,8 @@ hologres volume delete-file --volume my_vol --file data/report.csv --confirm
   "ok": true,
   "data": {
     "file": "data/report.csv",
+    "volume_path": "volume://my_vol/data/report.csv",
+    "oss_path": "oss://bucket/path/data/report.csv",
     "deleted": true
   }
 }
@@ -1527,6 +1531,8 @@ hologres volume download-file --volume my_vol --file data/file.csv -d /tmp --net
   "ok": true,
   "data": {
     "file": "report.csv",
+    "volume_path": "volume://my_vol/report.csv",
+    "oss_path": "oss://bucket/path/report.csv",
     "local_path": "./output/report.csv",
     "downloaded": true
   }
@@ -1558,6 +1564,8 @@ hologres volume upload-file --volume my_vol --local-file ./img.png --target-file
   "data": {
     "local_file": "./data.csv",
     "target_file": "data/data.csv",
+    "volume_path": "volume://my_vol/data/data.csv",
+    "oss_path": "oss://bucket/path/data/data.csv",
     "uploaded": true
   }
 }

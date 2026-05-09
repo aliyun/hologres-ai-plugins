@@ -62,6 +62,15 @@ def _get_oss_client(volume: dict, net: str = "internet"):
     return bucket, prefix
 
 
+def _build_paths(volume_name: str, file_name: str, vol: dict) -> dict:
+    """Build volume_path and oss_path for a file."""
+    bucket, root_prefix = _parse_oss_root(vol["root"])
+    return {
+        "volume_path": f"volume://{volume_name}/{file_name}",
+        "oss_path": f"oss://{bucket}/{root_prefix}{file_name}",
+    }
+
+
 def _find_volume(volumes: list[dict], volume_name: str, fmt: str) -> dict | None:
     """Find a volume by name. Returns volume dict or None (prints error)."""
     for v in volumes:
@@ -310,8 +319,11 @@ def list_files_cmd(
             rel_name = obj.key
             if rel_name.startswith(root_prefix):
                 rel_name = rel_name[len(root_prefix):]
+            paths = _build_paths(volume_name, rel_name, vol)
             rows.append({
                 "name": rel_name,
+                "volume_path": paths["volume_path"],
+                "oss_path": paths["oss_path"],
                 "size": obj.size,
                 "last_modified": obj.last_modified,
             })
@@ -366,8 +378,11 @@ def delete_file_cmd(
     full_key = root_prefix + file_name
 
     if not confirm:
+        paths = _build_paths(volume_name, file_name, vol)
         print_output(success({
             "action": f"DELETE oss://{_parse_oss_root(vol['root'])[0]}/{full_key}",
+            "volume_path": paths["volume_path"],
+            "oss_path": paths["oss_path"],
             "dry_run": True,
         }, fmt))
         return
@@ -379,8 +394,11 @@ def delete_file_cmd(
         print_output(error("OSS_ERROR", str(e), fmt))
         return
 
+    paths = _build_paths(volume_name, file_name, vol)
     print_output(success({
         "file": file_name,
+        "volume_path": paths["volume_path"],
+        "oss_path": paths["oss_path"],
         "deleted": True,
     }, fmt))
 
@@ -434,8 +452,11 @@ def download_file_cmd(
         print_output(error("OSS_ERROR", str(e), fmt))
         return
 
+    paths = _build_paths(volume_name, file_name, vol)
     print_output(success({
         "file": file_name,
+        "volume_path": paths["volume_path"],
+        "oss_path": paths["oss_path"],
         "local_path": local_path,
         "downloaded": True,
     }, fmt))
@@ -492,9 +513,12 @@ def upload_file_cmd(
         print_output(error("OSS_ERROR", str(e), fmt))
         return
 
+    paths = _build_paths(volume_name, target_file, vol)
     print_output(success({
         "local_file": local_file,
         "target_file": target_file,
+        "volume_path": paths["volume_path"],
+        "oss_path": paths["oss_path"],
         "uploaded": True,
     }, fmt))
 
