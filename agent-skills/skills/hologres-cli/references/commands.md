@@ -1336,7 +1336,7 @@ Manage local volume configurations for OSS file storage. Volumes are stored in `
 
 ### volume create
 
-Create a volume configuration in the current profile.
+Create a volume configuration in the current profile. Before saving, creates an OSS directory placeholder at the root path. If the OSS operation fails, the configuration is not saved.
 
 ```bash
 hologres volume create my_vol \
@@ -1379,6 +1379,14 @@ hologres volume create my_vol \
 {
   "ok": false,
   "error": {"code": "ALREADY_EXISTS", "message": "Volume 'my_vol' already exists in profile 'default'."}
+}
+```
+
+**Error (OSS directory creation failed):**
+```json
+{
+  "ok": false,
+  "error": {"code": "OSS_ERROR", "message": "Failed to create OSS directory placeholder: ..."}
 }
 ```
 

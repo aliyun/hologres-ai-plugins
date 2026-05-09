@@ -94,7 +94,7 @@ hologres-ai-plugins/
 | `hologres ai-guide` | 生成 AI Agent 使用指南 |
 | `hologres ai gen "<prompt>" [--model]` | 使用 AI 函数生成文本 |
 | `hologres ai image-gen "<prompt>" -o volume://vol/path [选项]` | 使用 AI 函数生成图片到 OSS Volume |
-| `hologres volume create <name> --endpoint <ep> --root <root> --rolearn <arn> --access-key <ak> --access-secret <sk>` | 创建本地 Volume 配置 |
+| `hologres volume create <name> --endpoint <ep> --root <root> --rolearn <arn> --access-key <ak> --access-secret <sk>` | 创建本地 Volume 配置（同时在 OSS 上创建目录占位文件） |
 | `hologres volume list` | 列出当前 Profile 下所有 Volume |
 | `hologres volume delete <name>` | 删除 Volume 配置 |
 | `hologres volume list-files --volume <name> [--prefix P] [--max-count N] [--net internet\|intranet]` | 列出 Volume 下的文件 |

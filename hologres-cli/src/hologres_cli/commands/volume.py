@@ -188,7 +188,25 @@ def create_cmd(
     # Auto-generate public endpoint from internal endpoint
     public_endpoint = endpoint.replace("-internal", "")
 
-    # Add volume and save
+    # Create OSS directory placeholder before saving config
+    try:
+        bucket, root_prefix = _get_oss_client(
+            {"access_key": access_key, "access_secret": access_secret,
+             "public_endpoint": public_endpoint, "endpoint": endpoint,
+             "root": root},
+            net="internet",
+        )
+        if root_prefix:
+            bucket.put_object(root_prefix, b"")
+    except Exception as exc:
+        print_output(error(
+            "OSS_ERROR",
+            f"Failed to create OSS directory placeholder: {exc}",
+            fmt,
+        ))
+        return
+
+    # OSS placeholder created, now save config
     volume_entry = {
         "name": volume_name,
         "type": vol_type,

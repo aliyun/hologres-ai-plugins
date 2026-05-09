@@ -579,7 +579,7 @@ SELECT ai_gen('<json_request>', to_file('<volume_root>', '<endpoint>', '<rolearn
 
 ### Volume (Local Storage Configuration)
 
-Manage local volume configurations for OSS file storage. Volumes are stored in `~/.hologres/config.json` under the current profile.
+Manage local volume configurations for OSS file storage. Volumes are stored in `~/.hologres/config.json` under the current profile. When creating a volume, an OSS directory placeholder is created first; if this fails, the configuration is not saved.
 
 ```bash
 # Create a volume
@@ -742,6 +742,7 @@ hologres sql run --write "DELETE FROM users WHERE id = 1"
 | `VIEW_NOT_FOUND` | View not found |
 | `NOT_LOGICAL_PARTITION` | Table is not a logical partition table |
 | `INVALID_PARTITION_PROPERTY` | Invalid partition property name or value |
+| `OSS_ERROR` | OSS operation failed (e.g. directory placeholder creation on volume create) |
 
 ## Sensitive Data Masking
 

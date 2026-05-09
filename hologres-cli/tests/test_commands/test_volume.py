@@ -55,6 +55,16 @@ _VALID_CREATE_ARGS = [
 ]
 
 
+def _mock_oss_client(mocker):
+    """Mock _get_oss_client to return a fake bucket with no-op put_object."""
+    mock_bucket = MagicMock()
+    mocker.patch(
+        "hologres_cli.commands.volume._get_oss_client",
+        return_value=(mock_bucket, "path/"),
+    )
+    return mock_bucket
+
+
 class TestVolumeCreateCmd:
     """Tests for volume create command."""
 
@@ -62,6 +72,7 @@ class TestVolumeCreateCmd:
         config = _make_config()
         mocker.patch("hologres_cli.commands.volume.load_config", return_value=config)
         mock_save = mocker.patch("hologres_cli.commands.volume.save_config")
+        mock_bucket = _mock_oss_client(mocker)
 
         runner = CliRunner()
         result = runner.invoke(cli, _VALID_CREATE_ARGS)
@@ -71,6 +82,8 @@ class TestVolumeCreateCmd:
         assert output["ok"] is True
         assert output["data"]["volume"] == "my_vol"
         assert output["data"]["created"] is True
+
+        mock_bucket.put_object.assert_called_once_with("path/", b"")
 
         saved_config = mock_save.call_args[0][0]
         vol = saved_config["profiles"][0]["volumes"][0]
@@ -82,10 +95,58 @@ class TestVolumeCreateCmd:
         assert vol["access_key"] == "LTAI5tTestAK"
         assert vol["access_secret"] == "TestSecretXXX"
 
+    def test_create_oss_failure_aborts(self, mocker):
+        config = _make_config()
+        mocker.patch("hologres_cli.commands.volume.load_config", return_value=config)
+        mock_save = mocker.patch("hologres_cli.commands.volume.save_config")
+
+        mock_bucket = MagicMock()
+        mock_bucket.put_object.side_effect = Exception("Access denied")
+        mocker.patch(
+            "hologres_cli.commands.volume._get_oss_client",
+            return_value=(mock_bucket, "path/"),
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, _VALID_CREATE_ARGS)
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "OSS_ERROR"
+        mock_save.assert_not_called()
+
+    def test_create_empty_prefix_skips_oss_put(self, mocker):
+        config = _make_config()
+        mocker.patch("hologres_cli.commands.volume.load_config", return_value=config)
+        mock_save = mocker.patch("hologres_cli.commands.volume.save_config")
+
+        mock_bucket = MagicMock()
+        mocker.patch(
+            "hologres_cli.commands.volume._get_oss_client",
+            return_value=(mock_bucket, ""),
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "volume", "create", "my_vol",
+            "--endpoint", "oss-cn-hangzhou-internal.aliyuncs.com",
+            "--root", "oss://bucket/",
+            "--rolearn", "arn",
+            "--access-key", "ak", "--access-secret", "sk",
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        mock_bucket.put_object.assert_not_called()
+        mock_save.assert_called_once()
+
     def test_create_public_endpoint_auto_generated(self, mocker):
         config = _make_config()
         mocker.patch("hologres_cli.commands.volume.load_config", return_value=config)
         mock_save = mocker.patch("hologres_cli.commands.volume.save_config")
+        _mock_oss_client(mocker)
 
         runner = CliRunner()
         result = runner.invoke(cli, _VALID_CREATE_ARGS)
@@ -123,6 +184,7 @@ class TestVolumeCreateCmd:
         config = _make_config()
         mocker.patch("hologres_cli.commands.volume.load_config", return_value=config)
         mock_save = mocker.patch("hologres_cli.commands.volume.save_config")
+        _mock_oss_client(mocker)
 
         runner = CliRunner()
         result = runner.invoke(cli, _VALID_CREATE_ARGS)
@@ -223,6 +285,7 @@ class TestVolumeCreateCmd:
         config = _make_config()
         mocker.patch("hologres_cli.commands.volume.load_config", return_value=config)
         mock_save = mocker.patch("hologres_cli.commands.volume.save_config")
+        _mock_oss_client(mocker)
 
         runner = CliRunner()
         result = runner.invoke(cli, [
@@ -266,6 +329,7 @@ class TestVolumeCreateCmd:
         config = _make_config_multi()
         mocker.patch("hologres_cli.commands.volume.load_config", return_value=config)
         mock_save = mocker.patch("hologres_cli.commands.volume.save_config")
+        _mock_oss_client(mocker)
 
         runner = CliRunner()
         result = runner.invoke(cli, [
@@ -290,6 +354,7 @@ class TestVolumeCreateCmd:
         config = _make_config()
         mocker.patch("hologres_cli.commands.volume.load_config", return_value=config)
         mocker.patch("hologres_cli.commands.volume.save_config")
+        _mock_oss_client(mocker)
 
         runner = CliRunner()
         result = runner.invoke(cli, [
