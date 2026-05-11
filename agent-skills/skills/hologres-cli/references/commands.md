@@ -1276,6 +1276,9 @@ hologres ai image-gen "参照人物风格生成Q版" --reference-url volume://my
 
 # Multiple reference images (mixed volume:// and oss://)
 hologres ai image-gen "融合两张参考图" --reference-url volume://my_vol/img1.png --reference-url oss://bucket/path/img2.png -o volume://my_vol/output
+
+# With local file (requires --upload-volume)
+hologres ai image-gen "参照人物风格生成Q版" --reference-url ./ref.png --upload-volume my_vol -o volume://my_vol/output
 ```
 
 **Arguments:**
@@ -1296,7 +1299,9 @@ hologres ai image-gen "融合两张参考图" --reference-url volume://my_vol/im
 | `--prompt-extend` | Enable/disable prompt rewriting (`true`/`false`) |
 | `--watermark` | Add watermark to image (`true`/`false`) |
 | `--seed` | Random seed [0, 2147483647] |
-| `--reference-url` | Reference image URL (`volume://vol/path` or `oss://path`). Repeatable for multiple images |
+| `--reference-url` | Reference image URL (`volume://vol/path`, `oss://path`, or local file path). Repeatable for multiple images |
+| `--upload-volume` | Volume name for uploading local files (required when using local file paths) |
+| `--net` | Network type for file upload: `internet` (default) / `intranet` |
 
 **Output (JSON, success):**
 ```json
@@ -1372,6 +1377,9 @@ Generate video from a first-frame image.
 ```bash
 hologres ai i2v "一只猫在奔跑" --img-url volume://my_vol/frame.png -o volume://my_vol/output
 hologres ai i2v "猫" --img-url oss://bucket/frame.png --resolution 720P -o volume://my_vol/output
+
+# With local file (requires --upload-volume)
+hologres ai i2v "猫" --img-url ./frame.png --upload-volume my_vol -o volume://my_vol/output
 ```
 
 **Arguments:**
@@ -1384,13 +1392,15 @@ hologres ai i2v "猫" --img-url oss://bucket/frame.png --resolution 720P -o volu
 
 | Option | Description |
 |--------|-------------|
-| `--img-url` | First-frame image URL, `volume://` or `oss://` (required) |
+| `--img-url` | First-frame image URL: `volume://`, `oss://`, or local file path (required) |
 | `--output-dir, -o` | Output directory (required) |
 | `--model, -m` | AI model name (default: `happyhorse-1.0-i2v`) |
 | `--resolution` | Video resolution: `720P` / `1080P` (default: 1080P) |
 | `--duration` | Video duration in seconds, 3-15 (default: 5) |
 | `--watermark` | Add watermark: `true` / `false` |
 | `--seed` | Random seed [0, 2147483647] |
+| `--upload-volume` | Volume name for uploading local files (required when using local file paths) |
+| `--net` | Network type for file upload: `internet` (default) / `intranet` |
 
 Note: No `--ratio` option — aspect ratio follows the first-frame image.
 
@@ -1403,6 +1413,9 @@ hologres ai r2v "女性在花园漫步" --reference-url volume://my_vol/girl.png
 hologres ai r2v "人物oss://b/girl.png在跑步" \
   --reference-url oss://b/girl.png --reference-url volume://my_vol/fan.png \
   -o volume://my_vol/output
+
+# With local file (requires --upload-volume)
+hologres ai r2v "女性在花园漫步" --reference-url ./girl.png --upload-volume my_vol -o volume://my_vol/output
 ```
 
 **Arguments:**
@@ -1415,7 +1428,7 @@ hologres ai r2v "人物oss://b/girl.png在跑步" \
 
 | Option | Description |
 |--------|-------------|
-| `--reference-url` | Reference image URL (1-9 images), `volume://` or `oss://`. Repeatable. (required) |
+| `--reference-url` | Reference image URL (1-9 images), `volume://`, `oss://`, or local file path. Repeatable. (required) |
 | `--output-dir, -o` | Output directory (required) |
 | `--model, -m` | AI model name (default: `happyhorse-1.0-r2v`) |
 | `--resolution` | Video resolution: `720P` / `1080P` |
@@ -1423,6 +1436,8 @@ hologres ai r2v "人物oss://b/girl.png在跑步" \
 | `--duration` | Video duration in seconds, 3-15 |
 | `--watermark` | Add watermark: `true` / `false` |
 | `--seed` | Random seed [0, 2147483647] |
+| `--upload-volume` | Volume name for uploading local files (required when using local file paths) |
+| `--net` | Network type for file upload: `internet` (default) / `intranet` |
 
 ### ai video-edit
 
@@ -1432,6 +1447,9 @@ Edit video with text instructions. Supports style transfer, local replacement, e
 hologres ai video-edit "转为动漫风格" --video volume://my_vol/input.mp4 -o volume://my_vol/output
 hologres ai video-edit "让人物骑马" --video oss://b/train.mp4 \
   --reference-url volume://my_vol/char.png -o volume://my_vol/output
+
+# With local files (requires --upload-volume)
+hologres ai video-edit "转为动漫风格" --video ./input.mp4 --upload-volume my_vol -o volume://my_vol/output
 ```
 
 **Arguments:**
@@ -1444,14 +1462,16 @@ hologres ai video-edit "让人物骑马" --video oss://b/train.mp4 \
 
 | Option | Description |
 |--------|-------------|
-| `--video` | Input video URL, `volume://` or `oss://` (required) |
+| `--video` | Input video URL: `volume://`, `oss://`, or local file path (required) |
 | `--output-dir, -o` | Output directory (required) |
 | `--model, -m` | AI model name (default: `happyhorse-1.0-video-edit`) |
-| `--reference-url` | Reference image URL (0-5 images). Repeatable. |
+| `--reference-url` | Reference image URL (0-5 images), `volume://`, `oss://`, or local file path. Repeatable. |
 | `--resolution` | Video resolution: `720P` / `1080P` |
 | `--watermark` | Add watermark: `true` / `false` |
 | `--seed` | Random seed [0, 2147483647] |
 | `--audio-setting` | Audio control: `auto` (default) / `origin` (keep original audio) |
+| `--upload-volume` | Volume name for uploading local files (required when using local file paths) |
+| `--net` | Network type for file upload: `internet` (default) / `intranet` |
 
 Note: No `--ratio` or `--duration` options for video editing.
 

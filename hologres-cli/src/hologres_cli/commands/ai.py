@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json as json_mod
+import os
 import time
+import uuid
 
 import click
 
@@ -18,7 +20,7 @@ from ..output import (
     query_error,
     success,
 )
-from .volume import _parse_volume_uri
+from .volume import _get_oss_client, _parse_oss_root, _parse_volume_uri
 
 
 def _get_volume_config(profile_name: str | None, volume_name: str) -> dict | None:
@@ -134,8 +136,10 @@ def gen_cmd(ctx: click.Context, prompt: str, model: str | None) -> None:
 
 def _resolve_media_url(
     uri: str, profile: str | None, fmt: str,
+    upload_volume: str | None = None,
+    net: str = "internet",
 ) -> str | None:
-    """Resolve volume:// or oss:// URI to OSS path.
+    """Resolve volume://, oss://, or local file path to OSS path.
 
     Returns the resolved OSS path, or None on error (error already printed).
     """
@@ -156,12 +160,57 @@ def _resolve_media_url(
             ))
             return None
         return _build_oss_output_dir(vol["root"], rel_path).rstrip("/")
-    print_output(error(
-        "INVALID_ARGS",
-        f"Invalid URL: '{uri}'. Expected volume:// or oss:// prefix.",
-        fmt,
-    ))
-    return None
+    # Local file path
+    if upload_volume is None:
+        print_output(error(
+            "INVALID_ARGS",
+            f"Local file '{uri}' requires --upload-volume to specify upload destination.",
+            fmt,
+        ))
+        return None
+    return _upload_local_file(uri, upload_volume, profile, fmt, net)
+
+
+def _upload_local_file(
+    local_path: str,
+    volume_name: str,
+    profile: str | None,
+    fmt: str,
+    net: str = "internet",
+) -> str | None:
+    """Upload a local file to the specified volume and return the OSS path.
+
+    Returns the OSS path on success, or None on error (error already printed).
+    """
+    if not os.path.isfile(local_path):
+        print_output(error(
+            "FILE_NOT_FOUND", f"Local file '{local_path}' not found.", fmt,
+        ))
+        return None
+
+    vol = _get_volume_config(profile, volume_name)
+    if not vol:
+        print_output(error(
+            "NOT_FOUND",
+            f"Volume '{volume_name}' not found. Run 'hologres volume create' first.",
+            fmt,
+        ))
+        return None
+
+    filename = os.path.basename(local_path)
+    short_uuid = uuid.uuid4().hex[:8]
+    target_file = f"_uploads/{short_uuid}_{filename}"
+
+    try:
+        bucket, root_prefix = _get_oss_client(vol, net)
+        full_key = root_prefix + target_file
+        bucket.put_object_from_file(full_key, local_path)
+    except Exception as e:
+        print_output(error("OSS_ERROR", f"Failed to upload '{local_path}': {e}", fmt))
+        return None
+
+    bucket_name, _ = _parse_oss_root(vol["root"])
+    return f"oss://{bucket_name}/{root_prefix}{target_file}"
 
 
 def _execute_video_gen(
@@ -175,6 +224,8 @@ def _execute_video_gen(
     video: str | None = None,
     reference_urls: tuple[str, ...] = (),
     parameters_dict: dict | None = None,
+    upload_volume: str | None = None,
+    net: str = "internet",
 ) -> None:
     """Shared implementation for video generation subcommands."""
     profile = ctx.obj.get("profile")
@@ -200,19 +251,25 @@ def _execute_video_gen(
     # Resolve media URLs
     resolved_img_url: str | None = None
     if img_url:
-        resolved_img_url = _resolve_media_url(img_url, profile, fmt)
+        resolved_img_url = _resolve_media_url(
+            img_url, profile, fmt, upload_volume=upload_volume, net=net,
+        )
         if resolved_img_url is None:
             return
 
     resolved_video: str | None = None
     if video:
-        resolved_video = _resolve_media_url(video, profile, fmt)
+        resolved_video = _resolve_media_url(
+            video, profile, fmt, upload_volume=upload_volume, net=net,
+        )
         if resolved_video is None:
             return
 
     resolved_refs: list[str] = []
     for ref_uri in reference_urls:
-        resolved = _resolve_media_url(ref_uri, profile, fmt)
+        resolved = _resolve_media_url(
+            ref_uri, profile, fmt, upload_volume=upload_volume, net=net,
+        )
         if resolved is None:
             return
         resolved_refs.append(resolved)
@@ -397,7 +454,7 @@ def t2v_cmd(ctx: click.Context, prompt: str, output_dir: str, model: str,
 @ai_cmd.command("i2v")
 @click.argument("prompt")
 @click.option("--img-url", required=True,
-              help="First-frame image URL (volume://vol/path or oss://path)")
+              help="First-frame image URL (volume://vol/path, oss://path, or local file path)")
 @click.option("--output-dir", "-o", required=True,
               help="Output directory. volume://volume_name[/sub_path]")
 @click.option("--model", "-m", default="happyhorse-1.0-i2v",
@@ -409,16 +466,22 @@ def t2v_cmd(ctx: click.Context, prompt: str, output_dir: str, model: str,
 @click.option("--watermark", type=click.Choice(["true", "false"], case_sensitive=False),
               default=None, help="Add watermark (default: true)")
 @click.option("--seed", type=int, default=None, help="Random seed [0, 2147483647]")
+@click.option("--upload-volume", default=None,
+              help="Volume name for uploading local files (required when using local file paths).")
+@click.option("--net", default="internet", type=click.Choice(["internet", "intranet"]),
+              help="Network type for file upload: internet (default) or intranet.")
 @click.pass_context
 def i2v_cmd(ctx: click.Context, prompt: str, img_url: str, output_dir: str,
             model: str, resolution: str | None, duration: int | None,
-            watermark: str | None, seed: int | None) -> None:
+            watermark: str | None, seed: int | None,
+            upload_volume: str | None, net: str) -> None:
     """Generate video from first-frame image (image-to-video).
 
     \b
     Examples:
       hologres ai i2v "一只猫在草地上奔跑" --img-url volume://my_vol/frame.png -o volume://my_vol/output
       hologres ai i2v "猫" --img-url oss://bucket/frame.png -o volume://my_vol/output
+      hologres ai i2v "猫" --img-url ./frame.png --upload-volume my_vol -o volume://my_vol/output
     """
     params = _build_video_params(
         resolution=resolution, duration=duration,
@@ -427,13 +490,14 @@ def i2v_cmd(ctx: click.Context, prompt: str, img_url: str, output_dir: str,
     _execute_video_gen(
         ctx, prompt=prompt, model=model, output_dir=output_dir,
         op_name="ai.i2v", img_url=img_url, parameters_dict=params or None,
+        upload_volume=upload_volume, net=net,
     )
 
 
 @ai_cmd.command("r2v")
 @click.argument("prompt")
 @click.option("--reference-url", multiple=True, required=True,
-              help="Reference image URL (1-9), volume://vol/path or oss://path. Repeatable.")
+              help="Reference image URL (1-9), volume://vol/path, oss://path, or local file. Repeatable.")
 @click.option("--output-dir", "-o", required=True,
               help="Output directory. volume://volume_name[/sub_path]")
 @click.option("--model", "-m", default="happyhorse-1.0-r2v",
@@ -447,11 +511,16 @@ def i2v_cmd(ctx: click.Context, prompt: str, img_url: str, output_dir: str,
 @click.option("--watermark", type=click.Choice(["true", "false"], case_sensitive=False),
               default=None, help="Add watermark (default: true)")
 @click.option("--seed", type=int, default=None, help="Random seed [0, 2147483647]")
+@click.option("--upload-volume", default=None,
+              help="Volume name for uploading local files (required when using local file paths).")
+@click.option("--net", default="internet", type=click.Choice(["internet", "intranet"]),
+              help="Network type for file upload: internet (default) or intranet.")
 @click.pass_context
 def r2v_cmd(ctx: click.Context, prompt: str, reference_url: tuple[str, ...],
             output_dir: str, model: str, resolution: str | None,
             ratio: str | None, duration: int | None,
-            watermark: str | None, seed: int | None) -> None:
+            watermark: str | None, seed: int | None,
+            upload_volume: str | None, net: str) -> None:
     """Generate video from reference images (reference-to-video).
 
     \b
@@ -462,6 +531,7 @@ def r2v_cmd(ctx: click.Context, prompt: str, reference_url: tuple[str, ...],
     Examples:
       hologres ai r2v "女性在花园漫步" --reference-url volume://my_vol/girl.png -o volume://my_vol/output
       hologres ai r2v "人物oss://b/girl.png在跑步" --reference-url oss://b/girl.png -o volume://my_vol/output
+      hologres ai r2v "女性漫步" --reference-url ./girl.png --upload-volume my_vol -o volume://my_vol/output
     """
     params = _build_video_params(
         resolution=resolution, ratio=ratio, duration=duration,
@@ -471,19 +541,20 @@ def r2v_cmd(ctx: click.Context, prompt: str, reference_url: tuple[str, ...],
         ctx, prompt=prompt, model=model, output_dir=output_dir,
         op_name="ai.r2v", reference_urls=reference_url,
         parameters_dict=params or None,
+        upload_volume=upload_volume, net=net,
     )
 
 
 @ai_cmd.command("video-edit")
 @click.argument("prompt")
 @click.option("--video", required=True,
-              help="Input video URL (volume://vol/path or oss://path)")
+              help="Input video URL (volume://vol/path, oss://path, or local file path)")
 @click.option("--output-dir", "-o", required=True,
               help="Output directory. volume://volume_name[/sub_path]")
 @click.option("--model", "-m", default="happyhorse-1.0-video-edit",
               help="AI model name (default: happyhorse-1.0-video-edit)")
 @click.option("--reference-url", multiple=True, default=(),
-              help="Reference image URL (0-5), volume://vol/path or oss://path. Repeatable.")
+              help="Reference image URL (0-5), volume://vol/path, oss://path, or local file. Repeatable.")
 @click.option("--resolution", type=click.Choice(["720P", "1080P"], case_sensitive=False),
               default=None, help="Video resolution (default: 1080P)")
 @click.option("--watermark", type=click.Choice(["true", "false"], case_sensitive=False),
@@ -491,18 +562,24 @@ def r2v_cmd(ctx: click.Context, prompt: str, reference_url: tuple[str, ...],
 @click.option("--seed", type=int, default=None, help="Random seed [0, 2147483647]")
 @click.option("--audio-setting", type=click.Choice(["auto", "origin"], case_sensitive=False),
               default=None, help="Audio control: auto (default) or origin (keep original)")
+@click.option("--upload-volume", default=None,
+              help="Volume name for uploading local files (required when using local file paths).")
+@click.option("--net", default="internet", type=click.Choice(["internet", "intranet"]),
+              help="Network type for file upload: internet (default) or intranet.")
 @click.pass_context
 def video_edit_cmd(ctx: click.Context, prompt: str, video: str,
                    output_dir: str, model: str,
                    reference_url: tuple[str, ...],
                    resolution: str | None, watermark: str | None,
-                   seed: int | None, audio_setting: str | None) -> None:
+                   seed: int | None, audio_setting: str | None,
+                   upload_volume: str | None, net: str) -> None:
     """Edit video with text instructions (video editing).
 
     \b
     Examples:
       hologres ai video-edit "转为动漫风格" --video volume://my_vol/input.mp4 -o volume://my_vol/output
       hologres ai video-edit "让人物骑马" --video oss://b/train.mp4 --reference-url volume://my_vol/char.png -o volume://my_vol/out
+      hologres ai video-edit "转动漫风" --video ./input.mp4 --upload-volume my_vol -o volume://my_vol/output
     """
     params = _build_video_params(
         resolution=resolution, watermark=watermark,
@@ -512,6 +589,7 @@ def video_edit_cmd(ctx: click.Context, prompt: str, video: str,
         ctx, prompt=prompt, model=model, output_dir=output_dir,
         op_name="ai.video-edit", video=video, reference_urls=reference_url,
         parameters_dict=params or None,
+        upload_volume=upload_volume, net=net,
     )
 
 
@@ -529,13 +607,18 @@ def video_edit_cmd(ctx: click.Context, prompt: str, video: str,
               default=None, help="Add watermark to image")
 @click.option("--seed", type=int, default=None, help="Random seed [0, 2147483647]")
 @click.option("--reference-url", multiple=True, default=(),
-              help="Reference image URL (volume://vol/path or oss://path). Repeatable.")
+              help="Reference image URL (volume://vol/path, oss://path, or local file). Repeatable.")
+@click.option("--upload-volume", default=None,
+              help="Volume name for uploading local files (required when using local file paths).")
+@click.option("--net", default="internet", type=click.Choice(["internet", "intranet"]),
+              help="Network type for file upload: internet (default) or intranet.")
 @click.pass_context
 def image_gen_cmd(ctx: click.Context, prompt: str, output_dir: str,
                   model: str | None, negative_prompt: str | None,
                   size: str | None, num_images: int | None,
                   prompt_extend: str | None, watermark: str | None,
-                  seed: int | None, reference_url: tuple[str, ...]) -> None:
+                  seed: int | None, reference_url: tuple[str, ...],
+                  upload_volume: str | None, net: str) -> None:
     """Generate images using Hologres AI function and save to OSS volume.
 
     \b
@@ -544,6 +627,7 @@ def image_gen_cmd(ctx: click.Context, prompt: str, output_dir: str,
       hologres ai image-gen "生成一只猫" --model qwen-image-2.0 -o volume://my_vol
       hologres ai image-gen "短剧男主" --negative-prompt "低画质" -n 2 -o volume://my_vol/output
       hologres ai image-gen "参照人物风格生成Q版" --reference-url volume://my_vol/ref.png -o volume://my_vol/output
+      hologres ai image-gen "生成Q版" --reference-url ./ref.png --upload-volume my_vol -o volume://my_vol/output
     """
     profile = ctx.obj.get("profile")
     fmt = ctx.obj.get("format", FORMAT_JSON)
@@ -569,32 +653,12 @@ def image_gen_cmd(ctx: click.Context, prompt: str, output_dir: str,
     # Resolve reference URLs to OSS paths (before DB connection)
     resolved_refs: list[str] = []
     for ref_uri in reference_url:
-        if ref_uri.startswith("oss://"):
-            resolved_refs.append(ref_uri)
-        elif ref_uri.startswith("volume://"):
-            try:
-                ref_vol_name, ref_rel_path = _parse_volume_uri(ref_uri)
-            except ValueError as e:
-                print_output(error("INVALID_ARGS", str(e), fmt))
-                return
-            ref_vol = _get_volume_config(profile, ref_vol_name)
-            if not ref_vol:
-                print_output(error(
-                    "NOT_FOUND",
-                    f"Volume '{ref_vol_name}' not found (from --reference-url '{ref_uri}'). "
-                    f"Run 'hologres volume create' first.",
-                    fmt,
-                ))
-                return
-            ref_oss = _build_oss_output_dir(ref_vol["root"], ref_rel_path)
-            resolved_refs.append(ref_oss.rstrip("/"))
-        else:
-            print_output(error(
-                "INVALID_ARGS",
-                f"Invalid reference URL: '{ref_uri}'. Expected volume:// or oss:// prefix.",
-                fmt,
-            ))
+        resolved = _resolve_media_url(
+            ref_uri, profile, fmt, upload_volume=upload_volume, net=net,
+        )
+        if resolved is None:
             return
+        resolved_refs.append(resolved)
 
     try:
         conn = get_connection(profile=profile, read_only=True)

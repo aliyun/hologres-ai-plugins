@@ -1222,3 +1222,225 @@ class TestAiVideoEditCmd:
         output = json.loads(result.output)
         assert output["ok"] is False
         assert output["error"]["code"] == "NOT_FOUND"
+
+
+@pytest.mark.unit
+class TestUploadLocalFile:
+    """Tests for local file upload support in AI commands."""
+
+    def test_upload_local_file_success(self, mock_get_connection, mocker, tmp_path):
+        """Local file is uploaded and OSS path is used in request."""
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        local_file = tmp_path / "frame.png"
+        local_file.write_bytes(b"fake image data")
+
+        mock_bucket = mocker.MagicMock()
+        mocker.patch(
+            "hologres_cli.commands.ai._get_oss_client",
+            return_value=(mock_bucket, "data/"),
+        )
+        mocker.patch("hologres_cli.commands.ai.uuid.uuid4",
+                     return_value=mocker.MagicMock(hex="abcd1234deadbeef"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "i2v", "猫在跑",
+            "--img-url", str(local_file),
+            "--upload-volume", "test_vol",
+            "-o", "volume://test_vol/output",
+        ])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        mock_bucket.put_object_from_file.assert_called_once_with(
+            "data/_uploads/abcd1234_frame.png", str(local_file),
+        )
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["img_url"] == "oss://mybucket/data/_uploads/abcd1234_frame.png"
+
+    def test_upload_local_file_not_found(self, mock_get_connection, mocker):
+        """Non-existent local file returns FILE_NOT_FOUND."""
+        _patch_load_config(mocker)
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "i2v", "猫",
+            "--img-url", "/nonexistent/path/file.png",
+            "--upload-volume", "test_vol",
+            "-o", "volume://test_vol/output",
+        ])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "FILE_NOT_FOUND"
+
+    def test_upload_volume_not_found(self, mock_get_connection, mocker, tmp_path):
+        """Upload to non-existent volume returns NOT_FOUND."""
+        _patch_load_config(mocker)
+        local_file = tmp_path / "f.png"
+        local_file.write_bytes(b"data")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "i2v", "猫",
+            "--img-url", str(local_file),
+            "--upload-volume", "nonexistent_vol",
+            "-o", "volume://test_vol/output",
+        ])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "NOT_FOUND"
+
+    def test_local_file_without_upload_volume(self, mock_get_connection, mocker, tmp_path):
+        """Local file without --upload-volume returns INVALID_ARGS."""
+        _patch_load_config(mocker)
+        local_file = tmp_path / "f.png"
+        local_file.write_bytes(b"data")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "i2v", "猫",
+            "--img-url", str(local_file),
+            "-o", "volume://test_vol/output",
+        ])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_ARGS"
+        assert "--upload-volume" in output["error"]["message"]
+
+    def test_upload_oss_error(self, mock_get_connection, mocker, tmp_path):
+        """OSS upload failure returns OSS_ERROR."""
+        _patch_load_config(mocker)
+        local_file = tmp_path / "f.png"
+        local_file.write_bytes(b"data")
+
+        mock_bucket = mocker.MagicMock()
+        mock_bucket.put_object_from_file.side_effect = Exception("network timeout")
+        mocker.patch(
+            "hologres_cli.commands.ai._get_oss_client",
+            return_value=(mock_bucket, "data/"),
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "i2v", "猫",
+            "--img-url", str(local_file),
+            "--upload-volume", "test_vol",
+            "-o", "volume://test_vol/output",
+        ])
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "OSS_ERROR"
+
+    def test_r2v_mixed_local_and_remote(self, mock_get_connection, mocker, tmp_path):
+        """r2v with mixed local file and oss:// reference URLs."""
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        local_file = tmp_path / "girl.png"
+        local_file.write_bytes(b"data")
+
+        mock_bucket = mocker.MagicMock()
+        mocker.patch(
+            "hologres_cli.commands.ai._get_oss_client",
+            return_value=(mock_bucket, "data/"),
+        )
+        mocker.patch("hologres_cli.commands.ai.uuid.uuid4",
+                     return_value=mocker.MagicMock(hex="11112222deadbeef"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "r2v", "人物在跑步",
+            "--reference-url", str(local_file),
+            "--reference-url", "oss://bucket/fan.png",
+            "--upload-volume", "test_vol",
+            "-o", "volume://test_vol/output",
+        ])
+        assert result.exit_code == 0
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["reference_urls"][0] == "oss://mybucket/data/_uploads/11112222_girl.png"
+        assert request["reference_urls"][1] == "oss://bucket/fan.png"
+
+    def test_video_edit_local_video(self, mock_get_connection, mocker, tmp_path):
+        """video-edit with local video file."""
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        local_file = tmp_path / "input.mp4"
+        local_file.write_bytes(b"video data")
+
+        mock_bucket = mocker.MagicMock()
+        mocker.patch(
+            "hologres_cli.commands.ai._get_oss_client",
+            return_value=(mock_bucket, "data/"),
+        )
+        mocker.patch("hologres_cli.commands.ai.uuid.uuid4",
+                     return_value=mocker.MagicMock(hex="aabb1122deadbeef"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "video-edit", "转动漫",
+            "--video", str(local_file),
+            "--upload-volume", "test_vol",
+            "-o", "volume://test_vol/output",
+        ])
+        assert result.exit_code == 0
+        request = json.loads(mock_get_connection.execute.call_args[0][1][1])
+        assert request["video"] == "oss://mybucket/data/_uploads/aabb1122_input.mp4"
+
+    def test_image_gen_local_reference(self, mock_get_connection, mocker, tmp_path):
+        """image-gen with local reference file."""
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{
+            "ai_gen": json.dumps({
+                "image_oss_paths": ["oss://mybucket/data/output/img.png"],
+                "usage": {"width": 1024, "height": 1024, "image_count": 1},
+            })
+        }]
+        local_file = tmp_path / "ref.png"
+        local_file.write_bytes(b"ref data")
+
+        mock_bucket = mocker.MagicMock()
+        mocker.patch(
+            "hologres_cli.commands.ai._get_oss_client",
+            return_value=(mock_bucket, "data/"),
+        )
+        mocker.patch("hologres_cli.commands.ai.uuid.uuid4",
+                     return_value=mocker.MagicMock(hex="ccdd3344deadbeef"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "image-gen", "生成Q版",
+            "--reference-url", str(local_file),
+            "--upload-volume", "test_vol",
+            "-o", "volume://test_vol/output",
+        ])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        # image-gen without --model: params = (request_json, root, endpoint)
+        request = json.loads(mock_get_connection.execute.call_args[0][1][0])
+        assert request["reference_urls"] == ["oss://mybucket/data/_uploads/ccdd3344_ref.png"]
+
+    def test_net_intranet_passed_to_upload(self, mock_get_connection, mocker, tmp_path):
+        """--net intranet is passed to _get_oss_client."""
+        _patch_load_config(mocker)
+        mock_get_connection.execute.return_value = [{"ai_gen": MOCK_VIDEO_RESPONSE}]
+        local_file = tmp_path / "frame.png"
+        local_file.write_bytes(b"data")
+
+        mock_get_oss = mocker.patch(
+            "hologres_cli.commands.ai._get_oss_client",
+            return_value=(mocker.MagicMock(), "data/"),
+        )
+        mocker.patch("hologres_cli.commands.ai.uuid.uuid4",
+                     return_value=mocker.MagicMock(hex="1234567890abcdef"))
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "ai", "i2v", "猫",
+            "--img-url", str(local_file),
+            "--upload-volume", "test_vol",
+            "--net", "intranet",
+            "-o", "volume://test_vol/output",
+        ])
+        assert result.exit_code == 0
+        mock_get_oss.assert_called_once()
+        assert mock_get_oss.call_args[0][1] == "intranet"
