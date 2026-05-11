@@ -54,15 +54,6 @@ hologres ai gen "hello" -m qwen-plus
 
 Non-JSON formats (table/csv/jsonl) output the generated text directly.
 
-**Underlying SQL:**
-```sql
--- Without model
-SELECT ai_gen('<prompt>');
-
--- With model
-SELECT ai_gen('<model>', '<prompt>');
-```
-
 ### ai image-gen
 
 Generate images using Hologres AI function `ai_gen()` with a JSON request body. Images are saved directly to an OSS volume via `to_file()`. A volume must be configured first (see `hologres volume create`).
@@ -138,15 +129,6 @@ When response JSON cannot be parsed or has no `image_oss_paths`, falls back to:
 ```
 
 Non-JSON formats output volume paths, one per line.
-
-**Underlying SQL:**
-```sql
--- Without model
-SELECT ai_gen('<json_request>', to_file('<volume_root>', '<endpoint>', '<rolearn>'));
-
--- With model
-SELECT ai_gen('qwen-image-2.0', '<json_request>', to_file('<volume_root>', '<endpoint>', '<rolearn>'));
-```
 
 ### ai t2v
 
@@ -298,11 +280,6 @@ Note: No `--ratio` or `--duration` options for video editing.
 ```
 
 Non-JSON formats output the volume path directly.
-
-**Underlying SQL:**
-```sql
-SELECT ai_gen('<model>', '<json_request>'::text, to_file('<volume_root>', '<endpoint>', '<rolearn>'));
-```
 
 ## volume
 
