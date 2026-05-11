@@ -335,6 +335,7 @@ Disable: `hologres sql run --no-mask "SELECT * FROM users LIMIT 10"`
 | Document | Content |
 |----------|--------|
 | [commands.md](references/commands.md) | Complete command reference with DT commands |
+| [ai-volume-model.md](references/ai-volume-model.md) | AI generation, volume storage, and model commands |
 | [safety-features.md](references/safety-features.md) | Safety guardrails details |
 
 ## Best Practices
