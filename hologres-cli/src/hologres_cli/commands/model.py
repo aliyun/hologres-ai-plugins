@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from importlib.resources import files
 
@@ -16,8 +17,11 @@ from ..output import (
     error,
     print_output,
     query_error,
+    success,
     success_rows,
 )
+
+_MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]+$")
 
 
 @click.group("model")
@@ -123,3 +127,90 @@ def catalog_cmd(ctx: click.Context, task: str | None) -> None:
         rows = [r for r in rows if r["task"] == task]
 
     print_output(success_rows(rows, fmt))
+
+
+@model_cmd.command("delete")
+@click.argument("model_name")
+@click.option(
+    "--confirm",
+    is_flag=True,
+    default=False,
+    help="[REQUIRED to execute] Confirm the delete operation. "
+         "Without --confirm, only dry-run SQL is shown (safety).",
+)
+@click.pass_context
+def delete_cmd(ctx: click.Context, model_name: str, confirm: bool) -> None:
+    """Delete a registered external AI model.
+
+    \b
+    MODEL_NAME: Name of the registered model (see `hologres model list`).
+
+    \b
+    SAFETY: Destructive operation. Defaults to dry-run; use --confirm to execute.
+
+    \b
+    Examples:
+      hologres model delete embed11               # dry-run, shows SQL
+      hologres model delete embed11 --confirm     # actually deletes
+    """
+    fmt = ctx.obj.get("format", FORMAT_JSON)
+    profile = ctx.obj.get("profile")
+
+    if not _MODEL_NAME_RE.match(model_name):
+        print_output(error(
+            "INVALID_INPUT",
+            "model_name may only contain letters, digits, underscore (_), "
+            "hyphen (-), and dot (.)",
+            fmt,
+        ))
+        return
+
+    sql = f"CALL delete_external_model('{model_name}')"
+
+    if not confirm:
+        print_output(success(
+            {"sql": sql, "dry_run": True},
+            fmt,
+            message="SQL generated (dry-run mode)",
+        ))
+        return
+
+    start_time = time.time()
+    try:
+        conn = get_connection(profile=profile, read_only=False)
+    except DSNError as e:
+        print_output(connection_error(str(e), fmt))
+        return
+
+    try:
+        conn.execute(sql)
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation(
+            "model.delete",
+            sql=sql,
+            dsn_masked=conn.masked_dsn,
+            success=True,
+            duration_ms=duration_ms,
+        )
+        if fmt == FORMAT_JSON:
+            print_output(success(
+                {"model": model_name, "deleted": True},
+                fmt,
+                message=f"Model '{model_name}' deleted successfully",
+            ))
+        else:
+            print_output(f"Model '{model_name}' deleted successfully")
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log_operation(
+            "model.delete",
+            sql=sql,
+            dsn_masked=conn.masked_dsn,
+            success=False,
+            error_code="QUERY_ERROR",
+            error_message=str(e),
+            duration_ms=duration_ms,
+        )
+        print_output(query_error(str(e), fmt))
+    finally:
+        conn.close()

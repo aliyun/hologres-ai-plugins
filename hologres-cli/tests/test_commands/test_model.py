@@ -227,3 +227,105 @@ class TestModelCatalogCmd:
         sample = data[sample_key]
         assert "provider" in sample
         assert "task" in sample
+
+
+class TestModelDeleteCmd:
+    """Tests for model delete command."""
+
+    def test_delete_dry_run_default(self, mock_get_connection):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "delete", "embed11"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["dry_run"] is True
+        assert output["data"]["sql"] == "CALL delete_external_model('embed11')"
+        # Dry-run must not touch the database.
+        mock_get_connection.execute.assert_not_called()
+
+    def test_delete_with_confirm_executes(self, mock_get_connection):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "delete", "embed11", "--confirm"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["model"] == "embed11"
+        assert output["data"]["deleted"] is True
+        mock_get_connection.execute.assert_called_once_with(
+            "CALL delete_external_model('embed11')"
+        )
+        mock_get_connection.close.assert_called_once()
+
+    def test_delete_query_error(self, mock_get_connection):
+        mock_get_connection.execute.side_effect = Exception(
+            "external model 'embed11' does not exist"
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "delete", "embed11", "--confirm"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "QUERY_ERROR"
+        mock_get_connection.close.assert_called_once()
+
+    def test_delete_connection_error(self, mocker):
+        mocker.patch(
+            "hologres_cli.commands.model.get_connection",
+            side_effect=DSNError("No DSN configured"),
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "delete", "embed11", "--confirm"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "CONNECTION_ERROR"
+
+    @pytest.mark.parametrize("bad_name", [
+        "name';DROP TABLE x;--",  # SQL injection attempt
+        "with space",
+        "semi;colon",
+        "中文名",
+        "name@host",
+        "name/slash",
+        "",  # explicit empty (when passed via Click)
+    ])
+    def test_delete_invalid_name_rejected(self, mock_get_connection, bad_name):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "delete", bad_name])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INVALID_INPUT"
+        mock_get_connection.execute.assert_not_called()
+
+    @pytest.mark.parametrize("good_name", [
+        "embed11",
+        "qwen3-vl-embedding",
+        "happyhorse-1.0-t2v",
+        "a.b_c-d",
+    ])
+    def test_delete_accepts_valid_names(self, mock_get_connection, good_name):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "delete", good_name])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert good_name in output["data"]["sql"]
+
+    def test_delete_dry_run_does_not_connect(self, mocker):
+        # Sentinel to ensure get_connection is never called in dry-run path.
+        mock_get_conn = mocker.patch("hologres_cli.commands.model.get_connection")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "delete", "embed11"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["dry_run"] is True
+        mock_get_conn.assert_not_called()

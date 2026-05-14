@@ -94,6 +94,7 @@ Use `--profile <name>` to switch profiles.
 - `hologres volume upload-file --volume <name> --local-file <path> --target-file <path> [--net internet|intranet]` - Upload file
 - `hologres model list [--task T] [--model-type T]` - List registered external AI models
 - `hologres model catalog [--task T]` - List supported AI model types from the bundled catalog
+- `hologres model delete <model_name> [--confirm]` - Delete a registered external AI model (dry-run by default)
 
 ## Safety: LIMIT required for >100 rows, --write for mutations, no DELETE/UPDATE without WHERE.
 ## Output: --format json|table|csv|jsonl. Default: json with {ok: true/false}.

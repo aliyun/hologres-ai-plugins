@@ -809,7 +809,22 @@ hologres model list --model-type qwen3-vl-embedding
 
 # Table format
 hologres -f table model list
+
+# Delete a registered external AI model (dry-run by default)
+hologres model delete embed11               # shows SQL only
+hologres model delete embed11 --confirm     # actually deletes
 ```
+
+**`model delete` Options:**
+
+| Option | Description |
+|--------|-------------|
+| `MODEL_NAME` | Name of the registered model (positional, required) |
+| `--confirm` | [REQUIRED to execute] Without this flag, only dry-run SQL is shown |
+
+**Notes:**
+- `model_name` is restricted to letters, digits, underscore (`_`), hyphen (`-`), and dot (`.`).
+- Underlying SQL: `CALL delete_external_model('<model_name>')`.
 
 #### model catalog
 

@@ -673,3 +673,51 @@ hologres -f table model catalog
   registered (it is part of `model list`).
 - Filtering is done client-side.
 - The catalog is bundled with the CLI; updates ship with new CLI releases.
+
+### model delete
+
+Delete a registered external AI model via `delete_external_model()`.
+
+```bash
+# Dry-run (default, shows SQL only)
+hologres model delete embed11
+
+# Actually delete
+hologres model delete embed11 --confirm
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `MODEL_NAME` | Name of the registered model (positional, required) |
+| `--confirm` | [REQUIRED to execute] Without this flag, only dry-run SQL is shown |
+
+**Output (dry-run):**
+```json
+{
+  "ok": true,
+  "data": {
+    "sql": "CALL delete_external_model('embed11')",
+    "dry_run": true
+  },
+  "message": "SQL generated (dry-run mode)"
+}
+```
+
+**Output (executed):**
+```json
+{
+  "ok": true,
+  "data": {
+    "model": "embed11",
+    "deleted": true
+  },
+  "message": "Model 'embed11' deleted successfully"
+}
+```
+
+**Notes:**
+- `model_name` is restricted to letters, digits, underscore (`_`), hyphen (`-`), and dot (`.`).
+- Underlying SQL: `CALL delete_external_model('<model_name>')`.
+- If the model does not exist, the server-side error is propagated as `QUERY_ERROR`.
