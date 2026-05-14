@@ -23,6 +23,7 @@ from ..config_store import (
     load_config,
     save_config,
 )
+from ..errors import ErrorCode
 from ..output import FORMAT_JSON, error, print_output, success, success_rows
 
 
@@ -396,7 +397,7 @@ def list_files_cmd(
             if count >= max_count:
                 break
     except oss2.exceptions.OssError as e:
-        print_output(error("OSS_ERROR", str(e), fmt))
+        print_output(error(ErrorCode.OSS_ERROR, str(e), fmt))
         return
 
     print_output(success_rows(rows, fmt))
@@ -456,7 +457,7 @@ def delete_file_cmd(
         bucket, _ = _get_oss_client(vol, net)
         bucket.delete_object(full_key)
     except oss2.exceptions.OssError as e:
-        print_output(error("OSS_ERROR", str(e), fmt))
+        print_output(error(ErrorCode.OSS_ERROR, str(e), fmt))
         return
 
     paths = _build_paths(volume_name, file_name, vol)
@@ -514,7 +515,7 @@ def download_file_cmd(
         bucket, _ = _get_oss_client(vol, net)
         bucket.get_object_to_file(full_key, local_path)
     except oss2.exceptions.OssError as e:
-        print_output(error("OSS_ERROR", str(e), fmt))
+        print_output(error(ErrorCode.OSS_ERROR, str(e), fmt))
         return
 
     paths = _build_paths(volume_name, file_name, vol)
@@ -550,7 +551,7 @@ def view_cmd(
     try:
         volume_name, file_path = _parse_volume_uri(uri)
     except ValueError as e:
-        print_output(error("INVALID_INPUT", str(e), fmt))
+        print_output(error(ErrorCode.INVALID_INPUT, str(e), fmt))
         return
 
     if not file_path:
@@ -582,7 +583,7 @@ def view_cmd(
         bucket, _ = _get_oss_client(vol, net)
         bucket.get_object_to_file(full_key, local_path)
     except oss2.exceptions.OssError as e:
-        print_output(error("OSS_ERROR", str(e), fmt))
+        print_output(error(ErrorCode.OSS_ERROR, str(e), fmt))
         return
 
     open_error = _open_file(local_path)
@@ -649,7 +650,7 @@ def upload_file_cmd(
         bucket, _ = _get_oss_client(vol, net)
         bucket.put_object_from_file(full_key, local_file)
     except oss2.exceptions.OssError as e:
-        print_output(error("OSS_ERROR", str(e), fmt))
+        print_output(error(ErrorCode.OSS_ERROR, str(e), fmt))
         return
 
     paths = _build_paths(volume_name, target_file, vol)

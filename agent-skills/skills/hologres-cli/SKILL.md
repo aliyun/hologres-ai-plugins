@@ -375,3 +375,32 @@ WHERE query_start > now() - interval '1 hour'
 GROUP BY 1
 ORDER BY 2 DESC;
 ```
+
+## Error Codes Reference
+
+All CLI errors return structured JSON with `retryable` and `hint` fields for automatic retry decisions:
+
+```json
+{"ok": false, "error": {"code": "...", "message": "...", "retryable": true/false, "hint": "..."}}
+```
+
+| Code | Retryable | When | Agent Action |
+|------|-----------|------|--------------|
+| `CONNECTION_ERROR` | Yes | Network/auth failure | Check config, retry after delay |
+| `CONNECTION_TIMEOUT` | Yes | Server busy | Retry after short delay |
+| `CONFIG_ERROR` | No | Invalid config | Run `hologres config` |
+| `PROFILE_NOT_FOUND` | No | Profile missing | Use `hologres config list` |
+| `INVALID_INPUT` | No | Bad parameters | Fix input and retry |
+| `INVALID_ARGS` | No | Wrong arguments | Check `--help` |
+| `WRITE_GUARD_ERROR` | No | Write without flag | Add `--write` flag |
+| `DANGEROUS_WRITE_BLOCKED` | No | DELETE/UPDATE no WHERE | Add WHERE clause |
+| `LIMIT_REQUIRED` | No | SELECT >100 rows | Add LIMIT or `--no-limit-check` |
+| `QUERY_ERROR` | Yes | SQL execution failed | Check syntax, retry once |
+| `QUERY_TIMEOUT` | Yes | Query too slow | Simplify query or add filters |
+| `TABLE_NOT_FOUND` | No | Table doesn't exist | Verify with `hologres table list` |
+| `NOT_FOUND` | No | Resource missing | Run corresponding list command |
+| `FILE_NOT_FOUND` | No | Path invalid | Verify file path |
+| `OSS_ERROR` | Yes | Storage failure | Check credentials, retry |
+| `NO_CHANGES` | No | Nothing to alter | Specify properties to change |
+| `INTERNAL_ERROR` | Yes | Unexpected failure | Retry once, then report bug |
+| `MODEL_TYPE_NOT_SUPPORTED` | No | Wrong model type | Use `hologres model list` |

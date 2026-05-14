@@ -11,6 +11,7 @@ import click
 
 from ..config_store import load_config
 from ..connection import DSNError, get_connection
+from ..errors import ErrorCode
 from ..logger import log_operation
 from ..output import (
     FORMAT_JSON,

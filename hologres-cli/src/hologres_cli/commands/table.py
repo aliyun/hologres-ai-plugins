@@ -9,6 +9,7 @@ import click
 
 from ..connection import DSNError, get_connection
 from ..logger import log_operation
+from ..errors import ErrorCode
 from ..output import (
     FORMAT_JSON,
     connection_error,
@@ -316,7 +317,7 @@ def create_cmd(ctx: click.Context, name: str, columns: str,
         _validate_identifier(schema_name, "schema name")
         _validate_identifier(table_name, "table name")
     except ValueError as e:
-        print_output(error("INVALID_INPUT", str(e), fmt))
+        print_output(error(ErrorCode.INVALID_INPUT, str(e), fmt))
         return
 
     # Validate logical-partition-only options
@@ -330,7 +331,7 @@ def create_cmd(ctx: click.Context, name: str, columns: str,
         used = [k for k, v in logical_only_opts.items() if v is not None]
         if used:
             opt_names = ", ".join(f"--{k.replace('_', '-')}" for k in used)
-            print_output(error("INVALID_ARGS",
+            print_output(error(ErrorCode.INVALID_ARGS,
                 f"{opt_names} can only be used with --partition-mode logical",
                 fmt))
             return
@@ -437,7 +438,7 @@ def show_cmd(ctx: click.Context, table: str) -> None:
         result = fetch_table_structure(conn, schema_name, table_name)
 
         if result is None:
-            print_output(error("TABLE_NOT_FOUND", f"Table '{schema_name}.{table_name}' not found", fmt))
+            print_output(error(ErrorCode.TABLE_NOT_FOUND, f"Table '{schema_name}.{table_name}' not found", fmt))
             return
 
         duration_ms = (time.time() - start_time) * 1000
@@ -514,7 +515,7 @@ def drop_cmd(ctx: click.Context, table: str, if_exists: bool, cascade: bool, con
         _validate_identifier(schema_name, "schema name")
         _validate_identifier(table_name, "table name")
     except ValueError as e:
-        print_output(error("INVALID_INPUT", str(e), fmt))
+        print_output(error(ErrorCode.INVALID_INPUT, str(e), fmt))
         return
 
     # Build SQL
@@ -586,7 +587,7 @@ def truncate_cmd(ctx: click.Context, table: str, confirm: bool) -> None:
         _validate_identifier(schema_name, "schema name")
         _validate_identifier(table_name, "table name")
     except ValueError as e:
-        print_output(error("INVALID_INPUT", str(e), fmt))
+        print_output(error(ErrorCode.INVALID_INPUT, str(e), fmt))
         return
 
     # Build SQL
@@ -681,7 +682,7 @@ def properties_cmd(ctx: click.Context, table: str) -> None:
         duration_ms = (time.time() - start_time) * 1000
         log_operation("table.properties", dsn_masked=conn.masked_dsn, success=False,
                       error_code="INVALID_INPUT", error_message=str(e), duration_ms=duration_ms)
-        print_output(error("INVALID_INPUT", str(e), fmt))
+        print_output(error(ErrorCode.INVALID_INPUT, str(e), fmt))
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
         log_operation("table.properties", dsn_masked=conn.masked_dsn, success=False,
@@ -873,12 +874,12 @@ def alter_cmd(ctx: click.Context, table: str, add_column: Tuple[str, ...],
         _validate_identifier(schema_name, "schema name")
         _validate_identifier(table_name, "table name")
     except ValueError as e:
-        print_output(error("INVALID_INPUT", str(e), fmt))
+        print_output(error(ErrorCode.INVALID_INPUT, str(e), fmt))
         return
 
     # Validate --rename-column format
     if rename_column is not None and ":" not in rename_column:
-        print_output(error("INVALID_ARGS",
+        print_output(error(ErrorCode.INVALID_ARGS,
                            'Invalid --rename-column format. Expected "old_name:new_name".', fmt))
         return
 
@@ -889,7 +890,7 @@ def alter_cmd(ctx: click.Context, table: str, add_column: Tuple[str, ...],
             _validate_identifier(old_col.strip(), "old column name")
             _validate_identifier(new_col.strip(), "new column name")
         except ValueError as e:
-            print_output(error("INVALID_INPUT", str(e), fmt))
+            print_output(error(ErrorCode.INVALID_INPUT, str(e), fmt))
             return
 
     # Validate --rename identifier
@@ -897,7 +898,7 @@ def alter_cmd(ctx: click.Context, table: str, add_column: Tuple[str, ...],
         try:
             _validate_identifier(rename, "new table name")
         except ValueError as e:
-            print_output(error("INVALID_INPUT", str(e), fmt))
+            print_output(error(ErrorCode.INVALID_INPUT, str(e), fmt))
             return
 
     # Validate --owner identifier
@@ -905,7 +906,7 @@ def alter_cmd(ctx: click.Context, table: str, add_column: Tuple[str, ...],
         try:
             _validate_identifier(owner, "owner name")
         except ValueError as e:
-            print_output(error("INVALID_INPUT", str(e), fmt))
+            print_output(error(ErrorCode.INVALID_INPUT, str(e), fmt))
             return
 
     # Build SQL
@@ -928,7 +929,7 @@ def alter_cmd(ctx: click.Context, table: str, add_column: Tuple[str, ...],
     )
 
     if not sql:
-        print_output(error("NO_CHANGES",
+        print_output(error(ErrorCode.NO_CHANGES,
                            "No properties specified to alter. Use --help for options.", fmt))
         return
 

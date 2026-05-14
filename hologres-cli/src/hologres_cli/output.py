@@ -9,9 +9,12 @@ import csv
 import io
 import json
 import sys
-from typing import Any, Optional
+from enum import Enum
+from typing import Any, Optional, Union
 
 from tabulate import tabulate
+
+from .errors import ErrorCode, ErrorMeta, lookup_error_meta
 
 FORMAT_JSON = "json"
 FORMAT_TABLE = "table"
@@ -54,9 +57,29 @@ def success_rows(
         return json.dumps(response, indent=2, ensure_ascii=False, default=str)
 
 
-def error(code: str, message: str, format: str = FORMAT_JSON, details: Optional[dict] = None) -> str:
-    """Format an error response."""
-    error_obj: dict[str, Any] = {"code": code, "message": message}
+def error(code: Union[str, ErrorCode], message: str, format: str = FORMAT_JSON, details: Optional[dict] = None) -> str:
+    """Format an error response with AI-parseable metadata.
+
+    Accepts either an ErrorCode enum member or a plain string code.
+    When a string is passed, the registry is consulted to attach retryable/hint metadata.
+    """
+    if isinstance(code, ErrorCode):
+        meta: ErrorMeta = code.value
+        code_str = meta.code
+        retryable = meta.retryable
+        hint = meta.hint
+    else:
+        code_str = code
+        meta_lookup = lookup_error_meta(code_str)
+        retryable = meta_lookup.retryable if meta_lookup else False
+        hint = meta_lookup.hint if meta_lookup else ""
+
+    error_obj: dict[str, Any] = {
+        "code": code_str,
+        "message": message,
+        "retryable": retryable,
+        "hint": hint,
+    }
     if details:
         error_obj["details"] = details
     response = {"ok": False, "error": error_obj}
@@ -123,20 +146,20 @@ def print_output(output: str, file=None) -> None:
 
 
 def connection_error(message: str, format: str = FORMAT_JSON) -> str:
-    return error("CONNECTION_ERROR", message, format)
+    return error(ErrorCode.CONNECTION_ERROR, message, format)
 
 
 def query_error(message: str, format: str = FORMAT_JSON, details: Optional[dict] = None) -> str:
-    return error("QUERY_ERROR", message, format, details)
+    return error(ErrorCode.QUERY_ERROR, message, format, details)
 
 
 def limit_required_error(format: str = FORMAT_JSON) -> str:
-    return error("LIMIT_REQUIRED", "Query returns more than 100 rows. Please add a LIMIT clause.", format)
+    return error(ErrorCode.LIMIT_REQUIRED, "Query returns more than 100 rows. Please add a LIMIT clause.", format)
 
 
 def write_guard_error(format: str = FORMAT_JSON) -> str:
-    return error("WRITE_GUARD_ERROR", "Write operations require the --write flag.", format)
+    return error(ErrorCode.WRITE_GUARD_ERROR, "Write operations require the --write flag.", format)
 
 
 def dangerous_write_error(operation: str, format: str = FORMAT_JSON) -> str:
-    return error("DANGEROUS_WRITE_BLOCKED", f"{operation} without WHERE clause is blocked.", format)
+    return error(ErrorCode.DANGEROUS_WRITE_BLOCKED, f"{operation} without WHERE clause is blocked.", format)
