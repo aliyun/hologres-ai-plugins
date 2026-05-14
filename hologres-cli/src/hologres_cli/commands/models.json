@@ -1,0 +1,518 @@
+{
+    "qwen3-max": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3-max-2026-01-23": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3-max-preview": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-max": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-max-latest": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-plus": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3.5-plus": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-plus-latest": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-flash": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3.5-flash": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-long": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-long-latest": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwq-plus": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwq-plus-latest": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "deepseek-v3.2": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "deepseek-v3.2-exp": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "deepseek-v3.1": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "deepseek-r1": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "deepseek-r1-0528": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "deepseek-v3": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "deepseek-r1-distill-qwen-1.5b": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "deepseek-r1-distill-qwen-7b": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "deepseek-r1-distill-qwen-14b": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "deepseek-r1-distill-qwen-32b": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "kimi-k2-thinking": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "Moonshot-Kimi-K2-Instruct": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "kimi-k2.5": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "kimi/kimi-k2.5": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "glm-4.6": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "glm-4.7": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "glm-5": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "MiniMax-M2.1": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "MiniMax-M2.5": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "MiniMax/MiniMax-M2.1": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "MiniMax/MiniMax-M2.5": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3-vl-235b-a22b-instruct": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3-vl-235b-a22b-thinking": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3-vl-32b-instruct": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3-vl-32b-thinking": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3-vl-8b-instruct": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3-vl-8b-thinking": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3-vl-plus": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3-vl-flash": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-vl-ocr": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-vl-ocr-latest": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3-omni-flash": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-mt-plus": {
+        "provider": "bailian",
+        "task": "translation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-mt-flash": {
+        "provider": "bailian",
+        "task": "translation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-mt-turbo": {
+        "provider": "bailian",
+        "task": "translation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-mt-lite": {
+        "provider": "bailian",
+        "task": "translation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "text-embedding-v1": {
+        "provider": "bailian",
+        "task": "embedding",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "text-embedding-v2": {
+        "provider": "bailian",
+        "task": "embedding",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "text-embedding-v3": {
+        "provider": "bailian",
+        "task": "embedding",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "text-embedding-v4": {
+        "provider": "bailian",
+        "task": "embedding",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "tongyi-embedding-vision-plus": {
+        "provider": "bailian",
+        "task": "embedding",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "tongyi-embedding-vision-flash": {
+        "provider": "bailian",
+        "task": "embedding",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "multimodal-embedding-v1": {
+        "provider": "bailian",
+        "task": "embedding",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3-vl-embedding": {
+        "provider": "bailian",
+        "task": "embedding",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-image-2.0-pro": {
+        "provider": "bailian",
+        "task": "image-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-image-2.0-pro-2026-03-03": {
+        "provider": "bailian",
+        "task": "image-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-image-2.0": {
+        "provider": "bailian",
+        "task": "image-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-image-2.0-2026-03-03": {
+        "provider": "bailian",
+        "task": "image-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-image-max": {
+        "provider": "bailian",
+        "task": "image-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-image-plus": {
+        "provider": "bailian",
+        "task": "image-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-image": {
+        "provider": "bailian",
+        "task": "image-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-image-edit": {
+        "provider": "bailian",
+        "task": "image-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-image-edit-plus": {
+        "provider": "bailian",
+        "task": "image-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen-image-edit-max": {
+        "provider": "bailian",
+        "task": "image-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "wan2.6-r2v": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "wan2.6-r2v-flash": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "wan2.6-t2v": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "wan2.6-i2v-flash": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "wan2.6-i2v": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "wan2.2-kf2v-flash": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/image2video/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "fun-asr": {
+        "provider": "bailian",
+        "task": "speech-to-text",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "wan2.7-image-pro": {
+        "provider": "bailian",
+        "task": "image-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "wan2.7-image": {
+        "provider": "bailian",
+        "task": "image-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "wan2.7-t2v": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "wan2.7-i2v": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "wan2.7-r2v": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "wan2.7-videoedit": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "qwen3.6-plus": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "happyhorse-1.0-t2v": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "happyhorse-1.0-i2v": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "happyhorse-1.0-r2v": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    },
+    "happyhorse-1.0-video-edit": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000/model_server_proxy"
+    }
+}
