@@ -841,6 +841,12 @@ hologres model catalog
 hologres model catalog --task embedding
 hologres model catalog --task video-generation
 
+# Substring match on model_type (case-insensitive)
+hologres model catalog --search happy
+
+# Combine filters (AND)
+hologres model catalog --task video-generation --search happy
+
 # Table format
 hologres -f table model catalog
 ```
@@ -850,6 +856,7 @@ hologres -f table model catalog
 | Option | Description |
 |--------|-------------|
 | `--task, -t` | Filter by task type (e.g. `embedding`, `video-generation`) |
+| `--search` | Substring match on `model_type` (case-insensitive). Combined with `--task` as AND |
 
 **Output:**
 ```json

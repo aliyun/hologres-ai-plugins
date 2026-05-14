@@ -215,6 +215,74 @@ class TestModelCatalogCmd:
         assert result.exit_code == 0
         spy.assert_not_called()
 
+    def test_catalog_search_substring(self, mocker):
+        catalog = dict(FAKE_CATALOG)
+        catalog["happyhorse-1.0-i2v"] = {
+            "provider": "bailian",
+            "task": "video-generation",
+            "model_url": "https://example/video",
+            "function_server_url": "http://example/proxy",
+        }
+        mocker.patch("hologres_cli.commands.model._load_catalog", return_value=catalog)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "catalog", "--search", "happy"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["data"]["count"] == 2
+        types = {r["model_type"] for r in output["data"]["rows"]}
+        assert types == {"happyhorse-1.0-t2v", "happyhorse-1.0-i2v"}
+
+    def test_catalog_search_case_insensitive(self, mocker):
+        mocker.patch("hologres_cli.commands.model._load_catalog", return_value=FAKE_CATALOG)
+
+        runner = CliRunner()
+        upper = runner.invoke(cli, ["model", "catalog", "--search", "HAPPY"])
+        lower = runner.invoke(cli, ["model", "catalog", "--search", "happy"])
+
+        assert upper.exit_code == 0 and lower.exit_code == 0
+        assert json.loads(upper.output) == json.loads(lower.output)
+        assert json.loads(upper.output)["data"]["count"] == 1
+
+    def test_catalog_search_no_match(self, mocker):
+        mocker.patch("hologres_cli.commands.model._load_catalog", return_value=FAKE_CATALOG)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "catalog", "--search", "xyz_nonexistent"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["rows"] == []
+        assert output["data"]["count"] == 0
+
+    def test_catalog_search_combined_with_task(self, mocker):
+        mocker.patch("hologres_cli.commands.model._load_catalog", return_value=FAKE_CATALOG)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "catalog",
+            "--task", "video-generation",
+            "--search", "happy",
+        ])
+
+        output = json.loads(result.output)
+        assert output["data"]["count"] == 1
+        assert output["data"]["rows"][0]["model_type"] == "happyhorse-1.0-t2v"
+
+    def test_catalog_search_combined_yields_zero(self, mocker):
+        mocker.patch("hologres_cli.commands.model._load_catalog", return_value=FAKE_CATALOG)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "catalog",
+            "--task", "chat/completions",
+            "--search", "happy",
+        ])
+
+        output = json.loads(result.output)
+        assert output["data"]["count"] == 0
+
     def test_catalog_real_models_json_loadable(self):
         # Integration-ish: real bundled models.json must parse and contain
         # the expected per-entry fields. Guards against packaging regressions.

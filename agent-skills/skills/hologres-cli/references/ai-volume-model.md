@@ -644,6 +644,8 @@ already registered on the instance.
 hologres model catalog
 hologres model catalog --task embedding
 hologres model catalog --task video-generation
+hologres model catalog --search happy
+hologres model catalog --task video-generation --search happy
 hologres -f table model catalog
 ```
 
@@ -652,6 +654,7 @@ hologres -f table model catalog
 | Option | Description |
 |--------|-------------|
 | `--task, -t` | Filter by task type (e.g. `embedding`, `video-generation`, `chat/completions`, `image-generation`, `translation`, `speech-to-text`) |
+| `--search` | Substring match on `model_type` (case-insensitive). Combined with `--task` as AND |
 
 **Output:**
 ```json
@@ -672,6 +675,8 @@ hologres -f table model catalog
   `model_name` here because the user-assigned name only exists once a model is
   registered (it is part of `model list`).
 - Filtering is done client-side.
+- `--search` matches on `model_type` only (substring, case-insensitive). When
+  combined with `--task`, both filters apply (AND).
 - The catalog is bundled with the CLI; updates ship with new CLI releases.
 
 ### model create

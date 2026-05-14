@@ -102,7 +102,7 @@ hologres dt list                                   # List Dynamic Tables
 | `hologres volume upload-file --volume <name> --local-file <path> --target-file <path> [--net internet\|intranet]` | Upload file to volume |
 | `hologres volume view volume://<name>/path/file [--net internet\|intranet]` | Download file to temp dir and open with system viewer |
 | `hologres model list [--task T] [--model-type T]` | List registered external AI models |
-| `hologres model catalog [--task T]` | List supported AI model types from the bundled catalog (no DB connection) |
+| `hologres model catalog [--task T] [--search S]` | List supported AI model types from the bundled catalog (no DB connection) |
 | `hologres model create --name N --type T --api-key K [--config J] [--dry-run]` | Register an external AI model via `add_external_model()` |
 | `hologres model delete <model_name> [--confirm]` | Delete a registered external AI model (dry-run by default) |
 

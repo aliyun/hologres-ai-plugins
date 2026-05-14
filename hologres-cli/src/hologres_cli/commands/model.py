@@ -137,14 +137,16 @@ def list_cmd(ctx: click.Context, task: str | None, model_type: str | None) -> No
 
 @model_cmd.command("catalog")
 @click.option("--task", "-t", default=None, help="Filter by task type (e.g. embedding, video-generation)")
+@click.option("--search", default=None, help="Substring match on model_type (case-insensitive)")
 @click.pass_context
-def catalog_cmd(ctx: click.Context, task: str | None) -> None:
+def catalog_cmd(ctx: click.Context, task: str | None, search: str | None) -> None:
     """List supported AI model types from the bundled catalog (models.json).
 
     \b
     Examples:
       hologres model catalog
       hologres model catalog --task embedding
+      hologres model catalog --search happy
       hologres -f table model catalog
     """
     fmt = ctx.obj.get("format", FORMAT_JSON)
@@ -161,6 +163,9 @@ def catalog_cmd(ctx: click.Context, task: str | None) -> None:
     ]
     if task:
         rows = [r for r in rows if r["task"] == task]
+    if search:
+        needle = search.lower()
+        rows = [r for r in rows if needle in (r["model_type"] or "").lower()]
 
     print_output(success_rows(rows, fmt))
 
