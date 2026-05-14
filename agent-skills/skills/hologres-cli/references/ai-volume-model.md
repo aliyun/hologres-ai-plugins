@@ -698,10 +698,10 @@ hologres model delete embed11 --confirm
 {
   "ok": true,
   "data": {
-    "sql": "CALL delete_external_model('embed11')",
+    "model": "embed11",
     "dry_run": true
   },
-  "message": "SQL generated (dry-run mode)"
+  "message": "Dry-run: model 'embed11' was NOT deleted. Re-run with --confirm to execute."
 }
 ```
 
@@ -719,5 +719,5 @@ hologres model delete embed11 --confirm
 
 **Notes:**
 - `model_name` is restricted to letters, digits, underscore (`_`), hyphen (`-`), and dot (`.`).
-- Underlying SQL: `CALL delete_external_model('<model_name>')`.
+- Dry-run output intentionally does not echo the underlying SQL.
 - If the model does not exist, the server-side error is propagated as `QUERY_ERROR`.

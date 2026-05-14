@@ -168,10 +168,14 @@ def delete_cmd(ctx: click.Context, model_name: str, confirm: bool) -> None:
     sql = f"CALL delete_external_model('{model_name}')"
 
     if not confirm:
+        # MR review feedback: do not expose the underlying SQL in dry-run output.
+        # delete_external_model is a fixed CALL whose only variable is model_name,
+        # so showing it adds no value and leaks an internal stored-proc detail.
         print_output(success(
-            {"sql": sql, "dry_run": True},
+            {"model": model_name, "dry_run": True},
             fmt,
-            message="SQL generated (dry-run mode)",
+            message=f"Dry-run: model '{model_name}' was NOT deleted. "
+                    f"Re-run with --confirm to execute.",
         ))
         return
 

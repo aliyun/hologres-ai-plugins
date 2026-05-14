@@ -820,11 +820,11 @@ hologres model delete embed11 --confirm     # actually deletes
 | Option | Description |
 |--------|-------------|
 | `MODEL_NAME` | Name of the registered model (positional, required) |
-| `--confirm` | [REQUIRED to execute] Without this flag, only dry-run SQL is shown |
+| `--confirm` | [REQUIRED to execute] Without this flag, dry-run is performed (no DB action) |
 
 **Notes:**
 - `model_name` is restricted to letters, digits, underscore (`_`), hyphen (`-`), and dot (`.`).
-- Underlying SQL: `CALL delete_external_model('<model_name>')`.
+- Dry-run output intentionally does not echo the underlying SQL.
 
 #### model catalog
 

@@ -240,7 +240,9 @@ class TestModelDeleteCmd:
         output = json.loads(result.output)
         assert output["ok"] is True
         assert output["data"]["dry_run"] is True
-        assert output["data"]["sql"] == "CALL delete_external_model('embed11')"
+        assert output["data"]["model"] == "embed11"
+        # MR review: dry-run must not leak the underlying SQL.
+        assert "sql" not in output["data"]
         # Dry-run must not touch the database.
         mock_get_connection.execute.assert_not_called()
 
@@ -315,7 +317,8 @@ class TestModelDeleteCmd:
         assert result.exit_code == 0
         output = json.loads(result.output)
         assert output["ok"] is True
-        assert good_name in output["data"]["sql"]
+        assert output["data"]["model"] == good_name
+        assert output["data"]["dry_run"] is True
 
     def test_delete_dry_run_does_not_connect(self, mocker):
         # Sentinel to ensure get_connection is never called in dry-run path.
