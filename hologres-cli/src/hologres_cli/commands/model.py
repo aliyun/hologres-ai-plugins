@@ -44,13 +44,15 @@ def _load_catalog() -> dict:
     Uses importlib.resources so it works in both source checkouts and
     zip-installed wheels.
     """
-    raw = files("hologres_cli.commands").joinpath("models.json").read_text(encoding="utf-8")
+    raw = files("hologres_cli.commands").joinpath(
+        "models.json").read_text(encoding="utf-8")
     return json.loads(raw)
 
 
 def _resolve_region(profile_name: str | None) -> str:
     """Read region_id from current/named profile. No CLI override."""
-    profile = get_profile(profile_name) if profile_name else get_current_profile()
+    profile = get_profile(
+        profile_name) if profile_name else get_current_profile()
     region = profile.get("region_id")
     if not region:
         raise ValueError(
@@ -182,11 +184,13 @@ def catalog_cmd(ctx: click.Context, task: str | None, search: str | None) -> Non
     try:
         data = _load_catalog()
     except Exception as e:
-        print_output(error("INTERNAL_ERROR", f"Failed to load model catalog: {e}", fmt))
+        print_output(
+            error("INTERNAL_ERROR", f"Failed to load model catalog: {e}", fmt))
         return
 
     rows = [
-        {"model_type": k, "model_provider": v.get("provider"), "task": v.get("task")}
+        {"model_type": k, "model_provider": v.get(
+            "provider"), "task": v.get("task")}
         for k, v in data.items()
     ]
     if task:
@@ -295,7 +299,7 @@ def delete_cmd(ctx: click.Context, model_name: str, confirm: bool) -> None:
 @click.option("--api-key", "api_key", required=True,
               help="Provider API key (never written to logs or shown in output)")
 @click.option("--config", "config_json", default="{}", show_default=True,
-              help="Extra JSON config string passed as the 7th argument of add_external_model")
+              help="Extra JSON config string")
 @click.option("--dry-run", is_flag=True,
               help="Show what would be registered without executing")
 @click.pass_context
@@ -307,7 +311,7 @@ def create_cmd(
     config_json: str,
     dry_run: bool,
 ) -> None:
-    """Register an external AI model via add_external_model().
+    """Register an external AI model.
 
     \b
     Examples:
@@ -322,14 +326,16 @@ def create_cmd(
     try:
         json.loads(config_json)
     except json.JSONDecodeError as e:
-        print_output(error("INVALID_INPUT", f"--config must be valid JSON: {e}", fmt))
+        print_output(
+            error("INVALID_INPUT", f"--config must be valid JSON: {e}", fmt))
         return
 
     # 2. Look up model_type in the bundled catalog.
     try:
         catalog = _load_catalog()
     except Exception as e:
-        print_output(error("INTERNAL_ERROR", f"Failed to load model catalog: {e}", fmt))
+        print_output(
+            error("INTERNAL_ERROR", f"Failed to load model catalog: {e}", fmt))
         return
     if model_type not in catalog:
         print_output(error(

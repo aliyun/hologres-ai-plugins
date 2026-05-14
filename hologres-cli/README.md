@@ -891,8 +891,7 @@ for `model list`.
 
 #### model create
 
-Registers an external AI model on the live Hologres instance via
-`CALL add_external_model(...)`. Required inputs are `--name`, `--type`, and
+Registers an external AI model on the live Hologres instance. Required inputs are `--name`, `--type`, and
 `--api-key`; everything else (`provider`, `task`, `model_url`,
 `function_server_url`) is read from the bundled catalog (`models.json`) and the
 `{region}` placeholder is filled from the **current profile's `region_id`**.
@@ -921,7 +920,7 @@ hologres model create -n my_chat -t qwen3-max --api-key sk-xxx --dry-run
 | `--name, -n` | Model name to register (used as the identifier in `ai_gen()` / embedding calls) |
 | `--type, -t` | Model type — must be a key in `models.json`; see `hologres model catalog` |
 | `--api-key` | Provider API key. Never written to `~/.hologres/sql-history.jsonl` or shown in CLI output |
-| `--config` | Extra JSON config string passed as the 7th argument of `add_external_model`; default `'{}'` |
+| `--config` | Extra JSON config string |
 | `--dry-run` | Show what would be registered without executing |
 
 **Output (success):**
@@ -957,7 +956,7 @@ hologres model create -n my_chat -t qwen3-max --api-key sk-xxx --dry-run
 | `INVALID_INPUT` | `--config` is not valid JSON |
 | `MODEL_TYPE_NOT_SUPPORTED` | `--type` is not a key in the bundled catalog |
 | `INVALID_ARGS` | Active profile lacks `region_id`, or `region_id` contains characters outside `[a-z0-9-]` |
-| `QUERY_ERROR` | Backend `add_external_model` call failed (duplicate name, permission, etc.) |
+| `QUERY_ERROR` | Backend call failed (duplicate name, permission, etc.) |
 
 ## Output Formats
 
