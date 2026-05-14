@@ -388,6 +388,7 @@ version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "cryptography" },
     { name = "oss2" },
     { name = "psycopg", extra = ["binary"] },
     { name = "tabulate" },
@@ -403,6 +404,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
+    { name = "cryptography", specifier = ">=41.0" },
     { name = "oss2", specifier = ">=2.18.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.1.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },

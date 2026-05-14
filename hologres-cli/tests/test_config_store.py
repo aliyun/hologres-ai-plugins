@@ -499,3 +499,89 @@ class TestMigrateFromLegacy:
 
         result = migrate_from_legacy()
         assert result is False
+
+
+class TestCredentialEncryption:
+    """Tests for credential encryption in config storage."""
+
+    def test_save_encrypts_sensitive_fields(self, mock_home, sample_config, monkeypatch):
+        """save_config() writes encrypted values to disk."""
+        monkeypatch.setattr("hologres_cli.crypto._key_file", lambda: mock_home / ".hologres" / ".cipher_key")
+
+        save_config(sample_config)
+
+        # Read raw JSON from disk (bypass load_config decryption)
+        config_file = mock_home / ".hologres" / "config.json"
+        raw = json.loads(config_file.read_text())
+        raw_profile = raw["profiles"][0]
+
+        # Sensitive fields should be encrypted on disk
+        assert raw_profile["access_key_secret"].startswith("ENC:")
+        # Non-sensitive fields remain plain
+        assert raw_profile["access_key_id"] == "LTAI5tTestAccessKeyId"
+
+    def test_load_decrypts_sensitive_fields(self, mock_home, sample_config, monkeypatch):
+        """load_config() returns decrypted values."""
+        monkeypatch.setattr("hologres_cli.crypto._key_file", lambda: mock_home / ".hologres" / ".cipher_key")
+
+        save_config(sample_config)
+        loaded = load_config()
+
+        profile = loaded["profiles"][0]
+        assert profile["access_key_secret"] == "TestAccessKeySecret123"
+
+    def test_backward_compat_plaintext_config(self, mock_home, sample_config, monkeypatch):
+        """Config with plaintext passwords still loads correctly."""
+        monkeypatch.setattr("hologres_cli.crypto._key_file", lambda: mock_home / ".hologres" / ".cipher_key")
+
+        # Write plaintext config directly (simulating old format)
+        config_dir = mock_home / ".hologres"
+        config_dir.mkdir(exist_ok=True)
+        config_file = config_dir / "config.json"
+        config_file.write_text(json.dumps(sample_config, indent=2))
+
+        loaded = load_config()
+        profile = loaded["profiles"][0]
+        assert profile["access_key_secret"] == "TestAccessKeySecret123"
+
+    def test_save_does_not_mutate_original(self, mock_home, sample_config, monkeypatch):
+        """save_config() does not modify the passed-in config dict."""
+        monkeypatch.setattr("hologres_cli.crypto._key_file", lambda: mock_home / ".hologres" / ".cipher_key")
+
+        original_secret = sample_config["profiles"][0]["access_key_secret"]
+        save_config(sample_config)
+
+        assert sample_config["profiles"][0]["access_key_secret"] == original_secret
+
+    def test_password_field_encrypted(self, mock_home, monkeypatch):
+        """Password field (basic auth) is also encrypted."""
+        monkeypatch.setattr("hologres_cli.crypto._key_file", lambda: mock_home / ".hologres" / ".cipher_key")
+
+        config = {
+            "current": "basic-profile",
+            "profiles": [{
+                "name": "basic-profile",
+                "auth_mode": "basic",
+                "username": "BASIC$user",
+                "password": "S3cr3t!@#$",
+                "access_key_id": "",
+                "access_key_secret": "",
+                "region_id": "cn-hangzhou",
+                "instance_id": "hgprecn-cn-xxx",
+                "nettype": "internet",
+                "database": "mydb",
+                "warehouse": "default",
+                "endpoint": "",
+                "port": 80,
+            }],
+            "meta_path": "",
+        }
+
+        save_config(config)
+
+        config_file = mock_home / ".hologres" / "config.json"
+        raw = json.loads(config_file.read_text())
+        assert raw["profiles"][0]["password"].startswith("ENC:")
+
+        loaded = load_config()
+        assert loaded["profiles"][0]["password"] == "S3cr3t!@#$"

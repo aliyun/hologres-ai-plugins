@@ -7,10 +7,13 @@ to support test mocking of Path.home().
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote
+
+from .crypto import decrypt, encrypt
 
 
 class ConfigError(Exception):
@@ -90,18 +93,47 @@ def load_config() -> dict[str, Any]:
     config.setdefault("current", "")
     config.setdefault("profiles", [])
     config.setdefault("meta_path", "")
+
+    # Decrypt sensitive fields transparently
+    _decrypt_sensitive_fields(config)
+    return config
+
+
+def _encrypt_sensitive_fields(config: dict[str, Any]) -> dict[str, Any]:
+    """Return a deep copy of config with sensitive fields encrypted."""
+    out = copy.deepcopy(config)
+    for profile in out.get("profiles", []):
+        for key in SENSITIVE_KEYS:
+            value = profile.get(key, "")
+            if value and not value.startswith("ENC:"):
+                profile[key] = encrypt(value)
+    return out
+
+
+def _decrypt_sensitive_fields(config: dict[str, Any]) -> dict[str, Any]:
+    """Decrypt sensitive fields in-place and return config."""
+    for profile in config.get("profiles", []):
+        for key in SENSITIVE_KEYS:
+            value = profile.get(key, "")
+            if value:
+                profile[key] = decrypt(value)
     return config
 
 
 def save_config(config: dict[str, Any]) -> None:
-    """Save configuration to config.json."""
+    """Save configuration to config.json.
+
+    Sensitive fields (password, access_key_secret) are encrypted before writing.
+    """
     config_dir = _config_dir()
     config_dir.mkdir(parents=True, exist_ok=True)
 
     config_file = _config_file()
+    # Encrypt sensitive fields before persisting
+    encrypted_config = _encrypt_sensitive_fields(config)
     try:
         with open(config_file, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
+            json.dump(encrypted_config, f, indent=2, ensure_ascii=False)
     except OSError as e:
         raise ConfigError(f"Failed to write config file {config_file}: {e}")
 
