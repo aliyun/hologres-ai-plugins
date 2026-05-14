@@ -108,6 +108,7 @@ hologres-ai-plugins/
 | `hologres volume view volume://<name>/path/file [--net internet\|intranet]` | 下载文件到临时目录并用系统默认程序打开 |
 | `hologres model list [--task T] [--model-type T]` | 列出已注册的外部 AI 模型 |
 | `hologres model catalog [--task T]` | 列出 CLI 内置 catalog 中受支持的 AI 模型类型 |
+| `hologres model create --name N --type T --api-key K [--config J] [--dry-run]` | 注册外部 AI 模型(调用 `add_external_model()`) |
 | `hologres model delete <model_name> [--confirm]` | 删除已注册的外部 AI 模型(默认 dry-run) |
 
 **快速开始：**

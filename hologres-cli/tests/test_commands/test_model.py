@@ -332,3 +332,326 @@ class TestModelDeleteCmd:
         assert output["ok"] is True
         assert output["data"]["dry_run"] is True
         mock_get_conn.assert_not_called()
+
+
+CREATE_CATALOG = {
+    "qwen3-max": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000",
+    },
+    "wan2.2-kf2v-flash": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/image2video/video-synthesis",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000",
+    },
+    "kimi/kimi-k2.5": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+        "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000",
+    },
+}
+
+
+def _patch_create_deps(mocker, region_id="cn-hangzhou", catalog=None):
+    """Patch profile + catalog for `model create` tests."""
+    mocker.patch(
+        "hologres_cli.commands.model._load_catalog",
+        return_value=catalog if catalog is not None else CREATE_CATALOG,
+    )
+    profile = {"name": "default", "region_id": region_id}
+    mocker.patch("hologres_cli.commands.model.get_current_profile", return_value=profile)
+    mocker.patch("hologres_cli.commands.model.get_profile", return_value=profile)
+
+
+class TestModelCreateCmd:
+    """Tests for model create command."""
+
+    def test_create_success(self, mocker, mock_get_connection):
+        _patch_create_deps(mocker)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "my_chat",
+            "--type", "qwen3-max",
+            "--api-key", "sk-secret",
+        ])
+
+        assert result.exit_code == 0
+        out = json.loads(result.output)
+        assert out["ok"] is True
+        assert out["data"]["model_name"] == "my_chat"
+        assert out["data"]["model_type"] == "qwen3-max"
+        assert out["data"]["created"] is True
+        # MR review: per-skill we no longer expose provider/task/endpoint;
+        # success response stays minimal.
+        assert "endpoint" not in out["data"]
+        assert "provider" not in out["data"]
+        assert "task" not in out["data"]
+        # The executed SQL still routes through psycopg.sql.Literal — verify
+        # the live SQL contains the expected literals + the endpoint.
+        actual_sql = mock_get_connection.execute.call_args[0][0]
+        assert "CALL add_external_model" in actual_sql
+        assert "'my_chat'" in actual_sql
+        assert "'qwen3-max'" in actual_sql
+        assert "'sk-secret'" in actual_sql  # only logs/errors mask api_key
+        assert (
+            "http://model-server-cn-hangzhou.api.aliyun-inc.com:8000/providers/bailian"
+            "?url=https://vpc-cn-hangzhou.dashscope.aliyuncs.com/compatible-mode/v1"
+        ) in actual_sql
+        mock_get_connection.close.assert_called_once()
+
+    def test_create_unknown_model_type(self, mocker, mock_get_connection):
+        _patch_create_deps(mocker)
+        get_conn_spy = mocker.patch(
+            "hologres_cli.commands.model.get_connection",
+            wraps=lambda *a, **kw: mock_get_connection,
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "x",
+            "--type", "no-such-model",
+            "--api-key", "sk-x",
+        ])
+
+        out = json.loads(result.output)
+        assert out["ok"] is False
+        assert out["error"]["code"] == "MODEL_TYPE_NOT_SUPPORTED"
+        assert "hologres model catalog" in out["error"]["message"]
+        get_conn_spy.assert_not_called()
+
+    def test_create_missing_region_in_profile(self, mocker, mock_get_connection):
+        # Profile without region_id triggers INVALID_ARGS; never connects.
+        _patch_create_deps(mocker, region_id="")
+        get_conn_spy = mocker.patch(
+            "hologres_cli.commands.model.get_connection",
+            wraps=lambda *a, **kw: mock_get_connection,
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "x",
+            "--type", "qwen3-max",
+            "--api-key", "sk-x",
+        ])
+
+        out = json.loads(result.output)
+        assert out["ok"] is False
+        assert out["error"]["code"] == "INVALID_ARGS"
+        assert "region_id" in out["error"]["message"]
+        get_conn_spy.assert_not_called()
+
+    def test_create_invalid_region_chars(self, mocker, mock_get_connection):
+        _patch_create_deps(mocker, region_id="cn_hangzhou")  # underscore is illegal
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "x",
+            "--type", "qwen3-max",
+            "--api-key", "sk-x",
+        ])
+
+        out = json.loads(result.output)
+        assert out["ok"] is False
+        assert out["error"]["code"] == "INVALID_ARGS"
+        assert "invalid characters" in out["error"]["message"]
+
+    def test_create_invalid_config_json(self, mocker, mock_get_connection):
+        _patch_create_deps(mocker)
+        get_conn_spy = mocker.patch(
+            "hologres_cli.commands.model.get_connection",
+            wraps=lambda *a, **kw: mock_get_connection,
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "x",
+            "--type", "qwen3-max",
+            "--api-key", "sk-x",
+            "--config", "{notjson",
+        ])
+
+        out = json.loads(result.output)
+        assert out["ok"] is False
+        assert out["error"]["code"] == "INVALID_INPUT"
+        get_conn_spy.assert_not_called()
+
+    def test_create_passes_config_as_string(self, mocker, mock_get_connection):
+        _patch_create_deps(mocker)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "x",
+            "--type", "qwen3-max",
+            "--api-key", "sk-x",
+            "--config", '{"timeout": 10}',
+        ])
+
+        assert result.exit_code == 0
+        actual_sql = mock_get_connection.execute.call_args[0][0]
+        # The 7th argument should be the JSON string literal, not expanded.
+        assert "'{\"timeout\": 10}'" in actual_sql
+
+    def test_create_dry_run_does_not_show_sql(self, mocker, mock_get_connection):
+        # MR review: dry-run must NOT echo the underlying SQL or api_key.
+        _patch_create_deps(mocker)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "my_chat",
+            "--type", "qwen3-max",
+            "--api-key", "sk-DRYSECRET",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        out = json.loads(result.output)
+        assert out["ok"] is True
+        assert out["data"]["dry_run"] is True
+        assert out["data"]["model_name"] == "my_chat"
+        assert out["data"]["model_type"] == "qwen3-max"
+        # No SQL, no endpoint, no api_key anywhere.
+        assert "sql" not in out["data"]
+        assert "endpoint" not in out["data"]
+        assert "sk-DRYSECRET" not in result.output
+        mock_get_connection.execute.assert_not_called()
+
+    def test_create_dry_run_does_not_connect(self, mocker):
+        # Dry-run must not even open a connection.
+        _patch_create_deps(mocker)
+        get_conn_spy = mocker.patch("hologres_cli.commands.model.get_connection")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "my_chat",
+            "--type", "qwen3-max",
+            "--api-key", "sk-x",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        get_conn_spy.assert_not_called()
+
+    def test_create_query_error(self, mocker, mock_get_connection):
+        _patch_create_deps(mocker)
+        mock_get_connection.execute.side_effect = Exception("duplicate key")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "x",
+            "--type", "qwen3-max",
+            "--api-key", "sk-x",
+        ])
+
+        out = json.loads(result.output)
+        assert out["ok"] is False
+        assert out["error"]["code"] == "QUERY_ERROR"
+        mock_get_connection.close.assert_called_once()
+
+    def test_create_connection_error(self, mocker):
+        _patch_create_deps(mocker)
+        mocker.patch(
+            "hologres_cli.commands.model.get_connection",
+            side_effect=DSNError("No DSN configured"),
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "x",
+            "--type", "qwen3-max",
+            "--api-key", "sk-x",
+        ])
+
+        out = json.loads(result.output)
+        assert out["ok"] is False
+        assert out["error"]["code"] == "CONNECTION_ERROR"
+
+    def test_create_log_redacts_api_key(self, mocker, mock_get_connection):
+        _patch_create_deps(mocker)
+        log_spy = mocker.patch("hologres_cli.commands.model.log_operation")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "x",
+            "--type", "qwen3-max",
+            "--api-key", "sk-LEAK",
+        ])
+
+        assert result.exit_code == 0
+        log_kwargs = log_spy.call_args.kwargs
+        sql_str = log_kwargs.get("sql", "")
+        assert "sk-LEAK" not in sql_str
+        assert "'****'" in sql_str
+
+    def test_create_alias_model_type(self, mocker, mock_get_connection):
+        # Slash-prefixed aliases like 'kimi/kimi-k2.5' must round-trip without issue.
+        _patch_create_deps(mocker)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "kimi_alias",
+            "--type", "kimi/kimi-k2.5",
+            "--api-key", "sk-x",
+        ])
+
+        assert result.exit_code == 0
+        out = json.loads(result.output)
+        assert out["ok"] is True
+        assert out["data"]["model_type"] == "kimi/kimi-k2.5"
+        # Verify the special path made it into the SQL endpoint.
+        actual_sql = mock_get_connection.execute.call_args[0][0]
+        assert "/providers/bailian?url=https://vpc-cn-hangzhou" in actual_sql
+
+    def test_create_special_model_url_path(self, mocker, mock_get_connection):
+        # wan2.2-kf2v-flash uses a non-standard model_url (image2video, not video-generation).
+        # The endpoint is no longer in the JSON response, so verify via the executed SQL.
+        _patch_create_deps(mocker)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "w22",
+            "--type", "wan2.2-kf2v-flash",
+            "--api-key", "sk-x",
+        ])
+
+        assert result.exit_code == 0
+        actual_sql = mock_get_connection.execute.call_args[0][0]
+        assert "image2video/video-synthesis" in actual_sql
+        assert "video-generation/video-synthesis" not in actual_sql
+
+    def test_create_catalog_load_failure(self, mocker, mock_get_connection):
+        # Defensive: if models.json is missing/corrupt, fail with INTERNAL_ERROR
+        # before even resolving the region.
+        mocker.patch(
+            "hologres_cli.commands.model._load_catalog",
+            side_effect=FileNotFoundError("models.json missing"),
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "x",
+            "--type", "qwen3-max",
+            "--api-key", "sk-x",
+        ])
+
+        out = json.loads(result.output)
+        assert out["ok"] is False
+        assert out["error"]["code"] == "INTERNAL_ERROR"

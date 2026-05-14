@@ -203,6 +203,24 @@ def mock_get_connection(mocker, mock_connection_class):
         return quoted.encode('utf-8')
     mocker.patch.object(psycopg_sql.Identifier, 'as_bytes', _mock_identifier_as_bytes)
 
+    # Patch psycopg.sql.Literal.as_bytes so sql.Literal.as_string() works with mock conns.
+    # Real psycopg uses the connection's adapter map for type-aware quoting; under a mock
+    # there is no adapter, so emulate the common case (str/int/None) with simple quoting.
+    def _mock_literal_as_bytes(self, context=None):
+        value = self._obj
+        if value is None:
+            return b"NULL"
+        if isinstance(value, bool):
+            return b"TRUE" if value else b"FALSE"
+        if isinstance(value, (int, float)):
+            return str(value).encode('utf-8')
+        # str (and bytes) — wrap in single quotes, escape embedded single quotes by doubling.
+        if isinstance(value, bytes):
+            value = value.decode('utf-8')
+        escaped = str(value).replace("'", "''")
+        return f"'{escaped}'".encode('utf-8')
+    mocker.patch.object(psycopg_sql.Literal, 'as_bytes', _mock_literal_as_bytes)
+
     # Patch conn_encoding to return 'utf-8' for mock connections
     mocker.patch('psycopg.sql.conn_encoding', return_value='utf-8')
 

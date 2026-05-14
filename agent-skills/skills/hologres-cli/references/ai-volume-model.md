@@ -674,12 +674,80 @@ hologres -f table model catalog
 - Filtering is done client-side.
 - The catalog is bundled with the CLI; updates ship with new CLI releases.
 
+### model create
+
+Register an external AI model on the live Hologres instance. The user provides
+three values: `--name` (the name you will reference in `ai_gen()` / embedding
+calls), `--type` (the model type — look up supported values via
+`hologres model catalog`), and `--api-key` (the provider API key).
+
+```bash
+hologres model create --name my_chat --type qwen3-max --api-key sk-xxx
+hologres model create -n my_embed -t text-embedding-v3 --api-key sk-xxx
+hologres model create -n my_video -t happyhorse-1.0-t2v --api-key sk-xxx
+
+# Pass extra config (must be valid JSON; default is '{}')
+hologres model create -n my_chat -t qwen3-max --api-key sk-xxx --config '{"timeout": 30}'
+
+# Dry-run shows what would be registered without executing
+hologres model create -n my_chat -t qwen3-max --api-key sk-xxx --dry-run
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--name, -n` | Model name to register (used as the identifier in `ai_gen()` / embedding calls) |
+| `--type, -t` | Model type. Look up supported values with `hologres model catalog`. |
+| `--api-key` | Provider API key. Never written to `~/.hologres/sql-history.jsonl`. |
+| `--config` | Extra JSON config string; default `'{}'` |
+| `--dry-run` | Show what would be registered without executing |
+
+**Output (dry-run):**
+```json
+{
+  "ok": true,
+  "data": {
+    "model_name": "my_chat",
+    "model_type": "qwen3-max",
+    "dry_run": true
+  },
+  "message": "Dry-run: model 'my_chat' was NOT registered. Re-run without --dry-run to execute."
+}
+```
+
+**Output (executed):**
+```json
+{
+  "ok": true,
+  "data": {
+    "model_name": "my_chat",
+    "model_type": "qwen3-max",
+    "created": true
+  },
+  "message": "Model 'my_chat' registered successfully"
+}
+```
+
+**Errors:**
+
+| Code | Trigger |
+|------|---------|
+| `INVALID_INPUT` | `--config` is not valid JSON |
+| `MODEL_TYPE_NOT_SUPPORTED` | `--type` is not a key returned by `hologres model catalog` |
+| `INVALID_ARGS` | Active profile lacks `region_id`, or `region_id` contains characters outside `[a-z0-9-]` |
+| `QUERY_ERROR` | Backend rejected the registration (duplicate name, permission, etc.) |
+
+**Notes:**
+- `api_key` is never displayed in CLI output, audit logs, or dry-run output.
+- Dry-run intentionally does not echo the underlying SQL.
+
 ### model delete
 
 Delete a registered external AI model via `delete_external_model()`.
 
 ```bash
-# Dry-run (default, shows SQL only)
+# Dry-run (default, shows what would be deleted)
 hologres model delete embed11
 
 # Actually delete
@@ -691,7 +759,7 @@ hologres model delete embed11 --confirm
 | Option | Description |
 |--------|-------------|
 | `MODEL_NAME` | Name of the registered model (positional, required) |
-| `--confirm` | [REQUIRED to execute] Without this flag, only dry-run SQL is shown |
+| `--confirm` | [REQUIRED to execute] Without this flag, only a dry-run preview is shown |
 
 **Output (dry-run):**
 ```json
