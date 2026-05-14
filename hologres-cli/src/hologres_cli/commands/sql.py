@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import click
 
-from ..connection import DSNError, get_connection
+from ..connection import ADAPTIVE_EXECUTION_GUC, DSNError, get_connection
 from ..logger import log_operation
 from ..masking import mask_rows
 from ..output import (
@@ -31,6 +31,8 @@ MAX_FIELD_LENGTH = 1000
 WRITE_KEYWORDS = {"INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE", "GRANT", "REVOKE"}
 LIMIT_PATTERN = re.compile(r"\bLIMIT\s+\d+", re.IGNORECASE)
 SELECT_PATTERN = re.compile(r"^\s*SELECT\b", re.IGNORECASE)
+# Statements that benefit from adaptive execution (DML only, not EXPLAIN)
+DML_PATTERN = re.compile(r"^\s*(SELECT|INSERT|UPDATE)\b", re.IGNORECASE)
 
 
 class SqlGroup(click.Group):
@@ -106,6 +108,13 @@ def _execute_single(query: str, profile, fmt, with_schema, no_limit_check, no_ma
         return {"error": {"code": "CONNECTION_ERROR", "message": str(e)}}
 
     query = query.strip()
+
+    # Apply adaptive execution GUC only for DML (SELECT/INSERT/UPDATE), not EXPLAIN
+    if _needs_adaptive_execution(query):
+        try:
+            conn.conn.execute(ADAPTIVE_EXECUTION_GUC)
+        except Exception:
+            pass  # Non-critical, continue execution
 
     # Write operation guard: require --write flag
     if _is_write_operation(query):
@@ -321,3 +330,12 @@ def _truncate_large_fields(rows: list[dict[str, Any]], max_len: int = MAX_FIELD_
                 new_row[key] = value
         result.append(new_row)
     return result
+
+
+def _needs_adaptive_execution(query: str) -> bool:
+    """Check if query is a DML statement that benefits from adaptive execution.
+
+    Returns True for SELECT, INSERT, UPDATE statements.
+    Returns False for EXPLAIN, EXPLAIN ANALYZE, and other statements.
+    """
+    return bool(DML_PATTERN.match(query))

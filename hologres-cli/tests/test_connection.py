@@ -254,7 +254,8 @@ class TestHologresConnection:
         conn = HologresConnection("hologres://user:pass@host:80/db")
         _ = conn.conn
         calls = mock_psycopg["conn"].execute.call_args_list
-        assert any("hg_experimental_enable_adaptive_execution" in str(c) for c in calls)
+        # adaptive_execution is NOT set at connection level (only for DML in sql.py)
+        assert not any("hg_experimental_enable_adaptive_execution" in str(c) for c in calls)
         assert any("hg_computing_resource" in str(c) for c in calls)
         assert any("default_transaction_read_only" in str(c) for c in calls)
 
@@ -263,8 +264,8 @@ class TestHologresConnection:
         conn = HologresConnection("hologres://user:pass@host:80/db", read_only=False)
         _ = conn.conn
         calls = mock_psycopg["conn"].execute.call_args_list
-        # Default GUCs are still applied
-        assert any("hg_experimental_enable_adaptive_execution" in str(c) for c in calls)
+        # Default GUCs are still applied (serverless computing)
+        assert not any("hg_experimental_enable_adaptive_execution" in str(c) for c in calls)
         assert any("hg_computing_resource" in str(c) for c in calls)
         # But read-only is NOT set
         assert not any("default_transaction_read_only" in str(c) for c in calls)

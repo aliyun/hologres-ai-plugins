@@ -27,9 +27,11 @@ DEFAULT_KEEPALIVES = {
 
 # Default session GUCs applied to every connection for safety and resource control
 DEFAULT_SESSION_GUCS = [
-    "SET hg_experimental_enable_adaptive_execution = on",  # Adaptive execution to prevent OOM
     "SET hg_computing_resource = 'serverless'",  # Route queries to serverless computing pool
 ]
+
+# GUC applied only to DML statements (SELECT/INSERT/UPDATE), NOT to EXPLAIN/EXPLAIN ANALYZE
+ADAPTIVE_EXECUTION_GUC = "SET hg_experimental_enable_adaptive_execution = on"
 
 
 class ConnectionError(Exception):
