@@ -103,6 +103,36 @@ python upload_to_pypi.py --publish
 python upload_to_pypi.py --publish --version 0.2.0
 ```
 
+### Publish to ClawHub (OpenClaw Skill Marketplace)
+
+Publish skills to the [ClawHub](https://clawhub.ai) public skill registry:
+
+```bash
+cd agent-skills
+
+# Prerequisites
+npm i -g clawhub
+clawhub login
+
+# Publish all skills
+python publish_to_clawhub.py
+
+# Publish a specific skill
+python publish_to_clawhub.py --skill hologres-cli
+
+# Dry-run (preview without publishing)
+python publish_to_clawhub.py --dry-run
+
+# Bump patch version before publishing
+python publish_to_clawhub.py --bump
+
+# Set a specific version
+python publish_to_clawhub.py --version 1.2.0
+
+# Publish under an org handle
+python publish_to_clawhub.py --owner holomcp
+```
+
 ### Publish to Aone (contextlab)
 
 Publish individual skills to the Aone platform:

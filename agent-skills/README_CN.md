@@ -103,6 +103,36 @@ python upload_to_pypi.py --publish
 python upload_to_pypi.py --publish --version 0.2.0
 ```
 
+### 发布到 ClawHub (OpenClaw Skill 市场)
+
+将技能发布到 [ClawHub](https://clawhub.ai) 公共技能市场：
+
+```bash
+cd agent-skills
+
+# 前置条件
+npm i -g clawhub
+clawhub login
+
+# 发布全部技能
+python publish_to_clawhub.py
+
+# 发布指定技能
+python publish_to_clawhub.py --skill hologres-cli
+
+# 预览模式（不实际发布）
+python publish_to_clawhub.py --dry-run
+
+# 自动递增 patch 版本后发布
+python publish_to_clawhub.py --bump
+
+# 指定版本号
+python publish_to_clawhub.py --version 1.2.0
+
+# 使用组织名发布
+python publish_to_clawhub.py --owner holomcp
+```
+
 ### 发布到 Aone (contextlab) 平台
 
 将单个技能发布到 Aone 平台：
