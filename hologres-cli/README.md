@@ -804,8 +804,14 @@ hologres model list
 # Filter by task type
 hologres model list --task embedding
 
-# Filter by model type
+# Filter by model type (exact match)
 hologres model list --model-type qwen3-vl-embedding
+
+# Substring search on model_name OR model_type (case-insensitive)
+hologres model list --search happy
+
+# Combine filters (AND): video-generation models whose name/type contains "happy"
+hologres model list --task video-generation --search happy
 
 # Table format
 hologres -f table model list
@@ -814,6 +820,14 @@ hologres -f table model list
 hologres model delete embed11               # shows SQL only
 hologres model delete embed11 --confirm     # actually deletes
 ```
+
+**`model list` Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--task, -t` | Filter by task type (e.g. `embedding`, `video-generation`). Exact match |
+| `--model-type` | Filter by model type (e.g. `qwen3-vl-embedding`). Exact match |
+| `--search` | Substring match on `model_name` OR `model_type` (case-insensitive). Combined with `--task` / `--model-type` as AND |
 
 **`model delete` Options:**
 

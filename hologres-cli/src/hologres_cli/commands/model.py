@@ -79,8 +79,15 @@ def _mask_api_key(rendered_sql: str, api_key: str) -> str:
 @model_cmd.command("list")
 @click.option("--task", "-t", default=None, help="Filter by task type (e.g. embedding, video-generation)")
 @click.option("--model-type", default=None, help="Filter by model type (e.g. qwen3-vl-embedding)")
+@click.option("--search", default=None,
+              help="Substring match on model_name OR model_type (case-insensitive)")
 @click.pass_context
-def list_cmd(ctx: click.Context, task: str | None, model_type: str | None) -> None:
+def list_cmd(
+    ctx: click.Context,
+    task: str | None,
+    model_type: str | None,
+    search: str | None,
+) -> None:
     """List registered external AI models.
 
     \b
@@ -88,6 +95,7 @@ def list_cmd(ctx: click.Context, task: str | None, model_type: str | None) -> No
       hologres model list
       hologres model list --task embedding
       hologres model list --model-type qwen3-vl-embedding
+      hologres model list --search happy
       hologres -f table model list
     """
     profile = ctx.obj.get("profile")
@@ -109,6 +117,13 @@ def list_cmd(ctx: click.Context, task: str | None, model_type: str | None) -> No
             rows = [r for r in rows if r.get("task") == task]
         if model_type:
             rows = [r for r in rows if r.get("model_type") == model_type]
+        if search:
+            needle = search.lower()
+            rows = [
+                r for r in rows
+                if needle in (r.get("model_name") or "").lower()
+                or needle in (r.get("model_type") or "").lower()
+            ]
 
         duration_ms = (time.time() - start_time) * 1000
         log_operation(

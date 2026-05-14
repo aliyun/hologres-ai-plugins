@@ -605,6 +605,8 @@ List registered external AI models via `list_external_models()`.
 hologres model list
 hologres model list --task embedding
 hologres model list --model-type qwen3-vl-embedding
+hologres model list --search happy
+hologres model list --task video-generation --search happy
 hologres -f table model list
 ```
 
@@ -612,8 +614,9 @@ hologres -f table model list
 
 | Option | Description |
 |--------|-------------|
-| `--task, -t` | Filter by task type (e.g. `embedding`, `video-generation`) |
-| `--model-type` | Filter by model type (e.g. `qwen3-vl-embedding`) |
+| `--task, -t` | Filter by task type (e.g. `embedding`, `video-generation`). Exact match |
+| `--model-type` | Filter by model type (e.g. `qwen3-vl-embedding`). Exact match |
+| `--search` | Substring match on `model_name` OR `model_type` (case-insensitive). Combined with `--task` / `--model-type` as AND |
 
 **Output:**
 ```json
@@ -630,7 +633,8 @@ hologres -f table model list
 
 **Notes:**
 - Filtering is done client-side since `list_external_models()` does not support WHERE clauses
-- Both filters can be combined
+- All filters combine with AND semantics
+- `--search` matches when the needle (case-insensitive) appears in either `model_name` or `model_type` (OR across these two fields)
 
 ### model catalog
 

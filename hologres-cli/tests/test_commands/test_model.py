@@ -116,6 +116,102 @@ class TestModelListCmd:
         assert "qwen3-vl-embedding" in result.output
         assert "bailian" in result.output
 
+    def test_list_search_matches_model_type(self, mock_get_connection):
+        mock_get_connection.execute.return_value = MOCK_MODELS
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "list", "--search", "happy"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        # MOCK_MODELS has one happyhorse-* row whose model_type contains "happy".
+        assert output["data"]["count"] == 1
+        assert output["data"]["rows"][0]["model_type"] == "happyhorse-1.0-t2v"
+
+    def test_list_search_matches_model_name_only(self, mock_get_connection):
+        # OR semantics: match when needle appears in model_name OR model_type.
+        # Build rows where each branch is exercised independently so AND
+        # semantics would silently drop one of them.
+        disjoint = [
+            # name contains "happy", type does NOT
+            {"model_name": "happy_alias", "model_type": "qwen3-max",
+             "model_provider": "bailian", "task": "chat/completions"},
+            # type contains "happy", name does NOT
+            {"model_name": "video_alias", "model_type": "happyhorse-1.0-i2v",
+             "model_provider": "bailian", "task": "video-generation"},
+            # neither
+            {"model_name": "embed11", "model_type": "qwen3-vl-embedding",
+             "model_provider": "bailian", "task": "embedding"},
+        ]
+        mock_get_connection.execute.return_value = disjoint
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "list", "--search", "happy"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["data"]["count"] == 2
+        names = {r["model_name"] for r in output["data"]["rows"]}
+        assert names == {"happy_alias", "video_alias"}
+
+    def test_list_search_case_insensitive(self, mock_get_connection):
+        mock_get_connection.execute.return_value = MOCK_MODELS
+
+        runner = CliRunner()
+        upper = runner.invoke(cli, ["model", "list", "--search", "HAPPY"])
+        lower = runner.invoke(cli, ["model", "list", "--search", "happy"])
+
+        assert upper.exit_code == 0 and lower.exit_code == 0
+        assert json.loads(upper.output) == json.loads(lower.output)
+        assert json.loads(upper.output)["data"]["count"] == 1
+
+    def test_list_search_no_match(self, mock_get_connection):
+        mock_get_connection.execute.return_value = MOCK_MODELS
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "list", "--search", "xyz_nonexistent"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["rows"] == []
+        assert output["data"]["count"] == 0
+
+    def test_list_search_combined_with_task(self, mock_get_connection):
+        mock_get_connection.execute.return_value = MOCK_MODELS
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "list",
+            "--task", "video-generation",
+            "--search", "happy",
+        ])
+
+        output = json.loads(result.output)
+        assert output["data"]["count"] == 1
+        assert output["data"]["rows"][0]["task"] == "video-generation"
+        assert output["data"]["rows"][0]["model_type"] == "happyhorse-1.0-t2v"
+
+    def test_list_search_combined_with_model_type(self, mock_get_connection):
+        mock_get_connection.execute.return_value = MOCK_MODELS
+
+        runner = CliRunner()
+        # AND of exact --model-type and substring --search: hits one row.
+        hit = runner.invoke(cli, [
+            "model", "list",
+            "--model-type", "happyhorse-1.0-t2v",
+            "--search", "happy",
+        ])
+        assert json.loads(hit.output)["data"]["count"] == 1
+
+        # AND with a model_type that has nothing in common: zero rows.
+        miss = runner.invoke(cli, [
+            "model", "list",
+            "--model-type", "qwen3-vl-embedding",
+            "--search", "happy",
+        ])
+        assert json.loads(miss.output)["data"]["count"] == 0
+
 
 FAKE_CATALOG = {
     "qwen3-max": {
