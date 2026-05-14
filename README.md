@@ -107,6 +107,7 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres volume upload-file --volume <name> --local-file <path> --target-file <path> [--net internet\|intranet]` | Upload file to volume |
 | `hologres volume view volume://<name>/path/file [--net internet\|intranet]` | Download file to temp dir and open with system viewer |
 | `hologres model list [--task T] [--model-type T]` | List registered external AI models |
+| `hologres model catalog [--task T]` | List supported AI model types from the bundled catalog |
 
 **Quick Start:**
 

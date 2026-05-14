@@ -115,3 +115,115 @@ class TestModelListCmd:
         assert "embed11" in result.output
         assert "qwen3-vl-embedding" in result.output
         assert "bailian" in result.output
+
+
+FAKE_CATALOG = {
+    "qwen3-max": {
+        "provider": "bailian",
+        "task": "chat/completions",
+        "model_url": "https://example/v1",
+        "function_server_url": "http://example/proxy",
+    },
+    "qwen-image-2.0": {
+        "provider": "bailian",
+        "task": "image-generation",
+        "model_url": "https://example/img",
+        "function_server_url": "http://example/proxy",
+    },
+    "happyhorse-1.0-t2v": {
+        "provider": "bailian",
+        "task": "video-generation",
+        "model_url": "https://example/video",
+        "function_server_url": "http://example/proxy",
+    },
+}
+
+
+class TestModelCatalogCmd:
+    """Tests for model catalog command."""
+
+    def test_catalog_returns_all(self, mocker):
+        mocker.patch("hologres_cli.commands.model._load_catalog", return_value=FAKE_CATALOG)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "catalog"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["count"] == 3
+        row = output["data"]["rows"][0]
+        assert set(row.keys()) == {"model_type", "model_provider", "task"}
+        assert row["model_type"] == "qwen3-max"
+        assert row["model_provider"] == "bailian"
+
+    def test_catalog_filter_by_task(self, mocker):
+        mocker.patch("hologres_cli.commands.model._load_catalog", return_value=FAKE_CATALOG)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "catalog", "--task", "video-generation"])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert output["data"]["count"] == 1
+        assert output["data"]["rows"][0]["model_type"] == "happyhorse-1.0-t2v"
+
+    def test_catalog_filter_no_match(self, mocker):
+        mocker.patch("hologres_cli.commands.model._load_catalog", return_value=FAKE_CATALOG)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "catalog", "--task", "nonexistent"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is True
+        assert output["data"]["rows"] == []
+        assert output["data"]["count"] == 0
+
+    def test_catalog_table_format(self, mocker):
+        mocker.patch("hologres_cli.commands.model._load_catalog", return_value=FAKE_CATALOG)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--format", "table", "model", "catalog"])
+
+        assert result.exit_code == 0
+        assert "model_type" in result.output
+        assert "qwen3-max" in result.output
+        assert "model_name" not in result.output
+
+    def test_catalog_load_failure(self, mocker):
+        mocker.patch(
+            "hologres_cli.commands.model._load_catalog",
+            side_effect=FileNotFoundError("models.json missing"),
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "catalog"])
+
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "INTERNAL_ERROR"
+
+    def test_catalog_does_not_open_db(self, mocker):
+        # Catalog must not need a DB connection. If it does, get_connection
+        # would be called and fail because DSN resolution is not mocked.
+        spy = mocker.patch("hologres_cli.commands.model.get_connection")
+        mocker.patch("hologres_cli.commands.model._load_catalog", return_value=FAKE_CATALOG)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["model", "catalog"])
+
+        assert result.exit_code == 0
+        spy.assert_not_called()
+
+    def test_catalog_real_models_json_loadable(self):
+        # Integration-ish: real bundled models.json must parse and contain
+        # the expected per-entry fields. Guards against packaging regressions.
+        from hologres_cli.commands.model import _load_catalog
+
+        data = _load_catalog()
+        assert isinstance(data, dict)
+        assert len(data) > 0
+        sample_key = next(iter(data))
+        sample = data[sample_key]
+        assert "provider" in sample
+        assert "task" in sample

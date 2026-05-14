@@ -798,7 +798,7 @@ hologres volume list-files --volume my_vol --net intranet
 ### Model Management
 
 ```bash
-# List all registered external AI models
+# List all registered external AI models (queries the live instance)
 hologres model list
 
 # Filter by task type
@@ -810,6 +810,48 @@ hologres model list --model-type qwen3-vl-embedding
 # Table format
 hologres -f table model list
 ```
+
+#### model catalog
+
+Lists supported AI model types from the bundled catalog (`models.json`). Unlike
+`model list`, `catalog` does not require a database connection and reflects what
+the CLI knows can be registered (versus what is already registered on the
+instance).
+
+```bash
+# List all supported model types
+hologres model catalog
+
+# Filter by task type
+hologres model catalog --task embedding
+hologres model catalog --task video-generation
+
+# Table format
+hologres -f table model catalog
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--task, -t` | Filter by task type (e.g. `embedding`, `video-generation`) |
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "rows": [
+      {"model_type": "qwen3-max", "model_provider": "bailian", "task": "chat/completions"}
+    ],
+    "count": 1
+  }
+}
+```
+
+Note: `model catalog` does not include a `model_name` field — that is assigned
+when registering a model via `register_external_model()` and is only meaningful
+for `model list`.
 
 ## Output Formats
 

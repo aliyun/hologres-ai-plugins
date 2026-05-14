@@ -631,3 +631,45 @@ hologres -f table model list
 **Notes:**
 - Filtering is done client-side since `list_external_models()` does not support WHERE clauses
 - Both filters can be combined
+
+### model catalog
+
+List supported AI model types from the bundled catalog (`models.json`). Reads
+the static catalog shipped with the CLI; does **not** require a database
+connection. Complementary to `model list`: use `catalog` before registering to
+see which model types are supported, and `list` afterwards to see what is
+already registered on the instance.
+
+```bash
+hologres model catalog
+hologres model catalog --task embedding
+hologres model catalog --task video-generation
+hologres -f table model catalog
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--task, -t` | Filter by task type (e.g. `embedding`, `video-generation`, `chat/completions`, `image-generation`, `translation`, `speech-to-text`) |
+
+**Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "rows": [
+      {"model_type": "qwen3-max", "model_provider": "bailian", "task": "chat/completions"},
+      {"model_type": "qwen-image-2.0", "model_provider": "bailian", "task": "image-generation"}
+    ],
+    "count": 2
+  }
+}
+```
+
+**Notes:**
+- Output columns are `model_type / model_provider / task` — there is no
+  `model_name` here because the user-assigned name only exists once a model is
+  registered (it is part of `model list`).
+- Filtering is done client-side.
+- The catalog is bundled with the CLI; updates ship with new CLI releases.
