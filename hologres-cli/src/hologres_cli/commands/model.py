@@ -26,6 +26,11 @@ from ..output import (
 _MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]+$")
 REGION_PATTERN = re.compile(r"^[a-z0-9-]+$")
 
+# Regions where the dashscope VPC host requires a '-prd' suffix
+# (e.g. vpc-cn-hangzhou-prd.dashscope.aliyuncs.com).
+# Only applies to model_url; function_server_url is unaffected.
+_REGIONS_WITH_PRD_SUFFIX = frozenset({"cn-hangzhou", "ap-southeast-1"})
+
 
 @click.group("model")
 def model_cmd() -> None:
@@ -64,10 +69,18 @@ def _build_endpoint(entry: dict, region: str) -> str:
 
     function_server_url in models.json is host:port only (no path),
     e.g. 'http://model-server-{region}.api.aliyun-inc.com:8000'.
+
+    For dashscope VPC endpoints in 'cn-hangzhou' / 'ap-southeast-1', the
+    model_url host requires a '-prd' suffix (e.g.
+    vpc-cn-hangzhou-prd.dashscope.aliyuncs.com). function_server_url is
+    unaffected.
     """
     fsu = entry["function_server_url"].replace("{region}", region)
     provider = entry["provider"]
-    model_url = entry["model_url"].replace("{region}", region)
+    model_url_region = (
+        f"{region}-prd" if region in _REGIONS_WITH_PRD_SUFFIX else region
+    )
+    model_url = entry["model_url"].replace("{region}", model_url_region)
     return f"{fsu}/providers/{provider}?url={model_url}"
 
 

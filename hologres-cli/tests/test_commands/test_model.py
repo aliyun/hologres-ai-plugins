@@ -563,9 +563,11 @@ class TestModelCreateCmd:
         assert "'my_chat'" in actual_sql
         assert "'qwen3-max'" in actual_sql
         assert "'sk-secret'" in actual_sql  # only logs/errors mask api_key
+        # cn-hangzhou triggers the '-prd' suffix on model_url host, but
+        # function_server_url ('model-server-cn-hangzhou.api...') stays unchanged.
         assert (
             "http://model-server-cn-hangzhou.api.aliyun-inc.com:8000/providers/bailian"
-            "?url=https://vpc-cn-hangzhou.dashscope.aliyuncs.com/compatible-mode/v1"
+            "?url=https://vpc-cn-hangzhou-prd.dashscope.aliyuncs.com/compatible-mode/v1"
         ) in actual_sql
         mock_get_connection.close.assert_called_once()
 
@@ -819,3 +821,40 @@ class TestModelCreateCmd:
         out = json.loads(result.output)
         assert out["ok"] is False
         assert out["error"]["code"] == "INTERNAL_ERROR"
+
+    def test_create_endpoint_prd_suffix_ap_southeast_1(self, mocker, mock_get_connection):
+        # ap-southeast-1 must also trigger the '-prd' suffix on model_url host.
+        _patch_create_deps(mocker, region_id="ap-southeast-1")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "sg_chat",
+            "--type", "qwen3-max",
+            "--api-key", "sk-x",
+        ])
+
+        assert result.exit_code == 0
+        actual_sql = mock_get_connection.execute.call_args[0][0]
+        assert "vpc-ap-southeast-1-prd.dashscope.aliyuncs.com" in actual_sql
+        assert "vpc-ap-southeast-1.dashscope.aliyuncs.com" not in actual_sql
+        # function_server_url stays without '-prd'.
+        assert "model-server-ap-southeast-1.api.aliyun-inc.com:8000" in actual_sql
+
+    def test_create_endpoint_no_prd_for_other_regions(self, mocker, mock_get_connection):
+        # Non-whitelisted regions must keep the original model_url host.
+        _patch_create_deps(mocker, region_id="cn-shanghai")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "sh_chat",
+            "--type", "qwen3-max",
+            "--api-key", "sk-x",
+        ])
+
+        assert result.exit_code == 0
+        actual_sql = mock_get_connection.execute.call_args[0][0]
+        assert "vpc-cn-shanghai.dashscope.aliyuncs.com" in actual_sql
+        assert "vpc-cn-shanghai-prd" not in actual_sql
+        assert "model-server-cn-shanghai.api.aliyun-inc.com:8000" in actual_sql
