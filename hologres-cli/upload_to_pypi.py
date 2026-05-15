@@ -42,7 +42,14 @@ DIST = ROOT / "dist"
 def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     """Run a command, print it, and check for errors."""
     print(f"\n>>> {' '.join(cmd)}")
-    return subprocess.run(cmd, check=True, **kwargs)
+    result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+    if result.stdout:
+        print(result.stdout)
+    if result.returncode != 0:
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        raise subprocess.CalledProcessError(result.returncode, cmd)
+    return result
 
 
 def require_uv() -> str:
@@ -141,8 +148,14 @@ def stage_publish(uv: str, token: str | None, test_pypi: bool) -> None:
         ]
     cmd += ["--token", token]
 
-    # Add all dist files
-    dist_files = sorted(DIST.glob("*"))
+    # Add only .whl and .tar.gz dist files (exclude .gitignore, etc.)
+    dist_files = sorted(
+        f for f in DIST.iterdir()
+        if f.suffix in (".whl", ".gz") and f.is_file()
+    )
+    if not dist_files:
+        print("ERROR: No distributable files found in dist/")
+        sys.exit(1)
     cmd += [str(f) for f in dist_files]
 
     run(cmd, cwd=ROOT)

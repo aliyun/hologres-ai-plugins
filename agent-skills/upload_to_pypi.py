@@ -41,7 +41,14 @@ SKILLS_DST = ROOT / "src" / "holo_plugin_installer" / "skills"
 def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     """Run a command, print it, and check for errors."""
     print(f"\n>>> {' '.join(cmd)}")
-    return subprocess.run(cmd, check=True, **kwargs)
+    result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+    if result.stdout:
+        print(result.stdout)
+    if result.returncode != 0:
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        raise subprocess.CalledProcessError(result.returncode, cmd)
+    return result
 
 
 def require_uv() -> str:
