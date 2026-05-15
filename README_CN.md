@@ -18,7 +18,8 @@ hologres-ai-plugins/
     │   ├── hologres-privileges/           # 权限管理技能
     │   ├── hologres-uv-compute/           # UV/PV 去重计算技能
     │   ├── hologres-bsi-profile-analysis/ # BSI 画像分析技能
-    │   └── hologres-ad-campaign/          # 广告素材生成与投放分析技能
+    │   ├── hologres-ad-campaign/          # 广告素材生成与投放分析技能
+    │   └── hologres-instance-health-analyse/ # 实例健康诊断与巡检技能
     ├── pyproject.toml
     └── upload_to_pypi.py
 ```
@@ -222,6 +223,15 @@ Hologres 权限管理技能，基于 PostgreSQL 标准授权模型（专家权�
 - 多渠道虚拟投放模拟（微信、抖音、小红书、B站）
 - 基于 Dynamic Table 的实时 ROI 分析
 - AI 策略建议（预算分配、止损建议、潜力股分析）
+
+#### hologres-instance-health-analyse
+
+Hologres 实例健康诊断与巡检，所有 SQL 通过 `hologres-cli` 执行：
+
+- Warehouse 资源巡检（CPU、内存、连接数，基于 `pg_stat_activity`）
+- FAILED Query 报错归类与错误模式分析（`hg_query_log`）
+- CPU/内存粒度慢查询分析（按 SQL 指纹聚合）
+- 输出结构化诊断报告与优化建议
 
 ## 环境要求
 

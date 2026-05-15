@@ -18,7 +18,8 @@ hologres-ai-plugins/
     │   ├── hologres-privileges/           # Privilege management skill
     │   ├── hologres-uv-compute/           # UV/PV deduplication skill
     │   ├── hologres-bsi-profile-analysis/ # BSI profile analysis skill
-    │   └── hologres-ad-campaign/          # Ad creative generation & campaign analysis skill
+    │   ├── hologres-ad-campaign/          # Ad creative generation & campaign analysis skill
+    │   └── hologres-instance-health-analyse/ # Instance health diagnosis & inspection skill
     ├── pyproject.toml
     └── upload_to_pypi.py
 ```
@@ -222,6 +223,15 @@ AI-powered ad creative generation and campaign analysis using Hologres AI Functi
 - Virtual delivery simulation across channels (WeChat, Douyin, Xiaohongshu, Bilibili)
 - Real-time ROI analysis via Dynamic Tables
 - AI-driven strategy recommendations (budget allocation, stop-loss suggestions)
+
+#### hologres-instance-health-analyse
+
+Hologres instance health diagnosis and inspection, executing all SQL through `hologres-cli`:
+
+- Warehouse resource inspection (CPU, memory, connections via `pg_stat_activity`)
+- FAILED query classification and error pattern analysis (`hg_query_log`)
+- Slow query analysis by CPU/memory consumption (digest-based aggregation)
+- Structured diagnostic report with actionable optimization recommendations
 
 ## Requirements
 

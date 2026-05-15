@@ -14,6 +14,7 @@ An interactive installer that distributes Hologres AI agent skills to various AI
 | `hologres-uv-compute` | `hologres-cli` | Real-time UV/PV computation pipelines using Dynamic Tables and RoaringBitmap |
 | `hologres-bsi-profile-analysis` | `hologres-cli` | BSI (Bit-Sliced Index) based user profile analysis — tag computation, crowd targeting, GMV analysis |
 | `hologres-ad-campaign` | `hologres-cli` | AI-powered ad creative generation and campaign analysis — video synthesis, virtual delivery simulation, real-time ROI via Dynamic Tables |
+| `hologres-instance-health-analyse` | `hologres-cli` | Instance health diagnosis — Warehouse resource inspection, FAILED query classification, CPU/memory slow query analysis, structured diagnostic reports |
 
 > **Note:** All skills except `hologres-cli` depend on it as the foundational skill. SQL execution, GUC management, and data operations are performed through CLI commands. Install `hologres-cli` skill first.
 

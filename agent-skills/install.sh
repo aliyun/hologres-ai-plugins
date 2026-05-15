@@ -252,6 +252,7 @@ print_summary() {
     printf "  • hologres-uv-compute       (UV/PV deduplication)\n"
     printf "  • hologres-bsi-profile-analysis (BSI user profiles)\n"
     printf "  • hologres-ad-campaign      (Ad creative & campaign)\n"
+    printf "  • hologres-instance-health-analyse (Instance health diagnosis)\n"
     printf "\n"
     printf "${BOLD}Prerequisite:${RESET} Install hologres-cli first if not already:\n"
     printf "  ${CYAN}curl -sSf https://raw.githubusercontent.com/aliyun/hologres-ai-plugins/master/hologres-cli/install.sh | sh${RESET}\n"
