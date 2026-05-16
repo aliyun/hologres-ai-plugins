@@ -10,6 +10,15 @@ description: >
 
 系统性诊断 Hologres 实例健康状态，输出 Warehouse 资源、报错分析、慢查询三大模块的结构化诊断报告。
 
+## 时间范围参数
+
+以下所有查询中的时间范围默认为 `7 days`。用户可指定其他时间范围（如 `1 day`、`3 days`、`30 days`、`1 hour`），直接替换 SQL 中的 `{TIME_RANGE}` 即可。
+
+```
+默认值：{TIME_RANGE} = 7 days
+示例：用户说“分析过去 3 天” → 替换为 interval '3 days'
+```
+
 ## 核心诊断模块
 
 ```
@@ -60,6 +69,10 @@ hologres sql run --write "GRANT pg_read_all_stats TO \"云账号ID\""
 export HOLOGRES_SKILL=hologres-instance-health-analyse
 ```
 
+### 5. Serverless 计算池
+
+`hologres-cli` 连接层自动设置 `hg_computing_resource = 'serverless'`，所有诊断查询均通过 Serverless 计算池执行，不会占用业务 Warehouse 资源。无需额外配置。
+
 ## 第一步：Warehouse 资源巡检
 
 分析各 Warehouse 的 CPU、内存、连接数使用情况，判断是否存在资源瓶颈。
@@ -99,9 +112,11 @@ Warehouse 资源诊断：
 **执行命令**：
 
 ```bash
-# 按报错类型归类统计（过去7天）
-hologres sql run --no-limit-check "SELECT regexp_replace(message, E'\\n', ' ')::char(200) AS error_message, warehouse_name, count(1) AS error_count, min(query_start) AS first_seen, max(query_start) AS last_seen FROM hologres.hg_query_log WHERE status = 'FAILED' AND query_start >= now() - interval '7 days' AND message IS NOT NULL GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 50"
+# 报错类型归类统计（默认过去 7 天，可替换 {TIME_RANGE}）
+hologres sql run --no-limit-check "SELECT error_category, warehouse_name, count(1) AS error_count, min(query_start) AS first_seen, max(query_start) AS last_seen FROM (SELECT *, CASE WHEN ltrim(split_part(message, ': ', 2),' ') != 'XX000' and length(ltrim(split_part(message, ': ', 2),' ')) = 5 THEN ltrim(split_part(message, ': ', 2),' ') WHEN (query LIKE '-- query row count from analyze table%' or query LIKE '-- query from analyze table%') THEN 'AutoAnalyze-Failed' WHEN message LIKE '%canceling statement due to user request%' THEN 'User Cancelled' WHEN (message LIKE '%Total memory used by all existing queries exceeded memory limitation%' OR message LIKE '%query exceed per query memory limitation%') THEN 'OOM' WHEN message LIKE '%WriteLogRecord is not allowed in readonly mode%' THEN 'READONLY' WHEN message LIKE '%query next from foreign table executor failed%' THEN 'queryNext Foreign table Failed' WHEN message LIKE '%SERVER_INTERNAL_ERROR%query next from pg executor failed from%' THEN 'queryNext PQE Failed' WHEN (message LIKE '%Exceeds the scan limitation%' OR message LIKE '%Exceeds the partition limitation%') THEN 'Exceed Odps Scan Limit' WHEN message LIKE '%permission denied%' THEN 'permission denied' WHEN message LIKE '%duplicate key value violates%' THEN 'pk violates' WHEN message LIKE '%does not exist%' THEN 'does not exist' WHEN message LIKE '%Internal error%' THEN 'Other Internal Errors' ELSE 'OTHER' END AS error_category, warehouse_name, query_start FROM hologres.hg_query_log WHERE status = 'FAILED' AND query_start >= now() - interval '{TIME_RANGE}' AND message IS NOT NULL) t GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 50"
 ```
+
+完整的报错分类逻辑（含 50+ 种错误类型）见 [references/error-analysis.md](references/error-analysis.md)。
 
 **输出格式**（必须按此格式输出）：
 
@@ -127,8 +142,8 @@ Warehouse：Warehouse_2
 按 SQL 指纹（digest）归类，找出 CPU 消耗最高的 Query 模式。
 
 ```bash
-# CPU 粒度慢查询 Top 10（过去1天，按指纹聚合）
-hologres sql run --no-limit-check "SELECT digest AS sql_digest, count(1) AS exec_count, round(avg(cpu_time_ms)::numeric / 1000, 2) AS avg_cpu_sec, round(max(cpu_time_ms)::numeric / 1000, 2) AS max_cpu_sec, round(sum(cpu_time_ms)::numeric / 1000, 2) AS total_cpu_sec, round(avg(duration)::numeric / 1000, 2) AS avg_duration_sec, warehouse_name, max(query_id) AS sample_query_id, max(query)::char(100) AS sql_sample FROM hologres.hg_query_log WHERE query_start >= now() - interval '1 day' AND digest IS NOT NULL AND usename != 'system' AND cpu_time_ms IS NOT NULL GROUP BY digest, warehouse_name ORDER BY sum(cpu_time_ms) DESC LIMIT 10"
+# CPU 慢查询 Top 10（默认过去 7 天，可替换 {TIME_RANGE}）
+hologres sql run --no-limit-check "SELECT digest AS sql_digest, count(1) AS exec_count, round(avg(cpu_time_ms)::numeric / 1000, 2) AS avg_cpu_sec, round(max(cpu_time_ms)::numeric / 1000, 2) AS max_cpu_sec, round(sum(cpu_time_ms)::numeric / 1000, 2) AS total_cpu_sec, round(avg(duration)::numeric / 1000, 2) AS avg_duration_sec, warehouse_name, max(query_id) AS sample_query_id, max(query)::char(100) AS sql_sample FROM hologres.hg_query_log WHERE query_start >= now() - interval '{TIME_RANGE}' AND digest IS NOT NULL AND usename != 'system' AND cpu_time_ms IS NOT NULL GROUP BY digest, warehouse_name ORDER BY sum(cpu_time_ms) DESC LIMIT 10"
 ```
 
 ### 3.2 内存粒度慢查询
@@ -136,8 +151,8 @@ hologres sql run --no-limit-check "SELECT digest AS sql_digest, count(1) AS exec
 按 SQL 指纹归类，找出内存消耗最高的 Query 模式。
 
 ```bash
-# 内存粒度慢查询 Top 10（过去7天，按指纹聚合）
-hologres sql run --no-limit-check "SELECT digest AS sql_digest, count(1) AS exec_count, round(avg(memory_bytes)::numeric / 1048576, 2) AS avg_memory_mb, round(max(memory_bytes)::numeric / 1048576, 2) AS peak_memory_mb, round(avg(duration)::numeric / 1000, 2) AS avg_duration_sec, warehouse_name, max(query_id) AS sample_query_id, max(query)::char(100) AS sql_sample FROM hologres.hg_query_log WHERE query_start >= now() - interval '7 days' AND digest IS NOT NULL AND memory_bytes IS NOT NULL GROUP BY digest, warehouse_name ORDER BY avg(memory_bytes) DESC LIMIT 10"
+# 内存慢查询 Top 10（默认过去 7 天，可替换 {TIME_RANGE}）
+hologres sql run --no-limit-check "SELECT digest AS sql_digest, count(1) AS exec_count, round(avg(memory_bytes)::numeric / 1048576, 2) AS avg_memory_mb, round(max(memory_bytes)::numeric / 1048576, 2) AS peak_memory_mb, round(avg(duration)::numeric / 1000, 2) AS avg_duration_sec, warehouse_name, max(query_id) AS sample_query_id, max(query)::char(100) AS sql_sample FROM hologres.hg_query_log WHERE query_start >= now() - interval '{TIME_RANGE}' AND digest IS NOT NULL AND memory_bytes IS NOT NULL GROUP BY digest, warehouse_name ORDER BY avg(memory_bytes) DESC LIMIT 10"
 ```
 
 详细分析 SQL 见 [references/slow-query-analysis.md](references/slow-query-analysis.md)。
@@ -167,7 +182,7 @@ SQL 指纹：md5xxxxxx
 ```
 ========== Hologres 实例健康诊断报告 ==========
 诊断时间：{当前时间}
-诊断范围：过去 7 天
+诊断范围：过去 {TIME_RANGE}（默认 7 days）
 
 【1. Warehouse 资源】
 状态：正常 / 异常
