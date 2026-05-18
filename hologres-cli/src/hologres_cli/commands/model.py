@@ -73,12 +73,20 @@ def _build_endpoint(entry: dict, region: str) -> str:
     function_server_url in models.json is host:port only (no path),
     e.g. 'http://model-server-{region}.api.aliyun-inc.com:8000'.
 
+    When function_server_url is empty, endpoint = model_url directly
+    (no region substitution or PRD suffix applied).
+
     For dashscope VPC endpoints in 'cn-hangzhou' / 'ap-southeast-1', the
     model_url host requires a '-prd' suffix (e.g.
     vpc-cn-hangzhou-prd.dashscope.aliyuncs.com). function_server_url is
     unaffected.
     """
-    fsu = entry["function_server_url"].replace("{region}", region)
+    fsu = entry["function_server_url"]
+
+    if not fsu:
+        return entry["model_url"]
+
+    fsu = fsu.replace("{region}", region)
     provider = entry["provider"]
     model_url_region = (
         f"{region}-prd" if region in _REGIONS_WITH_PRD_SUFFIX else region

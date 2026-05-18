@@ -514,5 +514,17 @@
         "task": "video-generation",
         "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
         "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000"
+    },
+    "doubao-seedance-2-0-260128": {
+        "provider": "external",
+        "task": "video-generation",
+        "model_url": "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks",
+        "function_server_url": ""
+    },
+    "doubao-seedance-2-0-fast-260128": {
+        "provider": "external",
+        "task": "video-generation",
+        "model_url": "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks",
+        "function_server_url": ""
     }
 }

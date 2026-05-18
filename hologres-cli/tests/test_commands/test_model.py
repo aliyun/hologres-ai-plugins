@@ -392,6 +392,17 @@ class TestModelCatalogCmd:
         assert "provider" in sample
         assert "task" in sample
 
+    def test_catalog_contains_doubao_models(self):
+        from hologres_cli.commands.model import _load_catalog
+
+        data = _load_catalog()
+        assert "doubao-seedance-2-0-260128" in data
+        assert "doubao-seedance-2-0-fast-260128" in data
+        entry = data["doubao-seedance-2-0-260128"]
+        assert entry["provider"] == "external"
+        assert entry["task"] == "video-generation"
+        assert entry["function_server_url"] == ""
+
 
 class TestModelDeleteCmd:
     """Tests for model delete command."""
@@ -858,3 +869,104 @@ class TestModelCreateCmd:
         assert "vpc-cn-shanghai.dashscope.aliyuncs.com" in actual_sql
         assert "vpc-cn-shanghai-prd" not in actual_sql
         assert "model-server-cn-shanghai.api.aliyun-inc.com:8000" in actual_sql
+
+    def test_create_empty_fsu_uses_model_url_directly(self, mocker, mock_get_connection):
+        catalog = {
+            "doubao-seedance-2-0-260128": {
+                "provider": "external",
+                "task": "video-generation",
+                "model_url": "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks",
+                "function_server_url": ""
+            }
+        }
+        _patch_create_deps(mocker, catalog=catalog)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "my_doubao",
+            "--type", "doubao-seedance-2-0-260128",
+            "--api-key", "sk-xxx",
+        ])
+
+        assert result.exit_code == 0
+        out = json.loads(result.output)
+        assert out["ok"] is True
+        assert out["data"]["created"] is True
+
+        actual_sql = mock_get_connection.execute.call_args[0][0]
+        assert "'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks'" in actual_sql
+        assert "/providers/" not in actual_sql
+        assert "-prd" not in actual_sql
+
+    def test_create_empty_fsu_not_affected_by_prd_region(self, mocker, mock_get_connection):
+        # cn-hangzhou is in _REGIONS_WITH_PRD_SUFFIX but should not affect empty fsu models.
+        catalog = {
+            "doubao-seedance-2-0-fast-260128": {
+                "provider": "external",
+                "task": "video-generation",
+                "model_url": "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks",
+                "function_server_url": ""
+            }
+        }
+        _patch_create_deps(mocker, region_id="cn-hangzhou", catalog=catalog)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "model", "create",
+            "--name", "doubao_fast",
+            "--type", "doubao-seedance-2-0-fast-260128",
+            "--api-key", "sk-xxx",
+        ])
+
+        assert result.exit_code == 0
+        actual_sql = mock_get_connection.execute.call_args[0][0]
+        assert "'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks'" in actual_sql
+        assert "-prd" not in actual_sql
+
+
+class TestBuildEndpoint:
+    """Tests for _build_endpoint helper."""
+
+    def test_empty_fsu_returns_model_url(self):
+        from hologres_cli.commands.model import _build_endpoint
+
+        entry = {
+            "provider": "external",
+            "task": "video-generation",
+            "model_url": "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks",
+            "function_server_url": ""
+        }
+        result = _build_endpoint(entry, "cn-hangzhou")
+        assert result == "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks"
+        assert "-prd" not in result
+        assert "/providers/" not in result
+
+    def test_non_empty_fsu_unchanged(self):
+        from hologres_cli.commands.model import _build_endpoint
+
+        entry = {
+            "provider": "bailian",
+            "task": "chat/completions",
+            "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+            "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000"
+        }
+        result = _build_endpoint(entry, "cn-shanghai")
+        assert result == (
+            "http://model-server-cn-shanghai.api.aliyun-inc.com:8000"
+            "/providers/bailian"
+            "?url=https://vpc-cn-shanghai.dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+
+    def test_non_empty_fsu_with_prd_region(self):
+        from hologres_cli.commands.model import _build_endpoint
+
+        entry = {
+            "provider": "bailian",
+            "task": "chat/completions",
+            "model_url": "https://vpc-{region}.dashscope.aliyuncs.com/compatible-mode/v1",
+            "function_server_url": "http://model-server-{region}.api.aliyun-inc.com:8000"
+        }
+        result = _build_endpoint(entry, "cn-hangzhou")
+        assert "vpc-cn-hangzhou-prd.dashscope.aliyuncs.com" in result
+        assert "model-server-cn-hangzhou.api.aliyun-inc.com:8000" in result
