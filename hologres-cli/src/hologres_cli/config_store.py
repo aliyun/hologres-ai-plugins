@@ -53,10 +53,11 @@ SETTABLE_KEYS = {
     "access_key_id", "access_key_secret", "username", "password",
     "database", "warehouse", "endpoint", "port",
     "output_format", "language",
+    "cms_access_key_id", "cms_access_key_secret",
 }
 
 # Sensitive keys that should be masked in display
-SENSITIVE_KEYS = {"access_key_secret", "password"}
+SENSITIVE_KEYS = {"access_key_secret", "password", "cms_access_key_secret"}
 
 
 def _config_dir() -> Path:
