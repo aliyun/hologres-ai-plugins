@@ -212,9 +212,12 @@ def list_cmd(ctx: click.Context, search: str | None, region: str | None, page_si
     (metric_name, description, unit, dimensions, periods, statistics).
 
     \b
-    Requires Alibaba Cloud credentials configured via environment variables
-    (ALIBABA_CLOUD_ACCESS_KEY_ID / ALIBABA_CLOUD_ACCESS_KEY_SECRET) or
-    other credential providers supported by alibabacloud-credentials.
+    Requires Alibaba Cloud credentials. Resolution order (high to low):
+      1) `hologres metric config` (CloudMonitor-dedicated AK/SK, recommended)
+      2) `hologres config` (general AK/SK in ~/.hologres/config.json)
+      3) Environment variables (ALIBABA_CLOUD_ACCESS_KEY_ID / ALIBABA_CLOUD_ACCESS_KEY_SECRET)
+         or other providers supported by alibabacloud-credentials
+         (e.g. instance RAM role).
 
     \b
     Examples:
@@ -413,9 +416,12 @@ def query_cmd(
       shared_    (Lake acceleration)
 
     \b
-    Requires Alibaba Cloud credentials configured via environment variables
-    (ALIBABA_CLOUD_ACCESS_KEY_ID / ALIBABA_CLOUD_ACCESS_KEY_SECRET) or
-    other credential providers supported by alibabacloud-credentials.
+    Requires Alibaba Cloud credentials. Resolution order (high to low):
+      1) `hologres metric config` (CloudMonitor-dedicated AK/SK, recommended)
+      2) `hologres config` (general AK/SK in ~/.hologres/config.json)
+      3) Environment variables (ALIBABA_CLOUD_ACCESS_KEY_ID / ALIBABA_CLOUD_ACCESS_KEY_SECRET)
+         or other providers supported by alibabacloud-credentials
+         (e.g. instance RAM role).
 
     \b
     Examples:
@@ -568,9 +574,12 @@ def latest_cmd(
     returns the most recent datapoint(s) for quick health checks.
 
     \b
-    Requires Alibaba Cloud credentials configured via environment variables
-    (ALIBABA_CLOUD_ACCESS_KEY_ID / ALIBABA_CLOUD_ACCESS_KEY_SECRET) or
-    other credential providers supported by alibabacloud-credentials.
+    Requires Alibaba Cloud credentials. Resolution order (high to low):
+      1) `hologres metric config` (CloudMonitor-dedicated AK/SK, recommended)
+      2) `hologres config` (general AK/SK in ~/.hologres/config.json)
+      3) Environment variables (ALIBABA_CLOUD_ACCESS_KEY_ID / ALIBABA_CLOUD_ACCESS_KEY_SECRET)
+         or other providers supported by alibabacloud-credentials
+         (e.g. instance RAM role).
 
     \b
     Examples:

@@ -1,4 +1,4 @@
-"""Tests for the ``hologres hologram`` command module."""
+"""Tests for the ``hologres instance-manage`` command module."""
 
 from __future__ import annotations
 
@@ -69,11 +69,11 @@ def _inject_fake_sdk(mocker, *, hologram_client_factory=None, profile=None):
         profile = MOCK_PROFILE
 
     mocker.patch(
-        "hologres_cli.commands.hologram.get_current_profile",
+        "hologres_cli.commands.instance_manage.get_current_profile",
         return_value=profile,
     )
     mocker.patch(
-        "hologres_cli.commands.hologram.get_profile",
+        "hologres_cli.commands.instance_manage.get_profile",
         return_value=profile,
     )
 
@@ -289,7 +289,7 @@ class TestHologramListCmd:
 
     def test_list_dependency_missing(self, mocker):
         mocker.patch(
-            "hologres_cli.commands.hologram.get_current_profile",
+            "hologres_cli.commands.instance_manage.get_current_profile",
             return_value=MOCK_PROFILE,
         )
         _disable_hologram_sdk(mocker)
@@ -526,7 +526,7 @@ class TestHologramCreateCmd:
 
     def test_create_dependency_missing(self, mocker):
         mocker.patch(
-            "hologres_cli.commands.hologram.get_current_profile",
+            "hologres_cli.commands.instance_manage.get_current_profile",
             return_value=MOCK_PROFILE,
         )
         _disable_hologram_sdk(mocker)

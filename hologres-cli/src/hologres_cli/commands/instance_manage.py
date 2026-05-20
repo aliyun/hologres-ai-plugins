@@ -354,6 +354,22 @@ _CHARGE_TYPES = ["PostPaid", "PrePaid"]
               help="Leader instance ID (Follower type)")
 @click.option("--auto-pay/--no-auto-pay", default=True, show_default=True,
               help="Whether to automatically pay for prepaid orders")
+@click.option("--pricing-cycle", type=click.Choice(["Month", "Hour"]), default=None,
+              help="Pricing cycle: Month or Hour. Only Month is supported for PrePaid instances.")
+@click.option("--duration", type=int, default=None,
+              help="Purchase duration (e.g. 2 months). Required for PrePaid instances.")
+@click.option("--auto-renew/--no-auto-renew", default=None,
+              help="Enable auto-renewal for PrePaid instances.")
+@click.option("--cold-storage-size", type=int, default=None,
+              help="Cold storage size in GB. Ignored for PostPaid instances.")
+@click.option("--initial-databases", default=None,
+              help="Initial database name to create.")
+@click.option("--resource-group-id", default=None,
+              help="Resource group ID. Uses default resource group if not specified.")
+@click.option("--enable-serverless/--no-enable-serverless", default=None,
+              help="Enable serverless computing.")
+@click.option("--storage-type", type=click.Choice(["local", "redundant"]), default=None,
+              help="Storage type: local (single-zone) or redundant (multi-zone).")
 @click.pass_context
 def create_cmd(
     ctx: click.Context,
@@ -369,6 +385,14 @@ def create_cmd(
     gateway_count: Optional[int],
     leader_instance_id: Optional[str],
     auto_pay: bool,
+    pricing_cycle: Optional[str],
+    duration: Optional[int],
+    auto_renew: Optional[bool],
+    cold_storage_size: Optional[int],
+    initial_databases: Optional[str],
+    resource_group_id: Optional[str],
+    enable_serverless: Optional[bool],
+    storage_type: Optional[str],
 ) -> None:
     """Create a new Hologres instance.
 
@@ -409,9 +433,10 @@ def create_cmd(
         "instance_name": instance_name,
         "instance_type": instance_type,
         "charge_type": charge_type,
-        "pricing_cycle": "Month",
         "auto_pay": auto_pay,
     }
+    if pricing_cycle is not None:
+        request_kwargs["pricing_cycle"] = pricing_cycle
     if cpu is not None:
         request_kwargs["cpu"] = cpu
     if storage_size is not None:
@@ -420,6 +445,20 @@ def create_cmd(
         request_kwargs["gateway_count"] = gateway_count
     if leader_instance_id:
         request_kwargs["leader_instance_id"] = leader_instance_id
+    if duration is not None:
+        request_kwargs["duration"] = duration
+    if auto_renew is not None:
+        request_kwargs["auto_renew"] = auto_renew
+    if cold_storage_size is not None:
+        request_kwargs["cold_storage_size"] = cold_storage_size
+    if initial_databases is not None:
+        request_kwargs["initial_databases"] = initial_databases
+    if resource_group_id is not None:
+        request_kwargs["resource_group_id"] = resource_group_id
+    if enable_serverless is not None:
+        request_kwargs["enable_serverless_computing"] = enable_serverless
+    if storage_type is not None:
+        request_kwargs["storage_type"] = storage_type
 
     try:
         request = hologram_models.CreateInstanceRequest(**request_kwargs)
@@ -652,6 +691,8 @@ _SCALE_TYPES = ["UPGRADE", "DOWNGRADE"]
               help="Target cold-storage size (GB)")
 @click.option("--gateway-count", default=None, type=int,
               help="Target gateway count")
+@click.option("--enable-serverless/--no-enable-serverless", default=None,
+              help="Enable or disable serverless computing.")
 @click.pass_context
 def scale_cmd(
     ctx: click.Context,
@@ -661,6 +702,7 @@ def scale_cmd(
     storage_size: Optional[int],
     cold_storage_size: Optional[int],
     gateway_count: Optional[int],
+    enable_serverless: Optional[bool],
 ) -> None:
     """Scale a Hologres instance up or down."""
     fmt = ctx.obj.get("format", FORMAT_JSON)
@@ -675,7 +717,13 @@ def scale_cmd(
     if iid is None:
         return
 
-    if cpu is None and storage_size is None and cold_storage_size is None and gateway_count is None:
+    if (
+        cpu is None
+        and storage_size is None
+        and cold_storage_size is None
+        and gateway_count is None
+        and enable_serverless is None
+    ):
         log_operation(
             op,
             success=False,
@@ -685,7 +733,7 @@ def scale_cmd(
         print_output(error(
             "NO_CHANGES",
             "Specify at least one of --cpu, --storage-size, --cold-storage-size, "
-            "or --gateway-count.",
+            "--gateway-count, or --enable-serverless/--no-enable-serverless.",
             fmt,
         ))
         return
@@ -711,6 +759,8 @@ def scale_cmd(
         request_kwargs["cold_storage_size"] = cold_storage_size
     if gateway_count is not None:
         request_kwargs["gateway_count"] = gateway_count
+    if enable_serverless is not None:
+        request_kwargs["enable_serverless_computing"] = enable_serverless
 
     try:
         request = hologram_models.ScaleInstanceRequest(**request_kwargs)
@@ -732,6 +782,7 @@ def scale_cmd(
             "storage_size": storage_size,
             "cold_storage_size": cold_storage_size,
             "gateway_count": gateway_count,
+            "enable_serverless": enable_serverless,
         },
     )
     print_output(success(body, fmt))

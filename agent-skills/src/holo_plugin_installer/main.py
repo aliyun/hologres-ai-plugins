@@ -45,6 +45,7 @@ AVAILABLE_SKILLS = [
     "hologres-bsi-profile-analysis",
     "hologres-ad-campaign",
     "hologres-instance-health-analyse",
+    "hologres-diagnosis-cpu",
 ]
 
 

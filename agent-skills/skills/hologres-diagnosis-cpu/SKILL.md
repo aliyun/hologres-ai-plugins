@@ -24,7 +24,7 @@ description: >
 
 ## 指标名称前缀约定
 
-Hologres 云监控指标名称包含 **产品类型前缀**，使用时必须根据实例类型添加对应前缀：
+Hologres 云监控指标名称包含 **产品类型前缀**，前缀通过「前置步骤：实例类型自动判断」自动获取，无需用户手动指定：
 
 | 实例类型 | 前缀 | 示例 |
 |----------|------|------|
@@ -37,6 +37,9 @@ Hologres 云监控指标名称包含 **产品类型前缀**，使用时必须根
 ## 诊断主流程
 
 ```
+前置步骤：实例类型自动判断
+   └── 调用 instance-manage get → 获取 InstanceType → 映射指标前缀 {prefix}
+
 第一阶段：CPU 水位采集 + 状态分级
    ├── 持续打满 / 持续高位 → 第二阶段（归因）
    └── 安全平稳         → 直接出具「健康」报告
@@ -49,6 +52,53 @@ Hologres 云监控指标名称包含 **产品类型前缀**，使用时必须根
 
 第三阶段：综合输出诊断报告（Markdown）
 ```
+
+## 前置步骤：实例类型自动判断
+
+在执行任何指标查询之前，必须先获取实例类型并自动映射到对应的指标名前缀 `{prefix}`，无需用户手动指定。
+
+### 执行命令
+
+```bash
+hologres instance-manage get
+```
+
+### 解析规则
+
+从返回 JSON 中提取 `data.Instance.InstanceType` 字段，根据以下映射表确定 `{prefix}`：
+
+| InstanceType | 中文名 | 指标前缀 |
+|---|---|---|
+| Warehouse | 计算组型 | `warehouse_` |
+| Follower | 只读从实例 | `follower_` |
+| Standard | 普通型 | `standard_` |
+| Serverless | Serverless 型 | `serverless_` |
+| Shared | 共享型 | `shared_` |
+
+### 示例
+
+```bash
+hologres instance-manage get
+```
+
+返回结果（摘要）：
+
+```json
+{
+  "data": {
+    "Instance": {
+      "InstanceType": "Warehouse",
+      ...
+    }
+  }
+}
+```
+
+→ `InstanceType` 为 `"Warehouse"` → 使用 `warehouse_` 前缀 → 后续查询 `warehouse_cpu_usage`、`warehouse_query_qps` 等。
+
+> **重要**：后续所有指标查询中的 `{prefix}` 均由此步骤自动确定，无需用户手动选择。
+
+---
 
 ## 前提条件
 
@@ -115,13 +165,13 @@ export HOLOGRES_SKILL=hologres-diagnosis-cpu
 
 ## 第一阶段：CPU 水位采集与状态分级
 
-调用云监控获取 `instance_id` 下各 Warehouse 粒度的 CPU 使用率时间序列，并据此对实例 CPU 状态进行分类。
+调用云监控获取 `instance_id` 下各 Warehouse 粒度的 CPU 使用率时间序列，并据此对实例 CPU 状态进行分类。指标名前缀 `{prefix}` 已由前置步骤自动确定。
 
 ### 1.1 获取 CPU 时间序列（按 Warehouse 粒度）
 
 ```bash
 # 时间窗口内的 CPU 使用率曲线（建议 period=60 秒）
-# 注意：指标名需加产品类型前缀，如通用型为 standard_cpu_usage，计算组为 warehouse_cpu_usage
+# 注意：{prefix} 已由前置步骤自动确定（如 Warehouse 实例 → warehouse_cpu_usage）
 hologres metric query {prefix}_cpu_usage \
     --instance-id {instance_id} \
     --start-time {start_time} \
@@ -167,7 +217,7 @@ hologres metric latest {prefix}_cpu_usage --instance-id {instance_id} --period 6
 #### 执行命令
 
 ```bash
-# QPS 时间序列（以通用型为例，计算组前缀为 warehouse_）
+# QPS 时间序列（{prefix} 已由前置步骤自动确定）
 hologres metric query {prefix}_query_qps \
     --instance-id {instance_id} --start-time {start_time} --end-time {end_time} --period 60
 
@@ -226,7 +276,7 @@ hologres sql run --no-limit-check "SELECT worker_id, count(shard_id) AS shard_co
 
 ```bash
 # 各 Worker 当前活跃 Query 数（结合 pg_stat_activity）
-hologres sql run --no-limit-check "SELECT backend_id, warehouse_name, count(1) AS active_queries FROM pg_stat_activity WHERE state = 'active' AND usename != 'system' GROUP BY backend_id, warehouse_name ORDER BY active_queries DESC LIMIT 50"
+hologres sql run --no-limit-check "SELECT pid, usename, state, wait_event_type, wait_event, now() - query_start AS wait_duration, left(query, 100) AS sql_snippet FROM pg_stat_activity WHERE wait_event IS NOT NULL AND state = 'active' AND usename != 'system' ORDER BY query_start ASC"
 ```
 
 #### 物理不均判定
@@ -252,10 +302,10 @@ Worker CPU 分布：
 **数据源**：元仓 `hologres.hg_query_log`
 
 ```bash
-hologres sql run --no-limit-check "SELECT query_id, duration AS duration_ms, cpu_time_ms, query_start, status, usename, warehouse_name, CASE WHEN engine_type IN ('HQE','SDK') AND optimization_cost < 5 THEN 'Fixed Plan' ELSE 'Adaptive' END AS plan_type, query::char(120) AS sql_sample FROM hologres.hg_query_log WHERE query_start >= '{start_time}' AND query_start <= '{end_time}' AND cpu_time_ms IS NOT NULL AND usename != 'system' ORDER BY cpu_time_ms DESC LIMIT 10"
+hologres sql run --no-limit-check "SELECT query_id, duration AS duration_ms, cpu_time_ms, query_start, status, usename, warehouse_name, engine_type, query::char(120) AS sql_sample FROM hologres.hg_query_log WHERE query_start >= '{start_time}' AND query_start <= '{end_time}' AND cpu_time_ms IS NOT NULL AND usename != 'system' ORDER BY cpu_time_ms DESC LIMIT 10"
 ```
 
-**展示字段**：Query ID、耗时（ms）、CPU 时间（ms）、是否 Fixed Plan、Warehouse、SQL 样本。
+**展示字段**：Query ID、耗时（ms）、CPU 时间（ms）、engine type、Warehouse、SQL 样本。
 
 #### 3.2 长 Query 与锁竞争排查
 
@@ -266,7 +316,7 @@ hologres sql run --no-limit-check "SELECT query_id, duration AS duration_ms, cpu
 
 ```bash
 # 当前在执行的长 Query
-hologres sql run --no-limit-check "SELECT pid, usename, warehouse_name, state, now() - query_start AS run_duration, wait_event_type, wait_event, left(query, 200) AS sql_snippet FROM pg_stat_activity WHERE state = 'active' AND usename != 'system' AND now() - query_start > interval '10 min' ORDER BY query_start ASC"
+hologres sql run --no-limit-check "SELECT pid, usename, state, now() - query_start AS run_duration, wait_event_type, wait_event, left(query, 200) AS sql_snippet FROM pg_stat_activity WHERE state = 'active' AND usename != 'system' AND now() - query_start > interval '10 min' ORDER BY query_start ASC"
 ```
 
 ```bash
@@ -443,6 +493,7 @@ export HOLOGRES_SKILL=hologres-diagnosis-cpu
 
 **逐步执行，每步汇报中间结果**：
 
+0. `hologres instance-manage get` —— 获取实例类型，自动映射指标前缀 `{prefix}`
 1. `hologres metric query {prefix}_cpu_usage` —— 获取 CPU 时间序列，做状态分级
 2. （若命中打满 / 高位）`hologres metric query {prefix}_query_qps / {prefix}_dml_rps / {prefix}_query_latency` —— Q1 宏观定性
 3. `hologres metric query {prefix}_cpu_usage_by_worker` + `hologres sql run`（`hg_worker_info`） —— Q2 分布定位
@@ -486,8 +537,8 @@ CLI 返回结构化错误时，根据 `retryable` 字段决定是否重试：
 ## 参考命令速查
 
 ```bash
-# 确定产品类型前缀：standard_（通用型）/ warehouse_（计算组）/ follower_（从实例）/ serverless_ / shared_（湖仓加速）
-# 可先用 list 查看实际可用指标名：
+# 前缀通过 `hologres instance-manage get` 自动获取（InstanceType → 前缀映射）
+# 也可用 list 查看实际可用指标名：
 hologres metric list --search cpu
 
 # CPU 水位（以通用型 standard_ 为例）
