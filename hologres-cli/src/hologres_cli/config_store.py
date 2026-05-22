@@ -45,6 +45,8 @@ DEFAULT_PROFILE: dict[str, Any] = {
     "port": 80,
     "output_format": "json",
     "language": "zh",
+    # Transport selection: "auto" (JDBC → API fallback), "jdbc", or "api".
+    "connection_mode": "auto",
 }
 
 # Keys that can be set via `hologres config set <key> <value>`
@@ -54,6 +56,7 @@ SETTABLE_KEYS = {
     "database", "warehouse", "endpoint", "port",
     "output_format", "language",
     "cms_access_key_id", "cms_access_key_secret",
+    "connection_mode",
 }
 
 # Sensitive keys that should be masked in display
@@ -393,6 +396,7 @@ def migrate_from_legacy() -> bool:
             "PORT": "port",
             "OUTPUT_FORMAT": "output_format",
             "LANGUAGE": "language",
+            "CONNECTION_MODE": "connection_mode",
         }
 
         for legacy_key, profile_key in field_map.items():

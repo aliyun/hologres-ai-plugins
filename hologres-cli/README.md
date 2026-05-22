@@ -8,6 +8,7 @@ AI-agent-friendly command-line interface for Hologres database with safety guard
 - **Structured Output**: All commands return JSON by default for easy parsing
 - **Safety Guardrails**: Row limits, write protection, dangerous operation blocking
 - **Multiple Formats**: JSON, table, CSV, JSONL output formats
+- **Dual Connection Mode**: JDBC (psycopg) with automatic OpenAPI `ExecuteStatement` fallback
 - **Dynamic Table Management**: Full lifecycle management for Dynamic Tables (V3.1+)
 - **Sensitive Data Masking**: Auto-masks phone, email, password fields
 - **Audit Logging**: All operations logged to `~/.hologres/sql-history.jsonl`
@@ -115,11 +116,38 @@ hologres config delete <name> --confirm  # Delete a profile
       "endpoint": "",
       "port": 80,
       "output_format": "json",
-      "language": "zh"
+      "language": "zh",
+      "connection_mode": "auto"
     }
   ]
 }
 ```
+
+### Connection Mode
+
+The `connection_mode` field controls how the CLI connects to Hologres:
+
+| Mode | Description |
+|------|-------------|
+| `auto` (default) | Try JDBC (PostgreSQL wire protocol) first; if connection fails, transparently fall back to OpenAPI `ExecuteStatement` |
+| `jdbc` | Use JDBC only. Classic lazy-connect behaviour, no fallback |
+| `api` | Use OpenAPI `ExecuteStatement` only. No JDBC attempt |
+
+```bash
+# Switch to API-only mode
+hologres config set connection_mode api
+
+# Switch back to auto (JDBC with fallback)
+hologres config set connection_mode auto
+```
+
+**API mode prerequisites:**
+- Profile must use RAM auth (`auth_mode: ram`) with `access_key_id` + `access_key_secret`
+- Profile must have `instance_id` and `region_id` configured
+- The instance must have `ExecuteStatement` enabled (see Instance Management commands below)
+- The RAM account must have `hologram:ExecuteStatement` permission
+
+> **When to use API mode:** The API fallback is useful when the PostgreSQL port (80/443) is firewalled, when connecting cross-region, or when the instance hasn't enabled the PostgreSQL wire-protocol gateway. In `auto` mode this happens transparently.
 
 ## Commands
 
@@ -494,6 +522,48 @@ hologres history          # Show recent command history
 hologres history -n 50    # Show last 50 entries
 hologres ai-guide         # Generate AI agent guide
 ```
+
+### Instance Management
+
+Manage Hologres instances via the Hologram OpenAPI. Requires RAM auth (`access_key_id` + `access_key_secret`).
+
+```bash
+# List all instances
+hologres instance-manage list
+
+# Get instance details
+hologres instance-manage get
+hologres instance-manage get --instance-id hgprecn-cn-xxx
+
+# Stop / Resume / Restart
+hologres instance-manage stop
+hologres instance-manage resume
+hologres instance-manage restart
+
+# Rename
+hologres instance-manage rename --instance-name new-name
+
+# Scale
+hologres instance-manage scale --scale-type UPGRADE --cpu 64
+```
+
+#### ExecuteStatement API Management
+
+These commands control whether the OpenAPI `ExecuteStatement` SQL execution feature is enabled for the instance. This is required for `connection_mode = api` or the auto-fallback.
+
+```bash
+# Enable ExecuteStatement (required for API-mode connections)
+hologres instance-manage enable-execute-statement
+hologres instance-manage enable-execute-statement --instance-id hgprecn-cn-xxx
+
+# Disable ExecuteStatement
+hologres instance-manage disable-execute-statement
+
+# Check if ExecuteStatement is enabled
+hologres instance-manage get-execute-statement-enabled
+```
+
+> **Note:** Once enabled, RAM accounts with the `hologram:ExecuteStatement` permission can execute SQL through the OpenAPI. This is the same mechanism the CLI uses when `connection_mode` falls back to `api`.
 
 ### AI
 
@@ -1037,7 +1107,7 @@ hologres sql run --write "DELETE FROM users WHERE id = 1"
 
 | Code | Description |
 |------|-------------|
-| `CONNECTION_ERROR` | Failed to connect to database |
+| `CONNECTION_ERROR` | Failed to connect to database (JDBC and API fallback both failed) |
 | `QUERY_ERROR` | SQL execution error |
 | `LIMIT_REQUIRED` | Query needs LIMIT clause |
 | `WRITE_GUARD_ERROR` | Write operation attempted without `--write` flag |

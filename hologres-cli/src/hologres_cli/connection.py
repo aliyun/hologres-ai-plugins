@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 import psycopg
 from psycopg.rows import dict_row
 
+from .api_connection import ApiConnectionError, HologresApiConnection
 from .config_store import ConfigError, build_dsn_from_profile, get_current_profile, get_profile
 
 DEFAULT_PORT = 80
@@ -202,22 +203,93 @@ class HologresConnection:
         self.close()
 
 
+def _resolve_profile_dict(profile: Optional[str]) -> dict[str, Any]:
+    """Resolve a profile *name* (or None for current) to a profile dict."""
+    try:
+        if profile:
+            return get_profile(profile)
+        return get_current_profile()
+    except ConfigError as e:
+        raise DSNError(str(e))
+
+
+def _api_prerequisites_met(profile: dict[str, Any]) -> bool:
+    """Return True if the profile has enough info for the API fallback."""
+    return bool(
+        profile.get("access_key_id")
+        and profile.get("access_key_secret")
+        and profile.get("instance_id")
+        and profile.get("region_id")
+        and profile.get("database")
+    )
+
+
 def get_connection(
     profile: Optional[str] = None,
     autocommit: bool = True,
     read_only: bool = True,
-) -> HologresConnection:
-    """Get a Hologres connection from config profile.
+):
+    """Get a Hologres connection from a config profile.
+
+    The transport is selected by the profile's ``connection_mode`` field:
+
+    - ``"jdbc"`` — Postgres wire protocol via ``psycopg`` (lazy connect,
+      classic behaviour, no fallback).
+    - ``"api"``  — Hologram OpenAPI ``ExecuteStatement``.
+    - ``"auto"`` (default) — try JDBC first; if the connect attempt
+      fails AND the profile has the AK/SK + instance_id needed for the
+      API path, transparently fall back to API mode.  Otherwise the
+      original JDBC error is re-raised.
 
     Args:
-        profile: Profile name to use. If None, uses current profile.
-        autocommit: Whether to use autocommit mode.
-        read_only: Whether to set the connection to read-only mode.
-                   Default True — the session executes
-                   ``SET default_transaction_read_only = ON`` upon creation,
-                   so any write statement (INSERT / UPDATE / DELETE / DDL)
-                   will be rejected by the database engine.
-                   Pass ``read_only=False`` for commands that need write access.
+        profile: Profile name to use. If None, uses the current profile.
+        autocommit: Whether to use autocommit mode (JDBC only).
+        read_only: Whether to enable read-only protections.  For JDBC
+            this issues ``SET default_transaction_read_only = ON`` upon
+            connection.  For API mode the same GUC is buffered and
+            included on each ``ExecuteStatement`` call.
     """
-    resolved_dsn = resolve_dsn(profile)
-    return HologresConnection(resolved_dsn, autocommit=autocommit, read_only=read_only)
+    prof = _resolve_profile_dict(profile)
+    mode = (prof.get("connection_mode") or "auto").lower()
+
+    # Pure API mode: no JDBC attempt at all.
+    if mode == "api":
+        try:
+            return HologresApiConnection(prof, autocommit=autocommit, read_only=read_only)
+        except ApiConnectionError as exc:
+            raise DSNError(str(exc))
+
+    # JDBC mode (with optional fallback for "auto").
+    try:
+        dsn = build_dsn_from_profile(prof)
+    except ConfigError as exc:
+        raise DSNError(str(exc))
+
+    jdbc_conn = HologresConnection(dsn, autocommit=autocommit, read_only=read_only)
+
+    if mode != "auto":
+        # Strict JDBC mode: keep classic lazy-connect behaviour.
+        return jdbc_conn
+
+    # auto: probe JDBC eagerly so we can fall back deterministically.
+    try:
+        _ = jdbc_conn.conn  # forces psycopg.connect()
+        return jdbc_conn
+    except Exception as exc:
+        try:
+            jdbc_conn.close()
+        except Exception:
+            pass
+        if not _api_prerequisites_met(prof):
+            raise DSNError(
+                "JDBC connection failed and API fallback is unavailable "
+                f"(missing access_key_id/access_key_secret/instance_id/region_id/database): {exc}"
+            )
+        try:
+            return HologresApiConnection(
+                prof, autocommit=autocommit, read_only=read_only
+            )
+        except ApiConnectionError as api_exc:
+            raise DSNError(
+                f"JDBC connection failed ({exc}); API fallback also failed: {api_exc}"
+            )

@@ -35,6 +35,7 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 - **Profile-Based Configuration** — Multi-profile management via `~/.hologres/config.json` with interactive wizard
 - **Structured Output** — All commands return JSON by default for easy parsing by AI agents
 - **Safety Guardrails** — Row limit protection, write operation blocking, dangerous SQL detection
+- **Dual Connection Mode** — JDBC (psycopg) with automatic OpenAPI `ExecuteStatement` fallback when JDBC is unavailable
 - **Dynamic Table Management** — Full lifecycle management for Dynamic Tables (V3.1+ syntax)
 - **Sensitive Data Masking** — Auto-masks phone, email, password, ID card, and bank card fields
 - **Multiple Output Formats** — JSON, table, CSV, JSON Lines (JSONL)
@@ -111,6 +112,12 @@ An AI-agent-friendly command-line interface with built-in safety guardrails and 
 | `hologres model catalog [--task T] [--search S]` | List supported AI model types from the bundled catalog |
 | `hologres model create --name N --type T --api-key K [--config J] [--dry-run]` | Register an external AI model |
 | `hologres model delete <model_name> [--confirm]` | Delete a registered external AI model (dry-run by default) |
+| `hologres instance-manage list` | List all Hologres instances |
+| `hologres instance-manage get` | Get instance details |
+| `hologres instance-manage stop / resume / restart` | Instance lifecycle operations |
+| `hologres instance-manage enable-execute-statement` | Enable ExecuteStatement API for the instance |
+| `hologres instance-manage disable-execute-statement` | Disable ExecuteStatement API |
+| `hologres instance-manage get-execute-statement-enabled` | Check if ExecuteStatement is enabled |
 
 **Quick Start:**
 

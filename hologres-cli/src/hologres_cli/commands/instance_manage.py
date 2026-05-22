@@ -786,3 +786,166 @@ def scale_cmd(
         },
     )
     print_output(success(body, fmt))
+
+
+# ---------------------------------------------------------------------------
+# ExecuteStatement OpenAPI lifecycle
+#
+# These three commands wrap the dedicated APIs that govern the
+# ExecuteStatement entry point used by the API-mode connection in
+# ``api_connection.py``.  They go through the SDK's generic ``call_api``
+# mechanism so they remain compatible with older SDK builds that don't
+# yet expose dedicated methods for these actions.
+# ---------------------------------------------------------------------------
+
+
+def _call_execute_statement_lifecycle_api(
+    client: Any,
+    instance_id: str,
+    action: str,
+    pathname_suffix: str,
+    method: str,
+) -> Any:
+    """Invoke one of the ExecuteStatement lifecycle APIs via ``call_api``.
+
+    All three (Enable / Disable / GetEnabled) follow the same shape:
+    ROA path under ``/api/v1/instances/{id}/<suffix>``, no body, no
+    query parameters.
+    """
+    from alibabacloud_tea_openapi import models as open_api_models
+    from alibabacloud_tea_util import models as util_models
+    from alibabacloud_openapi_util.client import Client as OpenApiUtilClient
+
+    runtime = util_models.RuntimeOptions()
+    req = open_api_models.OpenApiRequest(headers={})
+    params = open_api_models.Params(
+        action=action,
+        version="2022-06-01",
+        protocol="HTTPS",
+        pathname=f"/api/v1/instances/{OpenApiUtilClient.get_encode_param(instance_id)}/{pathname_suffix}",
+        method=method,
+        auth_type="AK",
+        style="ROA",
+        req_body_type="json",
+        body_type="json",
+    )
+    return client.call_api(params, req, runtime)
+
+
+def _execute_statement_lifecycle_command(
+    ctx: click.Context,
+    op: str,
+    instance_id: Optional[str],
+    action: str,
+    pathname_suffix: str,
+    method: str = "POST",
+) -> None:
+    """Shared implementation for enable/disable/get-enabled commands."""
+    fmt = ctx.obj.get("format", FORMAT_JSON)
+    op_start = time.time()
+
+    profile = _resolve_profile(ctx, fmt)
+    if profile is None:
+        return
+
+    iid = _resolve_instance_id(instance_id, profile, fmt, op)
+    if iid is None:
+        return
+
+    try:
+        _import_hologram_sdk()
+    except ImportError:
+        _dependency_missing_error(fmt)
+        return
+
+    try:
+        client = _create_hologram_client(profile)
+    except Exception as exc:
+        _credential_error(fmt, exc)
+        return
+
+    try:
+        response = _call_execute_statement_lifecycle_api(
+            client, iid, action, pathname_suffix, method
+        )
+    except Exception as exc:
+        _handle_api_exception(op, exc, fmt, op_start)
+        return
+
+    body = _extract_body(response)
+    duration_ms = (time.time() - op_start) * 1000
+    log_operation(
+        op,
+        success=True,
+        duration_ms=duration_ms,
+        extra={"instance_id": iid},
+    )
+    print_output(success(body, fmt))
+
+
+@instance_manage_cmd.command("enable-execute-statement")
+@click.option("--instance-id", default=None,
+              help="Hologres instance ID (defaults to profile instance_id)")
+@click.pass_context
+def enable_execute_statement_cmd(ctx: click.Context, instance_id: Optional[str]) -> None:
+    """Enable the OpenAPI ``ExecuteStatement`` SQL execution feature.
+
+    Once enabled, RAM accounts holding ``hologram:ExecuteStatement`` can
+    run SQL through the OpenAPI — the same path used by the CLI when
+    ``connection_mode`` falls back to ``api``.
+
+    \b
+    Examples:
+      hologres instance-manage enable-execute-statement
+      hologres instance-manage enable-execute-statement --instance-id hgprecn-cn-xxx
+    """
+    _execute_statement_lifecycle_command(
+        ctx,
+        op="instance-manage.enable-execute-statement",
+        instance_id=instance_id,
+        action="EnableExecuteStatement",
+        pathname_suffix="enableExecuteStatement",
+    )
+
+
+@instance_manage_cmd.command("disable-execute-statement")
+@click.option("--instance-id", default=None,
+              help="Hologres instance ID (defaults to profile instance_id)")
+@click.pass_context
+def disable_execute_statement_cmd(ctx: click.Context, instance_id: Optional[str]) -> None:
+    """Disable the OpenAPI ``ExecuteStatement`` SQL execution feature.
+
+    \b
+    Examples:
+      hologres instance-manage disable-execute-statement
+      hologres instance-manage disable-execute-statement --instance-id hgprecn-cn-xxx
+    """
+    _execute_statement_lifecycle_command(
+        ctx,
+        op="instance-manage.disable-execute-statement",
+        instance_id=instance_id,
+        action="DisableExecuteStatement",
+        pathname_suffix="disableExecuteStatement",
+    )
+
+
+@instance_manage_cmd.command("get-execute-statement-enabled")
+@click.option("--instance-id", default=None,
+              help="Hologres instance ID (defaults to profile instance_id)")
+@click.pass_context
+def get_execute_statement_enabled_cmd(ctx: click.Context, instance_id: Optional[str]) -> None:
+    """Check whether ``ExecuteStatement`` is enabled for the instance.
+
+    \b
+    Examples:
+      hologres instance-manage get-execute-statement-enabled
+      hologres instance-manage get-execute-statement-enabled --instance-id hgprecn-cn-xxx
+    """
+    _execute_statement_lifecycle_command(
+        ctx,
+        op="instance-manage.get-execute-statement-enabled",
+        instance_id=instance_id,
+        action="GetExecuteStatementEnabled",
+        pathname_suffix="getExecuteStatementEnabled",
+        method="GET",
+    )

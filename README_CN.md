@@ -35,6 +35,7 @@ hologres-ai-plugins/
 - **Profile 多环境管理** — 通过 `~/.hologres/config.json` 管理多个连接配置，支持交互式配置向导
 - **结构化输出** — 所有命令默认返回 JSON 格式，便于 AI Agent 解析
 - **安全防护** — 行数限制保护、写操作拦截、危险 SQL 检测
+- **双连接模式** — JDBC（psycopg）连接优先，JDBC 不可用时自动回退到 OpenAPI `ExecuteStatement` 方式
 - **Dynamic Table 管理** — Dynamic Table 全生命周期管理（V3.1+ 新语法）
 - **敏感数据脱敏** — 自动对手机号、邮箱、密码、身份证号、银行卡号等字段进行脱敏
 - **多种输出格式** — 支持 JSON、表格（table）、CSV、JSON Lines（JSONL）
@@ -111,6 +112,12 @@ hologres-ai-plugins/
 | `hologres model catalog [--task T] [--search S]` | 列出 CLI 内置 catalog 中受支持的 AI 模型类型 |
 | `hologres model create --name N --type T --api-key K [--config J] [--dry-run]` | 注册外部 AI 模型 |
 | `hologres model delete <model_name> [--confirm]` | 删除已注册的外部 AI 模型(默认 dry-run) |
+| `hologres instance-manage list` | 列出所有 Hologres 实例 |
+| `hologres instance-manage get` | 查看实例详情 |
+| `hologres instance-manage stop / resume / restart` | 实例生命周期操作 |
+| `hologres instance-manage enable-execute-statement` | 开启 ExecuteStatement API（API 模式连接前置条件） |
+| `hologres instance-manage disable-execute-statement` | 关闭 ExecuteStatement API |
+| `hologres instance-manage get-execute-statement-enabled` | 查询 ExecuteStatement 是否已开启 |
 
 **快速开始：**
 
