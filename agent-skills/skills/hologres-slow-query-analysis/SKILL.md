@@ -316,32 +316,53 @@ ltrim(split_part(message, ': ', 2), ' ') AS error_code
 
 #### 常见 Error Code 与错误类型映射
 
-| SQLSTATE Code | 错误类型 | 说明 | 典型根因 |
-| :--- | :--- | :--- | :--- |
-| `XX000` | ERRCODE_INTERNAL_ERROR | 内部错误 | 引擎 bug 或异常状态 |
-| `XX001` | ERRCODE_DATA_CORRUPTED | 数据损坏 | 存储损坏 |
-| `53200` | ERRCODE_OUT_OF_MEMORY | 内存不足 | 查询内存过大，需降低并发或优化 SQL |
-| `53300` | ERRCODE_TOO_MANY_CONNECTIONS | 连接过多 | 连接池耗尽 |
-| `53000` | ERRCODE_INSUFFICIENT_RESOURCES | 资源不足 | 通用资源耗尽 |
-| `57014` | ERRCODE_QUERY_CANCELED | 查询被取消 | 超时或手动取消 |
-| `57P01` | ERRCODE_ADMIN_SHUTDOWN | 管理员关闭 | 实例重启或维护 |
-| `57000` | ERRCODE_OPERATOR_INTERVENTION | 操作员干预 | 手动干预 |
-| `40P01` | ERRCODE_T_R_DEADLOCK_DETECTED | 死锁检测 | 并发事务冲突 |
-| `40001` | ERRCODE_T_R_SERIALIZATION_FAILURE | 序列化失败 | 事务冲突 |
-| `23505` | ERRCODE_UNIQUE_VIOLATION | 唯一性冲突 | 插入/更新时主键/唯一键重复 |
-| `23502` | ERRCODE_NOT_NULL_VIOLATION | 非空约束冲突 | 向 NOT NULL 列插入 NULL |
-| `42P01` | ERRCODE_UNDEFINED_TABLE | 表不存在 | 表不存在 |
-| `42703` | ERRCODE_UNDEFINED_COLUMN | 列不存在 | 列不存在 |
-| `42601` | ERRCODE_SYNTAX_ERROR | 语法错误 | SQL 语法问题 |
-| `42501` | ERRCODE_INSUFFICIENT_PRIVILEGE | 权限不足 | 权限被拒绝 |
-| `42883` | ERRCODE_UNDEFINED_FUNCTION | 函数不存在 | 函数不存在 |
-| `55P03` | ERRCODE_LOCK_NOT_AVAILABLE | 锁不可用 | 锁超时 |
-| `08006` | ERRCODE_CONNECTION_FAILURE | 连接失败 | 网络或后端断开 |
-| `08P01` | ERRCODE_PROTOCOL_VIOLATION | 协议违规 | 客户端/服务端协议不匹配 |
-| `22012` | ERRCODE_DIVISION_BY_ZERO | 除零错误 | 算术错误 |
-| `22001` | ERRCODE_STRING_DATA_RIGHT_TRUNCATION | 字符串截断 | 值长度超过列限制 |
-| `HG000` | ERRCODE_HG_NEED_RETRY | Hologres 需重试 | 临时错误，可重试 |
-| `HG001` | ERRCODE_HG_PLPGSQL_NEED_RETRY | Hologres PL/pgSQL 需重试 | 临时 PL/pgSQL 错误，可重试 |
+| SQLSTATE Code | 错误类型 | 说明 | 常见的完整报错 | 解决方法 |
+| :--- | :--- | :--- | :--- | :--- |
+| `HG_ERRCODE_FDW_ERROR` | 外部表元数据导入错误 | MaxCompute 外部表的元数据导入至 Hologres 时产生报错，通常是由于不支持某种类型的表所导致。 | `failed to import foreign schema from odps: Can't find file system factory` | 详情请参见 HG_ERRCODE_FDW_ERROR 文档。 |
+| `HV000` | ERRCODE_FDW_ERROR | 外部表查询出现报错。 | `failed to import foreign schema from odps: Authorization Failed: xxx`<br>`failed to import foreign schema from odps: Table not found -xxx` | 根据具体的报错解决，详情请参见 ERRCODE_FDW_ERROR 文档。 |
+| `23505` | ERRCODE_UNIQUE_VIOLATION | 违反唯一性约束，常出现在写入时主键重复的场景。 | `duplicate key value violates unique constraint DETAIL: xxx already exists.` | 处理主键重复的数据。若是 INSERT 语法报错，可以改写成 `insert into xx on conflict` 的语法，实现主键去重。 |
+| `23514` | ERRCODE_CHECK_VIOLATION | 违反检查约束，常发生在写入 Hologres 分区表时，写入的分区值与设置的分区值不一致。 | `new row for relation xx violates partition constraint DETAIL: Failing row contains (column1)=(xxxx).` | 需要检查分区数据和设置的分区值是否一致，并修改为一致。 |
+| `23502` | ERRCODE_NOT_NULL_VIOLATION | 违反非空约束。常发生在非空（not null）字段写入了空（null）数据。 | `null value in column xxx violates not-null constraint DETAIL: Failing row contains (null).` | 处理脏数据。 |
+| `42P01` | ERRCODE_UNDEFINED_TABLE | 表不存在，一般出现在表刚刚创建未更新元数据或者 Query 执行过程中，表有 TRUNCATE 或 DROP 的场景。 | `Dispatch query failed: Table not found` | 可以使用 Query 洞察排查是否有同时 TRUNCATE 或 DROP 任务，然后重试任务。 |
+| `XX000` | ERRCODE_INTERNAL_ERROR | 内部非预期错误，实例可能出现过宕机或者 Query 被意外中断。 | `Transaction xx is not found or it was expired and cancelled.`<br>`Query is cancelled`<br>`ERPC_ERROR_CONNECTION_CLOSED` | 非预期的内部错误，可以提工单排查。 |
+| `57014` | ERRCODE_QUERY_CANCELED | 查询被取消，一般是因为设置了客户端超时，或者表被 TRUNCATE 或 DROP 了。 | `ERROR: canceling statement due to statement timeout`<br>`canceling statement due to user request` | 检查是否设置了 statement_timeout，或排查是否有并发的 TRUNCATE/DROP 操作。 |
+| `0A000` | ERRCODE_FEATURE_NOT_SUPPORTED | 有某个功能不支持。 | `Dynamic partition selector is not supported`<br>`ALTER TABLE CHANGE OWNER is not supported in SPM` | 根据具体报错确认功能是否支持，改用其他等效方案。 |
+| `42704` | ERRCODE_UNDEFINED_OBJECT | 存在未定义的对象，一般是列不存在、Table Group 不存在。 | `column xxx does not exist`<br>`Table group xxx does not exist.` | 请先创建提示不存在的对象。确认报错不存在的对象在 SQL 中是否填写了正确名称。 |
+| `42501` | ERRCODE_INSUFFICIENT_PRIVILEGE | 当前账号权限不足，需要授权。 | `ERROR: permission denied for schema xxx`<br>`ERROR: permission denied for foreign table table_info` | 联系管理员授予对应权限。 |
+| `53200` | ERRCODE_OUT_OF_MEMORY | Query 因为内存不足，出现了 OOM。 | `Total memory used by all existing queries exceeded memory limitation` | 优化 SQL 降低内存消耗，或降低并发度。详情请参见 OOM 常见问题排查指南。 |
+| `42804` | ERRCODE_DATATYPE_MISMATCH | 类型不匹配，通常为表达式需要的类型与字段的实际类型不匹配。 | `unmatched data row schema number`<br>`Datasets has different schema` | 检查 SQL 的列是否匹配。 |
+| `22012` | ERRCODE_DIVISION_BY_ZERO | SQL 中存在除数为 0 的情况。 | `division by zero` | 处理脏数据，或者使用 GUC 使除以 0 不报错。 |
+| `22001` | ERRCODE_STRING_DATA_RIGHT_TRUNCATION | 字符串右截断，多发生于 VARCHAR 字段的实际值超过了建表时 VARCHAR 指定的长度。 | `value too long for type character varying(xx)` | 重新建表修改 VARCHAR 字段的长度，或者将字段类型设置为 TEXT。 |
+| `54000` | ERRCODE_PROGRAM_LIMIT_EXCEEDED | 超过 Hologres 允许的上限，通常发生在扫描外部表分区表数量、读的行数、读的字节等超过上限。 | `number of read rows (xxxxx) exceeds limit (xxxxxxx)`<br>`number of partitions (xxx) scanned for "xxxx" exceeds the maximum allowed (xxx)` | 外部表查询超过了限制，解决方法请参见对接 MaxCompute 常见问题与诊断。 |
+| `42601` | ERRCODE_SYNTAX_ERROR | SQL 语法错误。 | `syntax error at or near "xxxxx"` | 请您重新检查 SQL 语法。 |
+| `42883` | ERRCODE_UNDEFINED_FUNCTION | 一般为不支持的函数功能，可能是因为函数语法使用错误，或者未创建 Extension 等，也可能是不支持某个函数。 | `function xxxxx does not exist`<br>`operator does not exist: xxxxxx` | 请根据函数的语法进行操作，避免语法错误或者 Extension 未创建等。 |
+| `2F003` | ERRCODE_E_R_E_READING_SQL_DATA_NOT_PERMITTED | 没有外部表的读权限。 | `check permission for foreign table scan failed: failed to check permission: MaxCompute error, Authorization Failed [4019], You have NO privilege 'odps:Select' on {xxxxxxxxxx}` | 联系 ODPS/MaxCompute 管理员开通对应权限。 |
+| `42710` | ERRCODE_DUPLICATE_OBJECT | 存在重复的对象，通常发生于创建重复的 Extension、Publication、Role 等。 | `publication "xxxxx" already exists`<br>`extension "xxxxx" already exists` | 如果对象已经存在，不需要重复创建。 |
+| `22P02` | ERRCODE_INVALID_TEXT_REPRESENTATION | 非法的文本表达式，常发生于字符串转换为其他类型时，字符串的数据非法，比如空字符串（""）转 INT。 | `invalid input syntax for integer: xxx` | 处理脏数据。 |
+| `22P04` | ERRCODE_BAD_COPY_FILE_FORMAT | 执行 copy 命令时文件或数据的格式不正确，多发生于数据本身就包含了 copy 指定的分割符（比如空格），导致列的数量对不上。 | `extra data after last expected column. failed to query next`<br>`missing data for column "xxx". failed to query next` | 处理脏数据。 |
+| `42703` | ERRCODE_UNDEFINED_COLUMN | Query 中有不存在的列。 | `column xxxxx does not exist` | 重新检查 SQL 语法。 |
+| `22003` | ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE | 数值类型超过范围：numeric 类型数据超过了 numeric 定义的范围，或者 int/bigint 超过了表示范围。 | `value "xxxxx" is out of range for type bigint`<br>`numeric field overflow` | 检查是否有脏数据或者类型定义错误，重新修改列类型。 |
+| `22008` | ERRCODE_DATETIME_FIELD_OVERFLOW | timestamp、timestamptz、date、time、timetz 等时间相关的字段存在值溢出。 | `date/time field value out of range: "xxxxxx"` | 处理脏数据。 |
+| `22023` | ERRCODE_INVALID_PARAMETER_VALUE | 非法参数值，一般是各种情况下的参数不符合要求。 | `column "col" with type "float4" cannot be set as "bitmap_columns"` | 重新检查 SQL 语法和参数设置。 |
+| `22007` | ERRCODE_INVALID_DATETIME_FORMAT | 非法的日期格式，日期数据不符合格式要求。 | `invalid input syntax for type timestamp: ""`<br>`invalid value "" for "yyyy", Value must be an integer.` | 处理脏数据。 |
+| `22021` | ERRCODE_CHARACTER_NOT_IN_REPERTOIRE | 字符不在编码范围，常见于出现了 UTF-8 编码之外的非法字符。 | `invalid byte sequence for encoding "UTF8": 0xe9 0x80` | 处理脏数据。 |
+| `42P07` | ERRCODE_DUPLICATE_TABLE | 重复的表，常见表已经存在时，又重复建同名表。 | `relation "xxxx" already exists` | 如果表已经存在，则不需要重复创建。 |
+| `22P05` | ERRCODE_UNTRANSLATABLE_CHARACTER | 存在字符无法转化为目标格式。 | `character with byte sequence 0xe4 0x9e 0xab in encoding "UTF8" has no equivalent in encoding "GBK"` | 处理脏数据。 |
+| `42803` | ERRCODE_GROUPING_ERROR | 分组错误，group by 相关的错误。 | `column "xxx" must appear in the GROUP BY clause or be used in an aggregate function` | 重新检查 SQL 语法，聚合函数的字段需要包含在 group by 内。 |
+| `25001` | ERRCODE_INVALID_TRANSACTION_STATE | 非法的事务状态。涉及事务的相关操作非法。 | `SET_TABLE_PROPERTY and CREATE TABLE statement are not in the same transaction` | create table 语句需要和 CALL SET_TABLE_PROPERTY 在一个事务里（使用 begin; 和 commit;）。 |
+| `42702` | ERRCODE_AMBIGUOUS_COLUMN | 模棱两可的列。一般是 SQL 中同一列名可能是不同列时报错。 | `column reference "xxx" is ambiguous` | 重新检查 SQL 语法，明确指定列所属的表。 |
+| `42701` | ERRCODE_DUPLICATE_COLUMN | 重复列，常发生在建表时同一字段声明了多次。 | `column "xxx" specified more than once` | 重新检查 SQL 语法。 |
+| `42725` | ERRCODE_AMBIGUOUS_FUNCTION | 模棱两可的函数。一般是函数支持多种类型的入参，但传参的类型没有指定清楚。 | `function xxx does not exist`（因入参类型不明确） | 重新检查 SQL 语法，显式指定类型转换。 |
+| `42611` | ERRCODE_INVALID_COLUMN_DEFINITION | 非法的列定义，在 Hologres 中多是 Numeric 或 Decimal 类型未指明精度。 | `invalid definition of a numeric type` | 处理脏数据。 |
+| `3D000` | ERRCODE_INVALID_CATALOG_NAME / ERRCODE_UNDEFINED_DATABASE | 指定的数据库不存在。 | — | 检查数据库是否存在。 |
+| `42846` | ERRCODE_CANNOT_COERCE | 两个类型数据之间无法转化时报错。 | `cannot cast type date to integer` | 重新检查 SQL 语法。 |
+| `2BP01` | ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST | 依赖的对象仍存在，常见于删除一个对象时，依赖其的对象仍然存在。 | — | 处理相关依赖，先删除依赖对象再删除目标对象。 |
+| `3F000` | ERRCODE_UNDEFINED_SCHEMA | 指定的 Schema 不存在。 | `schema "xxxx" does not exist` | 检查 Schema 是否存在，不存在需要先创建。 |
+| `42P04` | ERRCODE_DUPLICATE_DATABASE | 重复的数据库，创建一个已存在的数据库时报错。 | — | 如果数据库已经存在，无需重复创建。 |
+| — | AutoAnalyze-Failed | Auto Analyze 因为某些原因失败。 | `query row count from analyze table`<br>`query from analyze table` | Auto Analyze 失败，一般为后端原因，请提工单排查。 |
+| — | Import Foreign Table Not Found | 找不到外部表。 | `failed to get foregin table split: Table not found`<br>`Failed to get odps table: Not enable acid table` | 请检查访问的外部表的是否存在。 |
+| — | Cannot Acquire Lock In Time | 这个异常通常是由于拿锁失败，高并发查询和删除（Drop）同一张表时，后端节点出现死锁，导致有关这张表的操作都卡住，从而报错。 | `internal error: Cannot acquire lock in time, current owners` | 解决方法请参见锁以及排查锁。 |
+| — | OTHER | 非预期的报错。 | `kConnectError: channel is empty`<br>`ERPC_ERROR_CONNECTION_CLOSED`<br>`internal error: Connect timeout` | 非预期的报错，可以提工单排查。 |
 
 完整映射表见 [error-codes.md](references/error-codes.md)。
 
