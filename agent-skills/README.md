@@ -15,6 +15,7 @@ An interactive installer that distributes Hologres AI agent skills to various AI
 | `hologres-bsi-profile-analysis` | `hologres-cli` | BSI (Bit-Sliced Index) based user profile analysis — tag computation, crowd targeting, GMV analysis |
 | `hologres-ad-campaign` | `hologres-cli` | AI-powered ad creative generation and campaign analysis — video synthesis, virtual delivery simulation, real-time ROI via Dynamic Tables |
 | `hologres-instance-health-analyse` | `hologres-cli` | Instance health diagnosis — Warehouse resource inspection, FAILED query classification, CPU/memory slow query analysis, structured diagnostic reports |
+| `hologres-diagnosis-cpu` | `hologres-cli` | CPU anomaly diagnosis — 4-quadrant root-cause analysis (macro qualitative / Worker-Shard distribution / query attribution / background task interference), structured diagnostic report and governance action list |
 
 > **Note:** All skills except `hologres-cli` depend on it as the foundational skill. SQL execution, GUC management, and data operations are performed through CLI commands. Install `hologres-cli` skill first.
 
@@ -78,6 +79,8 @@ $ hologres-agent-skills
   ● hologres-uv-compute
   ● hologres-bsi-profile-analysis
   ● hologres-ad-campaign
+  ● hologres-instance-health-analyse
+  ● hologres-diagnosis-cpu
 
 ✨ Installation complete
 ```
@@ -172,7 +175,9 @@ agent-skills/
 │   ├── hologres-privileges/
 │   ├── hologres-uv-compute/
 │   ├── hologres-bsi-profile-analysis/
-│   └── hologres-ad-campaign/
+│   ├── hologres-ad-campaign/
+│   ├── hologres-instance-health-analyse/
+│   └── hologres-diagnosis-cpu/
 ├── src/
 │   └── holo_plugin_installer/
 │       ├── __init__.py

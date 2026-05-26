@@ -19,7 +19,8 @@ hologres-ai-plugins/
     │   ├── hologres-uv-compute/           # UV/PV deduplication skill
     │   ├── hologres-bsi-profile-analysis/ # BSI profile analysis skill
     │   ├── hologres-ad-campaign/          # Ad creative generation & campaign analysis skill
-    │   └── hologres-instance-health-analyse/ # Instance health diagnosis & inspection skill
+    │   ├── hologres-instance-health-analyse/ # Instance health diagnosis & inspection skill
+    │   └── hologres-diagnosis-cpu/        # CPU anomaly diagnosis skill
     ├── pyproject.toml
     └── upload_to_pypi.py
 ```
@@ -239,6 +240,15 @@ Hologres instance health diagnosis and inspection, executing all SQL through `ho
 - FAILED query classification and error pattern analysis (`hg_query_log`)
 - Slow query analysis by CPU/memory consumption (digest-based aggregation)
 - Structured diagnostic report with actionable optimization recommendations
+
+#### hologres-diagnosis-cpu
+
+Hologres CPU anomaly diagnosis skill — when CPU is saturated / sustained-high / Worker imbalance / background Compaction interference is suspected:
+
+- CPU state classification (sustained saturation / sustained high / safe & stable)
+- 4-quadrant root-cause attribution (macro qualitative / Worker-Shard distribution / query attribution / background task interference)
+- Structured Markdown diagnostic report and governance action list
+- Takes `instance_id` + time window as input, all SQL executed through `hologres-cli`
 
 ## Requirements
 

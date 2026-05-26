@@ -19,7 +19,8 @@ hologres-ai-plugins/
     │   ├── hologres-uv-compute/           # UV/PV 去重计算技能
     │   ├── hologres-bsi-profile-analysis/ # BSI 画像分析技能
     │   ├── hologres-ad-campaign/          # 广告素材生成与投放分析技能
-    │   └── hologres-instance-health-analyse/ # 实例健康诊断与巡检技能
+    │   ├── hologres-instance-health-analyse/ # 实例健康诊断与巡检技能
+    │   └── hologres-diagnosis-cpu/        # CPU 异常诊断技能
     ├── pyproject.toml
     └── upload_to_pypi.py
 ```
@@ -239,6 +240,15 @@ Hologres 实例健康诊断与巡检，所有 SQL 通过 `hologres-cli` 执行�
 - FAILED Query 报错归类与错误模式分析（`hg_query_log`）
 - CPU/内存粒度慢查询分析（按 SQL 指纹聚合）
 - 输出结构化诊断报告与优化建议
+
+#### hologres-diagnosis-cpu
+
+Hologres 实例 CPU 使用率异常诊断技能 —— 当 CPU 打满 / 持续高位 / Worker CPU 不均 / 后台 Compaction 干扰时使用：
+
+- CPU 状态分级（持续打满 / 持续高位 / 安全平稳）
+- 四象限归因分析（宏观定性 / Worker-Shard 分布定位 / 查询归因 / 后台任务干扰）
+- 输出结构化的 Markdown 诊断报告与治理行动清单
+- 输入 `instance_id` + 时间窗口，所有 SQL 通过 `hologres-cli` 执行
 
 ## 环境要求
 
