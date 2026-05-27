@@ -29,7 +29,7 @@ def cli(ctx: click.Context, profile: Optional[str], format: str) -> None:
 
 
 
-from .commands import schema, sql, data, status, instance, warehouse, dt, config, table, view, extension, guc, partition, ai, volume, model, metric, instance_manage  # noqa: E402
+from .commands import schema, sql, data, status, instance, warehouse, dt, config, table, view, extension, guc, partition, ai, volume, model, metric, instance_manage, foreign  # noqa: E402
 cli.add_command(schema.schema_cmd)
 cli.add_command(sql.sql_cmd)
 cli.add_command(data.data_cmd)
@@ -48,6 +48,7 @@ cli.add_command(volume.volume_cmd)
 cli.add_command(model.model_cmd)
 cli.add_command(metric.metric_cmd)
 cli.add_command(instance_manage.instance_manage_cmd)
+cli.add_command(foreign.foreign_cmd)
 
 
 @cli.command("ai-guide")
@@ -97,6 +98,12 @@ Use `--profile <name>` to switch profiles.
 - `hologres model list [--task T] [--model-type T] [--search S]` - List registered external AI models
 - `hologres model catalog [--task T]` - List supported AI model types from the bundled catalog
 - `hologres model delete <model_name> [--confirm]` - Delete a registered external AI model (dry-run by default)
+- `hologres foreign list [--schema S] [--server S]` - List foreign tables
+- `hologres foreign show <[schema.]name>` - Show foreign table structure (server, options, columns)
+- `hologres foreign create -n <name> -c "<cols>" --project-name P [--odps-schema S] [--odps-table T] [--server odps_server] [--if-not-exists] [--dry-run]` - Create a foreign table (MaxCompute / DLF)
+- `hologres foreign alter <[schema.]name> [--add-column "c TYPE"]... [--drop-column C]... [--rename N] [--dry-run]` - Add/drop columns or rename a foreign table
+- `hologres foreign drop <[schema.]name> [--if-exists] [--cascade|--restrict] [--confirm]` - Drop a foreign table (dry-run by default)
+- `hologres foreign import --remote-schema R --into LOCAL [--odps-schema S] [--server odps_server] [--limit-to t1,t2 | --except t1,t2] [--if-table-exist error|ignore|update] [--if-unsupported-type error|skip] [--prefix P] [--suffix S] [--dry-run]` - Batch IMPORT FOREIGN SCHEMA
 
 ## Safety: LIMIT required for >100 rows, --write for mutations, no DELETE/UPDATE without WHERE.
 ## Output: --format json|table|csv|jsonl. Default: json with {ok: true/false}.
