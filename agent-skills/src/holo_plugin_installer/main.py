@@ -46,6 +46,7 @@ AVAILABLE_SKILLS = [
     "hologres-ad-campaign",
     "hologres-instance-health-analyse",
     "hologres-diagnosis-cpu",
+    "hologres-daily-report",
 ]
 
 
