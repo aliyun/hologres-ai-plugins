@@ -52,10 +52,10 @@ hologres warehouse
 hologres sql run --no-limit-check "SELECT state, count(*) as cnt FROM pg_stat_activity WHERE backend_type = 'client backend' GROUP BY 1 ORDER BY 2 DESC"
 
 # 按用户统计连接分布
-hologres sql run --no-limit-check "SELECT usename, state, count(*) as cnt FROM pg_stat_activity WHERE backend_type = 'client backend' GROUP BY 1, 2 ORDER BY 3 DESC"
+hologres sql run --no-limit-check "SELECT usename::text, state, count(*) as cnt FROM pg_stat_activity WHERE backend_type = 'client backend' GROUP BY 1, 2 ORDER BY 3 DESC"
 
 # 按应用统计连接分布
-hologres sql run --no-limit-check "SELECT application_name, state, count(*) as cnt FROM pg_stat_activity WHERE backend_type = 'client backend' AND application_name != '' GROUP BY 1, 2 ORDER BY 3 DESC"
+hologres sql run --no-limit-check "SELECT application_name, state, count(*) as cnt FROM pg_stat_activity WHERE backend_type = 'client backend' AND application_name <> '' GROUP BY 1, 2 ORDER BY 3 DESC"
 
 # 获取最大连接数上限
 hologres sql run "SHOW max_connections"
@@ -104,7 +104,7 @@ hologres sql run --no-limit-check "SELECT pid, usename, application_name, state,
 hologres sql run --no-limit-check "SELECT * FROM hologres.hg_stat_replica_delay"
 ```
 
-> 注意：此系统表在部分版本中可能不可用。如果查询失败，在日报中标注"数据不可用"。
+> 注意：此系统表在部分版本（如 V4.x）中可能不存在。如果查询失败，跳过此项，在日报中标注"数据不可用"。
 
 **诊断阈值**：
 - replay 延迟 > 10ms 持续 5 分钟 → 异常
@@ -118,7 +118,7 @@ hologres sql run --no-limit-check "SELECT * FROM hologres.hg_stat_replica_delay"
 
 ```bash
 # 当日所有 DDL 变更事件
-hologres sql run --no-limit-check "SELECT command_tag, usename, count(*) as cnt, min(query_start) as first_at, max(query_start) as last_at FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND command_tag IN ('CREATE TABLE', 'ALTER TABLE', 'DROP TABLE', 'CREATE INDEX', 'DROP INDEX', 'ALTER DATABASE', 'CREATE SCHEMA', 'DROP SCHEMA', 'CREATE VIEW', 'DROP VIEW', 'CREATE EXTENSION', 'ALTER ROLE', 'GRANT', 'REVOKE') AND usename != 'system' GROUP BY 1, 2 ORDER BY cnt DESC"
+hologres sql run --no-limit-check "SELECT command_tag, usename, count(*) as cnt, min(query_start) as first_at, max(query_start) as last_at FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND command_tag IN ('CREATE TABLE', 'ALTER TABLE', 'DROP TABLE', 'CREATE INDEX', 'DROP INDEX', 'ALTER DATABASE', 'CREATE SCHEMA', 'DROP SCHEMA', 'CREATE VIEW', 'DROP VIEW', 'CREATE EXTENSION', 'ALTER ROLE', 'GRANT', 'REVOKE') AND usename <> 'system' GROUP BY 1, 2 ORDER BY cnt DESC"
 ```
 
 **输出解读**：

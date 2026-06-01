@@ -15,7 +15,7 @@
 ## 1. SQL 总量统计
 
 ```bash
-hologres sql run --no-limit-check "SELECT count(*) as total_queries, count(*) FILTER (WHERE status = 'SUCCESS') as success_count, count(*) FILTER (WHERE status = 'FAILED') as failed_count, count(*) FILTER (WHERE duration > 10000 AND status = 'SUCCESS') as slow_count FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND usename != 'system'"
+hologres sql run --no-limit-check "SELECT count(*) as total_queries, count(*) FILTER (WHERE status = 'SUCCESS') as success_count, count(*) FILTER (WHERE status = 'FAILED') as failed_count, count(*) FILTER (WHERE duration > 10000 AND status = 'SUCCESS') as slow_count FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND usename <> 'system'"
 ```
 
 **输出解读**：
@@ -33,19 +33,19 @@ hologres sql run --no-limit-check "SELECT count(*) as total_queries, count(*) FI
 ### 2.1 按最大耗时排序的 Top 10
 
 ```bash
-hologres sql run --no-limit-check "SELECT query_digest as sql_fingerprint, count(*) as exec_count, round(avg(duration)::numeric, 2) as avg_duration_ms, max(duration) as max_duration_ms, round(sum(duration)::numeric, 2) as total_duration_ms, round(avg(cpu_time_ms)::numeric, 2) as avg_cpu_ms, round(avg(memory_bytes / 1048576.0)::numeric, 2) as avg_memory_mb, round(avg(read_bytes / 1048576.0)::numeric, 2) as avg_read_mb, round(avg(scan_rows)::numeric, 0) as avg_scan_rows, min(query_start) as first_seen, max(query_start) as last_seen FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'SUCCESS' AND duration > 10000 AND usename != 'system' GROUP BY 1 ORDER BY max_duration_ms DESC LIMIT 10"
+hologres sql run --no-limit-check "SELECT digest as sql_fingerprint, count(*) as exec_count, round(avg(duration)::numeric, 2) as avg_duration_ms, max(duration) as max_duration_ms, round(sum(duration)::numeric, 2) as total_duration_ms, round(avg(cpu_time_ms)::numeric, 2) as avg_cpu_ms, round(avg(memory_bytes / 1048576.0)::numeric, 2) as avg_memory_mb, round(avg(read_bytes / 1048576.0)::numeric, 2) as avg_read_mb, round(avg(read_rows)::numeric, 0) as avg_read_rows, min(query_start) as first_seen, max(query_start) as last_seen FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'SUCCESS' AND duration > 10000 AND usename <> 'system' GROUP BY 1 ORDER BY max_duration_ms DESC LIMIT 10"
 ```
 
 ### 2.2 按总消耗 CPU 排序的 Top 10
 
 ```bash
-hologres sql run --no-limit-check "SELECT query_digest as sql_fingerprint, count(*) as exec_count, round(sum(cpu_time_ms)::numeric, 2) as total_cpu_ms, round(avg(cpu_time_ms)::numeric, 2) as avg_cpu_ms, round(avg(duration)::numeric, 2) as avg_duration_ms, max(duration) as max_duration_ms FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'SUCCESS' AND usename != 'system' AND cpu_time_ms > 0 GROUP BY 1 ORDER BY total_cpu_ms DESC LIMIT 10"
+hologres sql run --no-limit-check "SELECT digest as sql_fingerprint, count(*) as exec_count, round(sum(cpu_time_ms)::numeric, 2) as total_cpu_ms, round(avg(cpu_time_ms)::numeric, 2) as avg_cpu_ms, round(avg(duration)::numeric, 2) as avg_duration_ms, max(duration) as max_duration_ms FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'SUCCESS' AND usename <> 'system' AND cpu_time_ms > 0 GROUP BY 1 ORDER BY total_cpu_ms DESC LIMIT 10"
 ```
 
 ### 2.3 按总消耗内存排序的 Top 10
 
 ```bash
-hologres sql run --no-limit-check "SELECT query_digest as sql_fingerprint, count(*) as exec_count, round(max(memory_bytes / 1048576.0)::numeric, 2) as max_memory_mb, round(avg(memory_bytes / 1048576.0)::numeric, 2) as avg_memory_mb, round(avg(duration)::numeric, 2) as avg_duration_ms FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'SUCCESS' AND usename != 'system' AND memory_bytes > 0 GROUP BY 1 ORDER BY max_memory_mb DESC LIMIT 10"
+hologres sql run --no-limit-check "SELECT digest as sql_fingerprint, count(*) as exec_count, round(max(memory_bytes / 1048576.0)::numeric, 2) as max_memory_mb, round(avg(memory_bytes / 1048576.0)::numeric, 2) as avg_memory_mb, round(avg(duration)::numeric, 2) as avg_duration_ms FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'SUCCESS' AND usename <> 'system' AND memory_bytes > 0 GROUP BY 1 ORDER BY max_memory_mb DESC LIMIT 10"
 ```
 
 ### 2.4 获取慢查询的完整 SQL 示例
@@ -53,14 +53,14 @@ hologres sql run --no-limit-check "SELECT query_digest as sql_fingerprint, count
 对于 Top N 中的每个 `sql_fingerprint`，获取一条完整 SQL 示例用于根因分析：
 
 ```bash
-hologres sql run --no-limit-check "SELECT query_id, left(query, 500) as query_preview, duration, cpu_time_ms, memory_bytes, scan_rows, read_bytes, query_start FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND query_digest = '{sql_fingerprint}' ORDER BY duration DESC LIMIT 1"
+hologres sql run --no-limit-check "SELECT query_id, left(query, 500) as query_preview, duration, cpu_time_ms, memory_bytes, read_rows, read_bytes, query_start FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND digest = '{sql_fingerprint}' ORDER BY duration DESC LIMIT 1"
 ```
 
 **根因判断规则**（引用 **hologres-slow-query-analysis** skill）：
 
 | 现象 | 可能根因 | 优化建议 |
 |------|---------|---------|
-| scan_rows 极大（> 1000 万） | 全表扫描 / 分区裁剪缺失 | 确认分区键、添加过滤条件 |
+| read_rows 极大（> 1000 万） | 全表扫描 / 分区裁剪缺失 | 确认分区键、添加过滤条件 |
 | memory_bytes 极大（> 4GB） | 中间结果集膨胀 | 拆分查询、添加 LIMIT |
 | cpu_time_ms 远大于 duration | 并行度不足 | 调整 DOP 参数 |
 | duration 远大于 cpu_time_ms | IO 瓶颈或锁等待 | 检查存储层、优化索引 |
@@ -77,13 +77,13 @@ hologres sql run --no-limit-check "SELECT query_id, left(query, 500) as query_pr
 ### 3.1 按错误类型分类
 
 ```bash
-hologres sql run --no-limit-check "SELECT CASE WHEN message ILIKE '%out of memory%' OR message ILIKE '%OOM%' OR message ILIKE '%cannot allocate%' THEN 'OOM' WHEN message ILIKE '%cancel%' OR message ILIKE '%timeout%' OR message ILIKE '%statement timeout%' THEN 'Timeout/Cancel' WHEN message ILIKE '%permission%' OR message ILIKE '%denied%' OR message ILIKE '%privilege%' THEN 'Permission' WHEN message ILIKE '%does not exist%' OR message ILIKE '%not found%' OR message ILIKE '%undefined%' THEN 'NotFound' WHEN message ILIKE '%syntax error%' OR message ILIKE '%parse error%' THEN 'SyntaxError' WHEN message ILIKE '%connection%' OR message ILIKE '%connect%' OR message ILIKE '%server closed%' THEN 'Connection' WHEN message ILIKE '%duplicate%' OR message ILIKE '%unique%' OR message ILIKE '%already exists%' THEN 'DuplicateKey' WHEN message ILIKE '%lock%' OR message ILIKE '%deadlock%' THEN 'Lock' WHEN message ILIKE '%type%' OR message ILIKE '%cast%' OR message ILIKE '%convert%' THEN 'TypeMismatch' WHEN message ILIKE '%partition%' THEN 'Partition' WHEN message ILIKE '%resource%' OR message ILIKE '%limit%' THEN 'ResourceLimit' ELSE 'Other' END as error_category, count(*) as cnt, min(query_start) as first_seen, max(query_start) as last_seen FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'FAILED' AND usename != 'system' GROUP BY 1 ORDER BY 2 DESC"
+hologres sql run --no-limit-check "SELECT CASE WHEN message ILIKE '%out of memory%' OR message ILIKE '%OOM%' OR message ILIKE '%cannot allocate%' THEN 'OOM' WHEN message ILIKE '%cancel%' OR message ILIKE '%timeout%' OR message ILIKE '%statement timeout%' THEN 'Timeout/Cancel' WHEN message ILIKE '%permission%' OR message ILIKE '%denied%' OR message ILIKE '%privilege%' THEN 'Permission' WHEN message ILIKE '%does not exist%' OR message ILIKE '%not found%' OR message ILIKE '%undefined%' THEN 'NotFound' WHEN message ILIKE '%syntax error%' OR message ILIKE '%parse error%' THEN 'SyntaxError' WHEN message ILIKE '%connection%' OR message ILIKE '%connect%' OR message ILIKE '%server closed%' THEN 'Connection' WHEN message ILIKE '%duplicate%' OR message ILIKE '%unique%' OR message ILIKE '%already exists%' THEN 'DuplicateKey' WHEN message ILIKE '%lock%' OR message ILIKE '%deadlock%' THEN 'Lock' WHEN message ILIKE '%type%' OR message ILIKE '%cast%' OR message ILIKE '%convert%' THEN 'TypeMismatch' WHEN message ILIKE '%partition%' THEN 'Partition' WHEN message ILIKE '%resource%' OR message ILIKE '%limit%' THEN 'ResourceLimit' ELSE 'Other' END as error_category, count(*) as cnt, min(query_start) as first_seen, max(query_start) as last_seen FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'FAILED' AND usename <> 'system' GROUP BY 1 ORDER BY 2 DESC"
 ```
 
 ### 3.2 失败查询示例（每类取 1 条）
 
 ```bash
-hologres sql run --no-limit-check "SELECT DISTINCT ON (CASE WHEN message ILIKE '%out of memory%' OR message ILIKE '%OOM%' THEN 'OOM' WHEN message ILIKE '%cancel%' OR message ILIKE '%timeout%' THEN 'Timeout' WHEN message ILIKE '%permission%' OR message ILIKE '%denied%' THEN 'Permission' ELSE 'Other' END) query_id, left(query, 300) as query_preview, left(message, 200) as error_message, duration, query_start FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'FAILED' AND usename != 'system' ORDER BY CASE WHEN message ILIKE '%out of memory%' OR message ILIKE '%OOM%' THEN 'OOM' WHEN message ILIKE '%cancel%' OR message ILIKE '%timeout%' THEN 'Timeout' WHEN message ILIKE '%permission%' OR message ILIKE '%denied%' THEN 'Permission' ELSE 'Other' END, duration DESC LIMIT 10"
+hologres sql run --no-limit-check "SELECT DISTINCT ON (CASE WHEN message ILIKE '%out of memory%' OR message ILIKE '%OOM%' THEN 'OOM' WHEN message ILIKE '%cancel%' OR message ILIKE '%timeout%' THEN 'Timeout' WHEN message ILIKE '%permission%' OR message ILIKE '%denied%' THEN 'Permission' ELSE 'Other' END) query_id, left(query, 300) as query_preview, left(message, 200) as error_message, duration, query_start FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'FAILED' AND usename <> 'system' ORDER BY CASE WHEN message ILIKE '%out of memory%' OR message ILIKE '%OOM%' THEN 'OOM' WHEN message ILIKE '%cancel%' OR message ILIKE '%timeout%' THEN 'Timeout' WHEN message ILIKE '%permission%' OR message ILIKE '%denied%' THEN 'Permission' ELSE 'Other' END, duration DESC LIMIT 10"
 ```
 
 ---
@@ -92,7 +92,7 @@ hologres sql run --no-limit-check "SELECT DISTINCT ON (CASE WHEN message ILIKE '
 
 ```bash
 # 对比同一查询指纹近 7 天 vs 当天的平均耗时
-hologres sql run --no-limit-check "SELECT cur.sql_fingerprint, cur.avg_duration_today, hist.avg_duration_7d, round(((cur.avg_duration_today - hist.avg_duration_7d) / NULLIF(hist.avg_duration_7d, 0) * 100)::numeric, 1) as change_pct FROM (SELECT query_digest as sql_fingerprint, round(avg(duration)::numeric, 2) as avg_duration_today, count(*) as exec_count_today FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'SUCCESS' AND usename != 'system' GROUP BY 1 HAVING count(*) >= 10) cur JOIN (SELECT query_digest as sql_fingerprint, round(avg(duration)::numeric, 2) as avg_duration_7d FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz - interval '7 days' AND query_start < '{report_date} 00:00:00'::timestamptz AND status = 'SUCCESS' AND usename != 'system' GROUP BY 1 HAVING count(*) >= 10) hist ON cur.sql_fingerprint = hist.sql_fingerprint WHERE cur.avg_duration_today > hist.avg_duration_7d * 1.5 ORDER BY change_pct DESC LIMIT 10"
+hologres sql run --no-limit-check "SELECT cur.sql_fingerprint, cur.avg_duration_today, hist.avg_duration_7d, round(((cur.avg_duration_today - hist.avg_duration_7d) / NULLIF(hist.avg_duration_7d, 0) * 100)::numeric, 1) as change_pct FROM (SELECT digest as sql_fingerprint, round(avg(duration)::numeric, 2) as avg_duration_today, count(*) as exec_count_today FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'SUCCESS' AND usename <> 'system' GROUP BY 1 HAVING count(*) >= 10) cur JOIN (SELECT digest as sql_fingerprint, round(avg(duration)::numeric, 2) as avg_duration_7d FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz - interval '7 days' AND query_start < '{report_date} 00:00:00'::timestamptz AND status = 'SUCCESS' AND usename <> 'system' GROUP BY 1 HAVING count(*) >= 10) hist ON cur.sql_fingerprint = hist.sql_fingerprint WHERE cur.avg_duration_today > hist.avg_duration_7d * 1.5 ORDER BY change_pct DESC LIMIT 10"
 ```
 
 **输出解读**：
@@ -132,7 +132,7 @@ hologres dt show <dt_table_name>
 
 ```bash
 # 按小时统计查询量和失败率
-hologres sql run --no-limit-check "SELECT date_trunc('hour', query_start) as hour, count(*) as total, count(*) FILTER (WHERE status = 'FAILED') as failed, count(*) FILTER (WHERE duration > 10000 AND status = 'SUCCESS') as slow, round(100.0 * count(*) FILTER (WHERE status = 'FAILED') / NULLIF(count(*), 0), 2) as fail_rate_pct FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND usename != 'system' GROUP BY 1 ORDER BY 1"
+hologres sql run --no-limit-check "SELECT date_trunc('hour', query_start) as hour, count(*) as total, count(*) FILTER (WHERE status = 'FAILED') as failed, count(*) FILTER (WHERE duration > 10000 AND status = 'SUCCESS') as slow, round(100.0 * count(*) FILTER (WHERE status = 'FAILED') / NULLIF(count(*), 0), 2) as fail_rate_pct FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND usename <> 'system' GROUP BY 1 ORDER BY 1"
 ```
 
 **输出解读**：

@@ -61,7 +61,7 @@ hologres sql run --no-limit-check "SELECT schemaname, tablename FROM pg_tables W
 通过 `hg_query_log` 判断近 30 天未被访问的大表：
 
 ```bash
-hologres sql run --no-limit-check "SELECT t.schemaname, t.tablename, pg_size_pretty(pg_total_relation_size(t.schemaname || '.' || t.tablename)) as size, pg_total_relation_size(t.schemaname || '.' || t.tablename) as size_bytes FROM pg_tables t WHERE t.schemaname NOT IN ('pg_catalog', 'information_schema', 'hologres') AND pg_total_relation_size(t.schemaname || '.' || t.tablename) > 1073741824 AND NOT EXISTS (SELECT 1 FROM hologres.hg_query_log q WHERE q.query ILIKE '%' || t.tablename || '%' AND q.query_start >= now() - interval '30 days' AND q.usename != 'system') ORDER BY size_bytes DESC LIMIT 20"
+hologres sql run --no-limit-check "SELECT t.schemaname, t.tablename, pg_size_pretty(pg_total_relation_size(t.schemaname || '.' || t.tablename)) as size, pg_total_relation_size(t.schemaname || '.' || t.tablename) as size_bytes FROM pg_tables t WHERE t.schemaname NOT IN ('pg_catalog', 'information_schema', 'hologres') AND pg_total_relation_size(t.schemaname || '.' || t.tablename) > 1073741824 AND NOT EXISTS (SELECT 1 FROM hologres.hg_query_log q WHERE q.query ILIKE '%' || t.tablename || '%' AND q.query_start >= now() - interval '30 days' AND q.usename <> 'system') ORDER BY size_bytes DESC LIMIT 20"
 ```
 
 **输出解读**：
@@ -87,7 +87,7 @@ hologres sql run --no-limit-check "SELECT schemaname, tablename, pg_size_pretty(
 ```bash
 # 需与前次巡检的表大小数据对比
 # 如果没有历史数据，可通过 hg_query_log 分析写入量最大的表
-hologres sql run --no-limit-check "SELECT split_part(query, ' ', 3) as target_table, count(*) as write_count FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND command_tag IN ('INSERT', 'COPY') AND usename != 'system' GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
+hologres sql run --no-limit-check "SELECT split_part(query, ' ', 3) as target_table, count(*) as write_count FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND command_tag IN ('INSERT', 'COPY') AND usename <> 'system' GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
 ```
 
 ---
@@ -159,7 +159,7 @@ hologres sql run "SHOW max_connections"
 hologres sql run "SELECT count(*) as table_count FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema', 'hologres')"
 
 # 近 7 天新增表数量（通过 DDL 日志推算）
-hologres sql run --no-limit-check "SELECT count(*) as new_tables FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz - interval '7 days' AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND command_tag = 'CREATE TABLE' AND usename != 'system'"
+hologres sql run --no-limit-check "SELECT count(*) as new_tables FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz - interval '7 days' AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND command_tag = 'CREATE TABLE' AND usename <> 'system'"
 ```
 
 **表数量上限参考**：

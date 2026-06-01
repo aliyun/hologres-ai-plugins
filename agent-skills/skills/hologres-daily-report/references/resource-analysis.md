@@ -129,14 +129,14 @@ hologres metric query {prefix}query_latency \
 
 ```bash
 # 当日查询延迟分布
-hologres sql run --no-limit-check "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY duration) as p50, percentile_cont(0.95) WITHIN GROUP (ORDER BY duration) as p95, percentile_cont(0.99) WITHIN GROUP (ORDER BY duration) as p99, avg(duration) as avg_duration, max(duration) as max_duration, count(*) as total_queries FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'SUCCESS' AND usename != 'system' AND duration > 0"
+hologres sql run --no-limit-check "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY duration) as p50, percentile_cont(0.95) WITHIN GROUP (ORDER BY duration) as p95, percentile_cont(0.99) WITHIN GROUP (ORDER BY duration) as p99, avg(duration) as avg_duration, max(duration) as max_duration, count(*) as total_queries FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'SUCCESS' AND usename <> 'system' AND duration > 0"
 ```
 
 ### 4.3 与前一日同期对比
 
 ```bash
 # 前一日查询延迟 P99
-hologres sql run --no-limit-check "SELECT percentile_cont(0.99) WITHIN GROUP (ORDER BY duration) as p99_yesterday FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz - interval '1 day' AND query_start < '{report_date} 00:00:00'::timestamptz AND status = 'SUCCESS' AND usename != 'system' AND duration > 0"
+hologres sql run --no-limit-check "SELECT percentile_cont(0.99) WITHIN GROUP (ORDER BY duration) as p99_yesterday FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz - interval '1 day' AND query_start < '{report_date} 00:00:00'::timestamptz AND status = 'SUCCESS' AND usename <> 'system' AND duration > 0"
 ```
 
 **诊断逻辑**：

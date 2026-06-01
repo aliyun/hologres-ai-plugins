@@ -107,7 +107,7 @@ hologres sql run --no-limit-check "SELECT pid, now() - query_start as duration, 
 
 ```bash
 # 检测当日 DDL 变更事件（CREATE/ALTER/DROP）
-hologres sql run --no-limit-check "SELECT command_tag, count(*) as cnt FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND command_tag IN ('CREATE TABLE', 'ALTER TABLE', 'DROP TABLE', 'CREATE INDEX', 'DROP INDEX', 'ALTER DATABASE') AND usename != 'system' GROUP BY 1 ORDER BY 2 DESC"
+hologres sql run --no-limit-check "SELECT command_tag, count(*) as cnt FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND command_tag IN ('CREATE TABLE', 'ALTER TABLE', 'DROP TABLE', 'CREATE INDEX', 'DROP INDEX', 'ALTER DATABASE') AND usename <> 'system' GROUP BY 1 ORDER BY 2 DESC"
 ```
 
 **诊断标准**：
@@ -194,7 +194,7 @@ hologres metric query {prefix}query_qps --start "{report_date}T00:00:00" --end "
 
 ```bash
 # 按耗时排序的 Top 10 慢查询（按 SQL 指纹聚合）
-hologres sql run --no-limit-check "SELECT query_digest as sql_fingerprint, count(*) as exec_count, round(avg(duration)::numeric, 2) as avg_duration_ms, max(duration) as max_duration_ms, round(avg(cpu_time_ms)::numeric, 2) as avg_cpu_ms, round(avg(memory_bytes/1048576.0)::numeric, 2) as avg_memory_mb, round(avg(read_bytes/1048576.0)::numeric, 2) as avg_read_mb, round(avg(scan_rows)::numeric, 0) as avg_scan_rows FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'SUCCESS' AND duration > 10000 AND usename != 'system' GROUP BY 1 ORDER BY max_duration_ms DESC LIMIT 10"
+hologres sql run --no-limit-check "SELECT digest as sql_fingerprint, count(*) as exec_count, round(avg(duration)::numeric, 2) as avg_duration_ms, max(duration) as max_duration_ms, round(avg(cpu_time_ms)::numeric, 2) as avg_cpu_ms, round(avg(memory_bytes/1048576.0)::numeric, 2) as avg_memory_mb, round(avg(read_bytes/1048576.0)::numeric, 2) as avg_read_mb, round(avg(read_rows)::numeric, 0) as avg_read_rows FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'SUCCESS' AND duration > 10000 AND usename <> 'system' GROUP BY 1 ORDER BY max_duration_ms DESC LIMIT 10"
 ```
 
 #### 3.2 失败查询统计
@@ -203,7 +203,7 @@ hologres sql run --no-limit-check "SELECT query_digest as sql_fingerprint, count
 
 ```bash
 # 失败查询按错误类型分类统计
-hologres sql run --no-limit-check "SELECT CASE WHEN message ILIKE '%out of memory%' OR message ILIKE '%OOM%' THEN 'OOM' WHEN message ILIKE '%cancel%' OR message ILIKE '%timeout%' THEN 'Timeout/Cancel' WHEN message ILIKE '%permission%' OR message ILIKE '%denied%' THEN 'Permission' WHEN message ILIKE '%does not exist%' OR message ILIKE '%not found%' THEN 'NotFound' WHEN message ILIKE '%syntax error%' THEN 'SyntaxError' WHEN message ILIKE '%connection%' OR message ILIKE '%connect%' THEN 'Connection' WHEN message ILIKE '%duplicate%' OR message ILIKE '%unique%' THEN 'DuplicateKey' WHEN message ILIKE '%lock%' OR message ILIKE '%deadlock%' THEN 'Lock' ELSE 'Other' END as error_category, count(*) as cnt, min(query_start) as first_seen, max(query_start) as last_seen FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'FAILED' AND usename != 'system' GROUP BY 1 ORDER BY 2 DESC"
+hologres sql run --no-limit-check "SELECT CASE WHEN message ILIKE '%out of memory%' OR message ILIKE '%OOM%' THEN 'OOM' WHEN message ILIKE '%cancel%' OR message ILIKE '%timeout%' THEN 'Timeout/Cancel' WHEN message ILIKE '%permission%' OR message ILIKE '%denied%' THEN 'Permission' WHEN message ILIKE '%does not exist%' OR message ILIKE '%not found%' THEN 'NotFound' WHEN message ILIKE '%syntax error%' THEN 'SyntaxError' WHEN message ILIKE '%connection%' OR message ILIKE '%connect%' THEN 'Connection' WHEN message ILIKE '%duplicate%' OR message ILIKE '%unique%' THEN 'DuplicateKey' WHEN message ILIKE '%lock%' OR message ILIKE '%deadlock%' THEN 'Lock' ELSE 'Other' END as error_category, count(*) as cnt, min(query_start) as first_seen, max(query_start) as last_seen FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'FAILED' AND usename <> 'system' GROUP BY 1 ORDER BY 2 DESC"
 ```
 
 #### 3.3 Dynamic Table 刷新状态
@@ -243,7 +243,7 @@ hologres metric query {prefix}storage_usage --start "{7_days_ago}T00:00:00" --en
 
 ```bash
 # 30 天未访问的表（通过 hg_query_log 最后访问时间）
-hologres sql run --no-limit-check "SELECT t.schemaname, t.tablename, pg_size_pretty(pg_total_relation_size(t.schemaname || '.' || t.tablename)) as size, pg_total_relation_size(t.schemaname || '.' || t.tablename) as size_bytes FROM pg_tables t WHERE t.schemaname NOT IN ('pg_catalog', 'information_schema', 'hologres') AND NOT EXISTS (SELECT 1 FROM hologres.hg_query_log q WHERE q.query ILIKE '%' || t.tablename || '%' AND q.query_start >= now() - interval '30 days' AND q.usename != 'system') AND pg_total_relation_size(t.schemaname || '.' || t.tablename) > 1073741824 ORDER BY size_bytes DESC LIMIT 20"
+hologres sql run --no-limit-check "SELECT t.schemaname, t.tablename, pg_size_pretty(pg_total_relation_size(t.schemaname || '.' || t.tablename)) as size, pg_total_relation_size(t.schemaname || '.' || t.tablename) as size_bytes FROM pg_tables t WHERE t.schemaname NOT IN ('pg_catalog', 'information_schema', 'hologres') AND NOT EXISTS (SELECT 1 FROM hologres.hg_query_log q WHERE q.query ILIKE '%' || t.tablename || '%' AND q.query_start >= now() - interval '30 days' AND q.usename <> 'system') AND pg_total_relation_size(t.schemaname || '.' || t.tablename) > 1073741824 ORDER BY size_bytes DESC LIMIT 20"
 ```
 
 **诊断标准**：
@@ -544,3 +544,4 @@ export HOLOGRES_SKILL=hologres-daily-report
 5. 健康评分仅作为参考指标，具体问题需结合诊断详情判断
 6. 日报中所有"建议"应标注优先级（P0/P1/P2）和建议完成时间
 7. 首次生成日报时，建议先运行 `hologres status` 确认连接正常
+8. **无数据降级策略**：当 `hg_query_log` 在指定日期无任何用户查询时，Q4（SQL 诊断）章节应明确输出"当日无用户查询"，而非留空或报错；同时跳过慢 SQL Top N、失败查询统计、退化检测等依赖查询日志的子步骤，在日报中标注"当日无查询数据，相关诊断项已跳过"
