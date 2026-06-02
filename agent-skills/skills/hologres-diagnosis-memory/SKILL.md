@@ -330,7 +330,7 @@ hologres sql run --no-limit-check "SELECT digest AS sql_digest, count(1) AS exec
 
 ```bash
 # 高频访问特定 Worker 的高内存 Query（结合 hg_query_log + hg_worker_info）
-hologres sql run --no-limit-check "SELECT query_id, usename, warehouse_name, memory_bytes, cpu_time_ms, duration AS duration_ms, query::char(200) AS sql_sample FROM hologres.hg_query_log WHERE query_start >= '{start_time}' AND query_start <= '{end_time}' AND memory_bytes > 1073741824 AND usename != 'system' ORDER BY memory_bytes DESC LIMIT 20"
+hologres sql run --no-limit-check "SELECT query_id, usename, warehouse_name, memory_bytes, cpu_time_ms, duration AS duration_ms, query::char(200) AS sql_sample FROM hologres.hg_query_log WHERE query_start >= '{start_time}' AND query_start <= '{end_time}' AND memory_bytes > 1073741824 AND usename <> 'system' ORDER BY memory_bytes DESC LIMIT 20"
 ```
 
 **判定**：是否存在热点 Dist Key 导致特定 Worker 被集中访问，或特定表的 Aggregate 操作集中在少数 Worker。
@@ -416,12 +416,9 @@ hologres sql run --no-limit-check "SELECT schemaname, count(*) AS table_count FR
 
 # 分区表数量检查
 hologres sql run --no-limit-check "SELECT n.nspname AS schemaname, c.relname AS tablename, count(i.inhrelid) AS partition_count FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace LEFT JOIN pg_catalog.pg_inherits i ON i.inhparent = c.oid WHERE c.relkind = 'p' AND n.nspname NOT IN ('pg_catalog', 'information_schema') GROUP BY n.nspname, c.relname ORDER BY partition_count DESC LIMIT 20"
-
-# Table Group 维度表数量（通过 hg_table_info）
-hologres sql run --no-limit-check "SELECT table_group, count(*) AS table_count FROM hologres.hg_table_info GROUP BY table_group ORDER BY table_count DESC LIMIT 20"
 ```
 
-**判定**：单 TG 表/分区数 > 10,000 → Meta Cache 常驻内存过高。
+**判定**：单 Schema 表/分区数 > 10,000 → Meta Cache 常驻内存过高。
 
 #### D2：长事务检测
 
