@@ -1,0 +1,14 @@
+{
+  "name": "hologres-diagnosis-memory",
+  "version": "1.0.0",
+  "description": "Hologres 实例内存使用率异常诊断技能。当用户提到内存打满、OOM、内存持续高位、Worker 内存不均、内存泄漏、内存倾斜、内存归因分析等场景时使用。覆盖宏观定性（全局高/局部倾斜/持续不回落）、业务指标对齐（排除正常增长）、内存分类初筛（Query vs System/Cache）、三大主线归因（Query侧/Write后台侧/System元数据侧+泄漏排查），输出结构化诊断报告与治理行动清单。Triggers: \"hologres 内存诊断\", \"OOM\", \"内存打满\", \"内存高位\", \"内存泄漏\", \"内存倾斜\", \"hologres memory diagnosis\", \"hologres memory usage\".",
+  "dependencies": {
+    "hologres-cli": "*"
+  },
+  "publishConfig": {
+    "registry": "https://contextlab.alibaba-inc.com/skill"
+  },
+  "aoneKit": {
+    "generated": true
+  }
+}
