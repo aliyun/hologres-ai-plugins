@@ -72,10 +72,7 @@ export HOLOGRES_SKILL=hologres-daily-report
 # 检查连接状态和版本
 hologres status
 
-# 查询实例详细信息（版本、最大连接数）
-hologres instance <instance_name>
-
-# 查询实例管理信息（实例类型、状态）
+# 查询实例管理信息（实例类型、状态，需主账号 AK/SK）
 hologres instance-manage get
 
 # 查询 Warehouse 列表（资源分配）
@@ -138,31 +135,32 @@ hologres sql run --no-limit-check "SELECT command_tag, count(*) as cnt FROM holo
 
 ```bash
 # 查询 CPU 使用率时序数据（最近24h，60s粒度）
-hologres metric query {prefix}cpu_usage --start "{report_date}T00:00:00" --end "{report_date}T23:59:59" --period 60
+# 注意：--instance-id 为必传参数；时间参数为 --start-time / --end-time（非 --start / --end）
+hologres metric query {prefix}cpu_usage --instance-id {instance_id} --start-time "{report_date}T00:00:00" --end-time "{report_date}T23:59:59" --period 60
 ```
 
 #### 2.2 内存使用率
 
 ```bash
-hologres metric query {prefix}memory_usage --start "{report_date}T00:00:00" --end "{report_date}T23:59:59" --period 60
+hologres metric query {prefix}memory_usage --instance-id {instance_id} --start-time "{report_date}T00:00:00" --end-time "{report_date}T23:59:59" --period 60
 ```
 
 #### 2.3 连接数
 
 ```bash
-hologres metric query {prefix}connections --start "{report_date}T00:00:00" --end "{report_date}T23:59:59" --period 60
+hologres metric query {prefix}connections --instance-id {instance_id} --start-time "{report_date}T00:00:00" --end-time "{report_date}T23:59:59" --period 60
 ```
 
 #### 2.4 查询延迟
 
 ```bash
-hologres metric query {prefix}query_latency --start "{report_date}T00:00:00" --end "{report_date}T23:59:59" --period 60
+hologres metric query {prefix}query_latency --instance-id {instance_id} --start-time "{report_date}T00:00:00" --end-time "{report_date}T23:59:59" --period 60
 ```
 
 #### 2.5 查询 QPS
 
 ```bash
-hologres metric query {prefix}query_qps --start "{report_date}T00:00:00" --end "{report_date}T23:59:59" --period 60
+hologres metric query {prefix}query_qps --instance-id {instance_id} --start-time "{report_date}T00:00:00" --end-time "{report_date}T23:59:59" --period 60
 ```
 
 **从时序数据中计算**：
@@ -236,7 +234,11 @@ hologres sql run --no-limit-check "SELECT schemaname, tablename, pg_size_pretty(
 
 ```bash
 # 查询近 7 天存储使用量（用于环比和趋势预测）
-hologres metric query {prefix}storage_usage --start "{7_days_ago}T00:00:00" --end "{report_date}T23:59:59" --period 3600
+# 注意：不存在 warehouse_storage_usage 指标，需用以下指标替代：
+#   - warehouse_hot_storage_used（热存储量，返回 Value 字段，单位 KB）
+#   - storage_usage_percent（存储使用百分比，返回 Maximum/Average 字段）
+hologres metric query storage_usage_percent --instance-id {instance_id} --start-time "{7_days_ago}T00:00:00" --end-time "{report_date}T23:59:59" --period 3600
+hologres metric query warehouse_hot_storage_used --instance-id {instance_id} --start-time "{7_days_ago}T00:00:00" --end-time "{report_date}T23:59:59" --period 3600
 ```
 
 #### 4.3 冷数据识别
@@ -545,3 +547,5 @@ export HOLOGRES_SKILL=hologres-daily-report
 6. 日报中所有"建议"应标注优先级（P0/P1/P2）和建议完成时间
 7. 首次生成日报时，建议先运行 `hologres status` 确认连接正常
 8. **无数据降级策略**：当 `hg_query_log` 在指定日期无任何用户查询时，Q4（SQL 诊断）章节应明确输出"当日无用户查询"，而非留空或报错；同时跳过慢 SQL Top N、失败查询统计、退化检测等依赖查询日志的子步骤，在日报中标注"当日无查询数据，相关诊断项已跳过"
+
+
