@@ -20,7 +20,10 @@ hologres-ai-plugins/
     │   ├── hologres-bsi-profile-analysis/ # BSI 画像分析技能
     │   ├── hologres-ad-campaign/          # 广告素材生成与投放分析技能
     │   ├── hologres-instance-health-analyse/ # 实例健康诊断与巡检技能
-    │   └── hologres-diagnosis-cpu/        # CPU 异常诊断技能
+    │   ├── hologres-diagnosis-cpu/        # CPU 异常诊断技能
+    │   ├── hologres-diagnosis-memory/     # 内存异常诊断技能（OOM / 泄漏 / 倾斜）
+    │   ├── hologres-daily-report/         # 运维诊断日报技能
+    │   └── hologres-knowledge-base/       # 检索与 RAG 知识库技能（HGraph 向量 + 全文倒排）
     ├── pyproject.toml
     └── upload_to_pypi.py
 ```
@@ -249,6 +252,38 @@ Hologres 实例 CPU 使用率异常诊断技能 —— 当 CPU 打满 / 持续�
 - 四象限归因分析（宏观定性 / Worker-Shard 分布定位 / 查询归因 / 后台任务干扰）
 - 输出结构化的 Markdown 诊断报告与治理行动清单
 - 输入 `instance_id` + 时间窗口，所有 SQL 通过 `hologres-cli` 执行
+
+#### hologres-diagnosis-memory
+
+Hologres 实例内存使用率异常诊断技能 —— 当用户提到内存打满、OOM、内存持续高位、Worker 内存不均、内存泄漏、内存倾斜、内存归因分析等场景时使用：
+
+- 输入 `instance_id` + 时间窗口
+- 自动完成内存水位形态判定（全局高 / 局部倾斜 / 持续不回落）
+- 业务指标对齐、内存分类初筛（Query vs System/Cache）
+- 沿 Query 主线、倾斜主线、Write/后台主线、System/元数据主线四大维度自动下钻
+- 云监控数据通过 `hologres metric query`，元仓与 PG 系统表通过 `hologres sql run`，OOM/Jeprof/Coredump 通过 `holo oncall common` 获取
+- 输出结构化 Markdown 诊断报告与治理行动清单
+- 仅限根因诊断 —— 对问题 Query 只输出 ID + 资源指标快照，不包含 SQL 优化或改写指导
+
+#### hologres-daily-report
+
+Hologres 运维诊断日报 —— 不是监控面板的数据搬运，而是由 AI 助手生成的
+**"诊断结论 + 根因解释 + 行动建议"型每日巡检报告**。
+
+- 入参：`instance_id` + `report_date`（默认昨天）+ `region`
+- 六大维度：实例健康、可用性、计算资源、SQL 性能、成本治理、容量预测
+- 所有指标通过 `hologres-cli` 查询，报告以结构化 Markdown 输出
+
+#### hologres-knowledge-base
+
+基于 Hologres 原生能力搭建企业检索与 RAG 知识库（无需外接向量数据库）：
+
+- **全文倒排索引**（Tantivy + BM25），支持 jieba / IK / ngram / pinyin 等多种中英文分词器
+- **HGraph 向量索引** 高性能 KNN 检索（rabitq 量化、内存/磁盘混合存储可选）
+- **混合检索** —— 向量 + 全文 + 标量过滤在单条 SQL 内完成（RRF 融合）
+- **holo-search-sdk** Python 客户端，提供易用的导入与检索 API
+- RAG 模式：服务端 `ai_gen()` 生成 embedding，或客户端 SDK 自定义 embedding 模型
+- 覆盖全生命周期：`CREATE TABLE WITH (...)` 一体式建表 → 文档切片导入 → 向量 / BM25 / 混合检索 → LLM Q&A
 
 ## 环境要求
 

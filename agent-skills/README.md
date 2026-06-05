@@ -16,6 +16,9 @@ An interactive installer that distributes Hologres AI agent skills to various AI
 | `hologres-ad-campaign` | `hologres-cli` | AI-powered ad creative generation and campaign analysis — video synthesis, virtual delivery simulation, real-time ROI via Dynamic Tables |
 | `hologres-instance-health-analyse` | `hologres-cli` | Instance health diagnosis — Warehouse resource inspection, FAILED query classification, CPU/memory slow query analysis, structured diagnostic reports |
 | `hologres-diagnosis-cpu` | `hologres-cli` | CPU anomaly diagnosis — 4-quadrant root-cause analysis (macro qualitative / Worker-Shard distribution / query attribution / background task interference), structured diagnostic report and governance action list |
+| `hologres-diagnosis-memory` | `hologres-cli` | Memory anomaly diagnosis — OOM / sustained-high / Worker imbalance / leak root-cause attribution along 4 lines (Query / skew / Write & background / System & metadata), with structured Markdown diagnostic report and action checklist |
+| `hologres-daily-report` | `hologres-cli` | Daily ops diagnosis report — opinionated "diagnostic conclusion + root cause + action recommendation" report across 6 dimensions (health, availability, compute, SQL perf, cost governance, capacity forecast) |
+| `hologres-knowledge-base` | `hologres-cli` | Search & RAG knowledge base — full-text inverted index (Tantivy + BM25), HGraph vector index, hybrid retrieval (vector + BM25 + scalar) in one SQL, optional embedding via Hologres `ai_gen()` or `holo-search-sdk` |
 
 > **Note:** All skills except `hologres-cli` depend on it as the foundational skill. SQL execution, GUC management, and data operations are performed through CLI commands. Install `hologres-cli` skill first.
 
@@ -81,6 +84,9 @@ $ hologres-agent-skills
   ● hologres-ad-campaign
   ● hologres-instance-health-analyse
   ● hologres-diagnosis-cpu
+  ● hologres-diagnosis-memory
+  ● hologres-daily-report
+  ● hologres-knowledge-base
 
 ✨ Installation complete
 ```
@@ -177,7 +183,10 @@ agent-skills/
 │   ├── hologres-bsi-profile-analysis/
 │   ├── hologres-ad-campaign/
 │   ├── hologres-instance-health-analyse/
-│   └── hologres-diagnosis-cpu/
+│   ├── hologres-diagnosis-cpu/
+│   ├── hologres-diagnosis-memory/
+│   ├── hologres-daily-report/
+│   └── hologres-knowledge-base/
 ├── src/
 │   └── holo_plugin_installer/
 │       ├── __init__.py

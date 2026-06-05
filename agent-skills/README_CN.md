@@ -16,6 +16,9 @@
 | `hologres-ad-campaign` | `hologres-cli` | 基于 AI Function 的广告素材生成与投放分析 — 视频合成、虚拟投放模拟、Dynamic Table 实时 ROI 分析 |
 | `hologres-instance-health-analyse` | `hologres-cli` | 实例健康诊断与巡检 — Warehouse 资源巡检、报错归类分析、CPU/内存慢查询分析、结构化诊断报告 |
 | `hologres-diagnosis-cpu` | `hologres-cli` | CPU 异常诊断 — 四象限归因分析（宏观定性 / Worker-Shard 分布定位 / 查询归因 / 后台任务干扰），输出结构化诊断报告与治理行动清单 |
+| `hologres-diagnosis-memory` | `hologres-cli` | 内存异常诊断 — OOM / 持续高位 / Worker 倾斜 / 泄漏归因，沿 Query 主线 / 倾斜主线 / Write 后台主线 / System 元数据主线四大维度自动下钻，输出结构化诊断报告与治理行动清单 |
+| `hologres-daily-report` | `hologres-cli` | 运维诊断日报 — 输出"诊断结论 + 根因解释 + 行动建议"型每日巡检报告，覆盖实例健康、可用性、计算资源、SQL 性能、成本治理、容量预测六大维度 |
+| `hologres-knowledge-base` | `hologres-cli` | 检索与 RAG 知识库 — 全文倒排索引（Tantivy + BM25）、HGraph 向量索引、单条 SQL 内完成向量 + BM25 + 标量混合检索；embedding 可走服务端 `ai_gen()` 或客户端 `holo-search-sdk` |
 
 > **说明：** 除 `hologres-cli` 外，其他所有技能均依赖它作为基础技能。SQL 执行、GUC 参数管理、数据操作等均通过 CLI 命令完成。请优先安装 `hologres-cli` 技能。
 
@@ -79,6 +82,11 @@ $ hologres-agent-skills
   ● hologres-uv-compute
   ● hologres-bsi-profile-analysis
   ● hologres-ad-campaign
+  ● hologres-instance-health-analyse
+  ● hologres-diagnosis-cpu
+  ● hologres-diagnosis-memory
+  ● hologres-daily-report
+  ● hologres-knowledge-base
 
 ✨ Installation complete
 ```
@@ -173,7 +181,12 @@ agent-skills/
 │   ├── hologres-privileges/
 │   ├── hologres-uv-compute/
 │   ├── hologres-bsi-profile-analysis/
-│   └── hologres-ad-campaign/
+│   ├── hologres-ad-campaign/
+│   ├── hologres-instance-health-analyse/
+│   ├── hologres-diagnosis-cpu/
+│   ├── hologres-diagnosis-memory/
+│   ├── hologres-daily-report/
+│   └── hologres-knowledge-base/
 ├── src/
 │   └── holo_plugin_installer/
 │       ├── __init__.py

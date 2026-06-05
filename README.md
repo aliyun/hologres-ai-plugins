@@ -20,7 +20,10 @@ hologres-ai-plugins/
     │   ├── hologres-bsi-profile-analysis/ # BSI profile analysis skill
     │   ├── hologres-ad-campaign/          # Ad creative generation & campaign analysis skill
     │   ├── hologres-instance-health-analyse/ # Instance health diagnosis & inspection skill
-    │   └── hologres-diagnosis-cpu/        # CPU anomaly diagnosis skill
+    │   ├── hologres-diagnosis-cpu/        # CPU anomaly diagnosis skill
+    │   ├── hologres-diagnosis-memory/     # Memory anomaly diagnosis skill (OOM / leak / skew)
+    │   ├── hologres-daily-report/         # Daily ops diagnosis report skill
+    │   └── hologres-knowledge-base/       # Search & RAG knowledge base skill (HGraph + fulltext)
     ├── pyproject.toml
     └── upload_to_pypi.py
 ```
@@ -249,6 +252,42 @@ Hologres CPU anomaly diagnosis skill — when CPU is saturated / sustained-high 
 - 4-quadrant root-cause attribution (macro qualitative / Worker-Shard distribution / query attribution / background task interference)
 - Structured Markdown diagnostic report and governance action list
 - Takes `instance_id` + time window as input, all SQL executed through `hologres-cli`
+
+#### hologres-diagnosis-memory
+
+Hologres instance memory anomaly diagnosis skill — for OOM events, sustained-high memory,
+worker memory imbalance, leak suspicions, and memory attribution analysis:
+
+- Takes `instance_id` + time window as input
+- Auto-classifies memory waveform (global high / local skew / no-recovery sustained)
+- Aligns with business metrics, then splits Query vs System/Cache memory
+- Drills down along 4 attribution lines: Query / skew / Write & background / System & metadata
+- Cloud monitor metrics via `hologres metric query`; metadata via `hologres sql run`;
+  OOM/Jeprof/Coredump internals via `holo oncall common`
+- Outputs structured Markdown diagnostic report + governance action checklist
+- Root-cause only — Query SQL rewrite suggestions are out of scope (reports query IDs + resource snapshots)
+
+#### hologres-daily-report
+
+Hologres ops daily diagnostic report — not a metric-dashboard data dump, but an opinionated
+**"diagnostic conclusion + root-cause explanation + action recommendation"** report generated
+by the AI assistant.
+
+- Inputs: `instance_id` + `report_date` (default: yesterday) + `region`
+- Six dimensions: instance health, availability, compute resources, SQL performance, cost governance, capacity forecast
+- All metrics queried through `hologres-cli`; report rendered as structured Markdown
+
+#### hologres-knowledge-base
+
+Build enterprise search & RAG knowledge bases on Hologres using the native building blocks
+(no external vector DB needed):
+
+- **Full-text inverted index** (Tantivy + BM25) with multiple Chinese/English tokenizers (jieba / IK / ngram / pinyin / …)
+- **HGraph vector index** for high-performance approximate nearest-neighbor search (rabitq quantization, configurable memory/disk hybrid storage)
+- **Hybrid search** — vector + full-text + scalar filters in a single SQL (RRF fusion)
+- **holo-search-sdk** Python client for ergonomic ingest & search
+- RAG patterns: in-Hologres embeddings via `ai_gen()`, or client-side embeddings via SDK
+- Covers full lifecycle: create table with `WITH (...)` syntax → ingest chunks → vector / BM25 / hybrid retrieval → LLM Q&A
 
 ## Requirements
 
