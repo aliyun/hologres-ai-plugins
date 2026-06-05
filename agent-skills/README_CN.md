@@ -169,6 +169,35 @@ python publish_to_aone.py --bump
 python publish_to_aone.py --version 1.2.0
 ```
 
+### Catalog 一致性校验
+
+Skill 名字在 **5 个 catalog 文件**里重复维护（installer + 4 个 README）。每加一个新 skill，
+5 处都要更新，否则 `uvx hologres-agent-skills` 用户看不到也装不上。校验脚本可以提前发现 drift：
+
+```bash
+# 独立运行（drift 时退出码 1，干净时退出码 0）
+python agent-skills/tests/test_catalog_consistency.py
+
+# 或走 pytest
+pytest agent-skills/tests/test_catalog_consistency.py -v
+```
+
+#### 安装到本地 pre-commit hook（可选，推荐）
+
+仓库自带一个 pre-commit 钩子 [`.githooks/pre-commit`](../.githooks/pre-commit)，先转发用户
+全局的 pre-commit（例如阿里 AccessKey 扫描），再跑 catalog 校验。每次 clone 后一次性激活：
+
+```bash
+git config --local core.hooksPath .githooks
+```
+
+卸载：`git config --local --unset core.hooksPath`。
+
+> **为什么要包装一层？** 当全局设了 `core.hooksPath`（例如阿里 AK 扫描默认安装在
+> `~/.aliyunAKScanHook/hooks`），仓库本地 `.git/hooks/` 就会被忽略。我们把
+> `core.hooksPath` 指到仓库内的 `.githooks` 目录，并在包装脚本里显式再调用一次全局
+> 钩子，AK 扫描就不会丢。
+
 ### 项目结构
 
 ```

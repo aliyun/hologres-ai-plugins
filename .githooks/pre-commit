@@ -1,0 +1,39 @@
+#!/usr/bin/env sh
+# Project-local pre-commit hook.
+#
+# Runs in two stages:
+#   1. Forwards to the user's globally-configured pre-commit hook (e.g. Alibaba
+#      AccessKey scanner installed at ~/.aliyunAKScanHook/hooks/pre-commit).
+#      This is necessary because enabling repo-local hooks via
+#      `git config --local core.hooksPath .githooks` OVERRIDES the global hook
+#      path, so we must re-invoke the global hook explicitly to preserve it.
+#   2. Runs the catalog consistency check
+#      (agent-skills/tests/test_catalog_consistency.py).
+#
+# Install (one-time, per clone):
+#   git config --local core.hooksPath .githooks
+#
+# Uninstall:
+#   git config --local --unset core.hooksPath
+#
+# To bypass for a single commit (NOT recommended — defeats the purpose):
+#   git commit --no-verify
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# -------- Stage 1: forward to global hook (if any) --------
+GLOBAL_HOOKS_PATH="$(git config --global --get core.hooksPath || true)"
+if [ -n "$GLOBAL_HOOKS_PATH" ]; then
+    # Expand leading ~ manually — POSIX sh doesn't always do tilde expansion in vars
+    case "$GLOBAL_HOOKS_PATH" in
+        "~"|"~/"*) GLOBAL_HOOKS_PATH="$HOME${GLOBAL_HOOKS_PATH#\~}" ;;
+    esac
+    if [ -x "$GLOBAL_HOOKS_PATH/pre-commit" ]; then
+        "$GLOBAL_HOOKS_PATH/pre-commit" "$@" || exit $?
+    fi
+fi
+
+# -------- Stage 2: catalog consistency --------
+python3 "$REPO_ROOT/agent-skills/tests/test_catalog_consistency.py"

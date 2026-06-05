@@ -169,6 +169,37 @@ python publish_to_aone.py --bump
 python publish_to_aone.py --version 1.2.0
 ```
 
+### Catalog Consistency Check
+
+Skill names are duplicated in **5 catalog files** (installer + 4 READMEs). Every time a new
+skill is added under `skills/`, all 5 must be updated, or `uvx hologres-agent-skills` users
+won't see / be able to install it. The check script catches the drift:
+
+```bash
+# Standalone run (exit 1 on drift, exit 0 on clean)
+python agent-skills/tests/test_catalog_consistency.py
+
+# Or via pytest
+pytest agent-skills/tests/test_catalog_consistency.py -v
+```
+
+#### Install as a local pre-commit hook (optional, recommended)
+
+A repo-local pre-commit hook lives at [`.githooks/pre-commit`](../.githooks/pre-commit). It
+chains the user's globally-configured pre-commit (e.g. Alibaba AccessKey scanner) and then
+runs the catalog check. One-time install per clone:
+
+```bash
+git config --local core.hooksPath .githooks
+```
+
+To uninstall: `git config --local --unset core.hooksPath`.
+
+> **Why a wrapper?** When `core.hooksPath` is set globally (e.g. by Alibaba's AK scanner
+> at `~/.aliyunAKScanHook/hooks`), the per-repo `.git/hooks/` directory is ignored. We have
+> to set `core.hooksPath` to a checked-in directory (`.githooks`) and explicitly re-invoke
+> the global hook from inside the wrapper so the AK scan still runs.
+
 ### Project Structure
 
 ```
