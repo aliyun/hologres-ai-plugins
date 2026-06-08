@@ -104,12 +104,12 @@ All queries from this session will appear in `hologres.hg_query_log` with
 | `tokenizer` | Optional | `jieba` / `ik` / `standard` / `ngram` / `pinyin` / … | `jieba` (中文) |
 | `chunk_size` | Optional | Tokens per chunk | `500` |
 | `chunk_overlap` | Optional | Token overlap between chunks | `50` |
-| `embedding_model` | Required | Name registered in Hologres via `register_external_model()`, or a local model | `text-embedding-v4` |
+| `embedding_model` | Required | Name registered in Hologres via `hologres model create`, or a local model | `text-embedding-v4` |
 | `llm_model` | Optional (Q&A only) | LLM for answer synthesis | `qwen-max` |
 
 > **Security:** Never echo / print AccessKey, password, or API keys.
-> Use `hologres config` to manage connection profiles.
-> The CLI redacts sensitive literals in `~/.hologres/sql-history.jsonl`.
+> Use `hologres config` and `hologres model create --api-key <key>` to store secrets outside the
+> conversation. The CLI redacts sensitive literals in `~/.hologres/sql-history.jsonl`.
 
 ---
 
@@ -257,10 +257,13 @@ or auto-embed (unlike ADBPG). You have two embedding strategies:
 
 #### Strategy A — Embed in Hologres via `ai_gen()` (recommended for SQL-only pipelines)
 
-Register an external embedding model once via SQL:
+Register an external embedding model once:
 
 ```bash
-hologres sql run --write "CALL register_external_model('my_embed', 'text-embedding-v4', 'bailian', '{\"api_key\": \"<DASHSCOPE_API_KEY>\"}', 'embedding')"
+hologres model create \
+  --name my_embed \
+  --type text-embedding-v4 \
+  --api-key '<DASHSCOPE_API_KEY>'
 ```
 
 Then insert chunks and let Hologres compute embeddings server-side:
@@ -579,4 +582,4 @@ External:
 | `QUERY_ERROR: index_options 'freqs' does not support phrase` | Phrase search on non-positions index | Recreate index with `index_options = 'positions'` |
 | `QUERY_ERROR: only column/row-column tables support fulltext index` | Index on row-store table | Recreate as `orientation = 'column'` |
 | `WRITE_GUARD_ERROR` | DDL/DML without `--write` flag | Add `--write` to `hologres sql run` |
-| `NOT_SUPPORTED` | Command not supported | Check CLI version or documentation |
+| `MODEL_TYPE_NOT_SUPPORTED` | `--type` not in catalog | `hologres model catalog` to list valid types |
