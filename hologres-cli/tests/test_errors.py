@@ -66,7 +66,6 @@ class TestErrorCodeRegistry:
             ErrorCode.NO_CHANGES,
             ErrorCode.CONFIG_ERROR,
             ErrorCode.PROFILE_NOT_FOUND,
-            ErrorCode.MODEL_TYPE_NOT_SUPPORTED,
         ]
         for code in non_retryable_codes:
             assert code.value.retryable is False, f"{code.name} should NOT be retryable"

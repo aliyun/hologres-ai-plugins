@@ -11,22 +11,9 @@ This guide covers what ADBPG does automatically (chunking, embedding, parsing, Q
 ## 1. Register an embedding model in Hologres
 
 Hologres can call external AI models (DashScope, OpenAI, etc.) via the
-`register_external_model()` mechanism. The `hologres-cli` wraps this:
+`register_external_model()` mechanism.
 
-### List supported model types
-
-```bash
-# All catalog entries
-hologres model catalog
-
-# Embedding only
-hologres model catalog --task embedding
-
-# Search
-hologres model catalog --search embed
-```
-
-Typical supported types (subject to change — always check `hologres model catalog` for the current list):
+Common embedding model types:
 
 | Type | Provider | Dimension |
 |------|----------|-----------|
@@ -38,15 +25,11 @@ Typical supported types (subject to change — always check `hologres model cata
 
 ### Register a model
 
-```bash
-hologres model create \
-  --name my_embed \
-  --type text-embedding-v4 \
-  --api-key '<DASHSCOPE_API_KEY>'
-```
+Register via SQL (the `model catalog` and `model create` CLI commands are not supported):
 
-> **Region** is auto-filled from the current profile's `region_id`. The API key is **never**
-> echoed to `~/.hologres/sql-history.jsonl` or stdout.
+```bash
+hologres sql run --write "CALL register_external_model('my_embed', 'text-embedding-v4', 'bailian', '{\"api_key\": \"<DASHSCOPE_API_KEY>\"}', 'embedding')"
+```
 
 ### List registered models
 

@@ -51,21 +51,15 @@ hologres --profile <name> sql run "SELECT model_name, model_type, model_provider
 
 **1.3 部署缺失模型**
 
-若查询结果中缺少任一模型，先查询 catalog 确认模型可用性：
+若查询结果中缺少任一模型，使用 SQL 注册模型：
 
 ```bash
-hologres --profile <name> model catalog --search <keyword>
-```
-
-然后使用百炼 API Key 注册模型：
-
-```bash
-hologres --profile <name> model create --name <model_name> --type <model_type> --api-key <bailian_api_key>
+hologres --profile <name> sql run --write "CALL register_external_model('<model_name>', '<model_type>', 'bailian', '{\"api_key\": \"<bailian_api_key>\"}', '<task>')"
 ```
 
 注意：`model_name` 不能包含点号（`.`），如有需要用下划线替换（例如 `wan2.7-i2v` 需改为 `wan2_7_i2v`）。
 
-注册后再次验证：
+注册后验证：
 
 ```bash
 hologres --profile <name> model list
@@ -548,7 +542,7 @@ FROM (
 
 ```
 0. 启动前置：pip install hologres-cli && export HOLOGRES_SKILL=hologres-ad-campaign
-1. 验证并部署模型（hologres model catalog / model create / model list）
+1. 验证并部署模型（hologres model list / SQL register_external_model）
 2. 收集信息并向用户确认所有参数
 3. 创建 OSS volume（hologres volume create）
 4. 创建 product_info / video_style / generated_images 等业务表并初始化数据
@@ -564,7 +558,7 @@ FROM (
 
 ## 坑点与注意
 
-- **模型名称规范**：`hologres model create` 的 `--name` 参数不能包含点号（`.`），如有需要用下划线替换。
+- **模型名称规范**：`register_external_model()` 的 model_name 参数不能包含点号（`.`），如有需要用下划线替换。
 - **CLI vs SQL**：图片/文本/视频生成**必须使用 `hologres ai` CLI 子命令**，不要使用 SQL `ai_gen`。`ai_gen` 对 I2V/R2V 等模型的参数封装不完整，会导致 `Field required: input.media` 等错误。
 - **Volume 创建**：`--root` 参数只需指定到 bucket 根目录（`oss://bucket/`），不要包含深层子路径，否则可能因 OSS ACL 权限失败。
 - **限流**：`hologres ai` 调用云端模型容易被限流，图片和视频生成必须逐个调用，不能批量执行。

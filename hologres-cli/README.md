@@ -910,124 +910,6 @@ hologres model delete embed11 --confirm     # actually deletes
 - `model_name` is restricted to letters, digits, underscore (`_`), hyphen (`-`), and dot (`.`).
 - Dry-run output intentionally does not echo the underlying SQL.
 
-#### model catalog
-
-Lists supported AI model types from the bundled catalog (`models.json`). Unlike
-`model list`, `catalog` does not require a database connection and reflects what
-the CLI knows can be registered (versus what is already registered on the
-instance).
-
-```bash
-# List all supported model types
-hologres model catalog
-
-# Filter by task type
-hologres model catalog --task embedding
-hologres model catalog --task video-generation
-
-# Substring match on model_type (case-insensitive)
-hologres model catalog --search happy
-
-# Combine filters (AND)
-hologres model catalog --task video-generation --search happy
-
-# Table format
-hologres -f table model catalog
-```
-
-**Options:**
-
-| Option | Description |
-|--------|-------------|
-| `--task, -t` | Filter by task type (e.g. `embedding`, `video-generation`) |
-| `--search` | Substring match on `model_type` (case-insensitive). Combined with `--task` as AND |
-
-**Output:**
-```json
-{
-  "ok": true,
-  "data": {
-    "rows": [
-      {"model_type": "qwen3-max", "model_provider": "bailian", "task": "chat/completions"}
-    ],
-    "count": 1
-  }
-}
-```
-
-Note: `model catalog` does not include a `model_name` field — that is assigned
-when registering a model via `register_external_model()` and is only meaningful
-for `model list`.
-
-#### model create
-
-Registers an external AI model on the live Hologres instance. Required inputs are `--name`, `--type`, and
-`--api-key`; everything else (`provider`, `task`, `model_url`,
-`function_server_url`) is read from the bundled catalog (`models.json`) and the
-`{region}` placeholder is filled from the **current profile's `region_id`**.
-There is no `--region` override; switch profiles with
-`--profile <name>` if you need a different region.
-
-```bash
-# Minimal (uses the active profile's region_id)
-hologres model create --name my_chat --type qwen3-max --api-key sk-xxx
-
-# Embedding / video-generation models work the same way
-hologres model create -n my_embed -t text-embedding-v3 --api-key sk-xxx
-hologres model create -n my_video -t happyhorse-1.0-t2v --api-key sk-xxx
-
-# Pass extra config (must be a valid JSON string; default is '{}')
-hologres model create -n my_chat -t qwen3-max --api-key sk-xxx --config '{"timeout": 30}'
-
-# Dry-run: show what would be registered, do NOT execute
-hologres model create -n my_chat -t qwen3-max --api-key sk-xxx --dry-run
-```
-
-**Options:**
-
-| Option | Description |
-|--------|-------------|
-| `--name, -n` | Model name to register (used as the identifier in `ai_gen()` / embedding calls) |
-| `--type, -t` | Model type — must be a key in `models.json`; see `hologres model catalog` |
-| `--api-key` | Provider API key. Never written to `~/.hologres/sql-history.jsonl` or shown in CLI output |
-| `--config` | Extra JSON config string |
-| `--dry-run` | Show what would be registered without executing |
-
-**Output (success):**
-```json
-{
-  "ok": true,
-  "data": {
-    "model_name": "my_chat",
-    "model_type": "qwen3-max",
-    "created": true
-  },
-  "message": "Model 'my_chat' registered successfully"
-}
-```
-
-**Output (dry-run):**
-```json
-{
-  "ok": true,
-  "data": {
-    "model_name": "my_chat",
-    "model_type": "qwen3-max",
-    "dry_run": true
-  },
-  "message": "Dry-run: model 'my_chat' was NOT registered. Re-run without --dry-run to execute."
-}
-```
-
-**Errors:**
-
-| Code | Trigger |
-|------|---------|
-| `INVALID_INPUT` | `--config` is not valid JSON |
-| `MODEL_TYPE_NOT_SUPPORTED` | `--type` is not a key in the bundled catalog |
-| `INVALID_ARGS` | Active profile lacks `region_id`, or `region_id` contains characters outside `[a-z0-9-]` |
-| `QUERY_ERROR` | Backend call failed (duplicate name, permission, etc.) |
-
 ## Output Formats
 
 ```bash
@@ -1123,8 +1005,8 @@ hologres sql run --write "DELETE FROM users WHERE id = 1"
 | `NOT_LOGICAL_PARTITION` | Table is not a logical partition table |
 | `INVALID_PARTITION_PROPERTY` | Invalid partition property name or value |
 | `OSS_ERROR` | OSS operation failed (e.g. directory placeholder creation on volume create) |
-| `MODEL_TYPE_NOT_SUPPORTED` | `model create --type` is not a key in the bundled catalog |
-| `INTERNAL_ERROR` | Internal failure (e.g. bundled `models.json` failed to load) |
+| `NOT_SUPPORTED` | Command is not supported in current CLI version |
+| `INTERNAL_ERROR` | Internal failure |
 
 ## Sensitive Data Masking
 

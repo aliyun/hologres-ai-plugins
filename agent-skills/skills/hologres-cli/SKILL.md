@@ -102,8 +102,6 @@ hologres dt list                                   # List Dynamic Tables
 | `hologres volume upload-file --volume <name> --local-file <path> --target-file <path> [--net internet\|intranet]` | Upload file to volume |
 | `hologres volume view volume://<name>/path/file [--net internet\|intranet]` | Download file to temp dir and open with system viewer |
 | `hologres model list [--task T] [--model-type T] [--search S]` | List registered external AI models |
-| `hologres model catalog [--task T] [--search S]` | List supported AI model types from the bundled catalog (no DB connection) |
-| `hologres model create --name N --type T --api-key K [--config J] [--dry-run]` | Register an external AI model |
 | `hologres model delete <model_name> [--confirm]` | Delete a registered external AI model (dry-run by default) |
 
 ## Dynamic Table Commands (V3.1+)
@@ -403,4 +401,4 @@ All CLI errors return structured JSON with `retryable` and `hint` fields for aut
 | `OSS_ERROR` | Yes | Storage failure | Check credentials, retry |
 | `NO_CHANGES` | No | Nothing to alter | Specify properties to change |
 | `INTERNAL_ERROR` | Yes | Unexpected failure | Retry once, then report bug |
-| `MODEL_TYPE_NOT_SUPPORTED` | No | Wrong model type | Use `hologres model list` |
+| `NOT_SUPPORTED` | No | Command not supported | Check CLI version or documentation |

@@ -96,7 +96,6 @@ Use `--profile <name>` to switch profiles.
 - `hologres volume download-file --volume <name> --file <path> -d <dir> [--net internet|intranet]` - Download file
 - `hologres volume upload-file --volume <name> --local-file <path> --target-file <path> [--net internet|intranet]` - Upload file
 - `hologres model list [--task T] [--model-type T] [--search S]` - List registered external AI models
-- `hologres model catalog [--task T]` - List supported AI model types from the bundled catalog
 - `hologres model delete <model_name> [--confirm]` - Delete a registered external AI model (dry-run by default)
 - `hologres foreign list [--schema S] [--server S]` - List foreign tables
 - `hologres foreign show <[schema.]name>` - Show foreign table structure (server, options, columns)

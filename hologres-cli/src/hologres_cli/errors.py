@@ -128,10 +128,6 @@ class ErrorCode(Enum):
         "INTERNAL_ERROR", True,
         "Unexpected error. Retry once; if persists, report a bug.",
     )
-    MODEL_TYPE_NOT_SUPPORTED = ErrorMeta(
-        "MODEL_TYPE_NOT_SUPPORTED", False,
-        "Use 'hologres model list' to see supported model types.",
-    )
 
 
 # Fast lookup: code string -> ErrorMeta

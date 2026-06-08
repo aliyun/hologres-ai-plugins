@@ -680,36 +680,6 @@ hologres model delete embed11               # 仅展示 SQL
 hologres model delete embed11 --confirm     # 实际删除
 ```
 
-#### model catalog
-
-列出 CLI 内置 catalog 中受支持的 AI 模型类型。与 `model list` 不同，`catalog` 不需要数据库连接。
-
-```bash
-hologres model catalog
-hologres model catalog --task embedding
-hologres model catalog --search happy
-hologres -f table model catalog
-```
-
-#### model create
-
-在 Hologres 实例上注册外部 AI 模型。
-
-```bash
-# 最小化（使用当前 Profile 的 region_id）
-hologres model create --name my_chat --type qwen3-max --api-key sk-xxx
-
-# Embedding / 视频生成模型同理
-hologres model create -n my_embed -t text-embedding-v3 --api-key sk-xxx
-hologres model create -n my_video -t happyhorse-1.0-t2v --api-key sk-xxx
-
-# 传入额外配置
-hologres model create -n my_chat -t qwen3-max --api-key sk-xxx --config '{"timeout": 30}'
-
-# Dry-run
-hologres model create -n my_chat -t qwen3-max --api-key sk-xxx --dry-run
-```
-
 ## 输出格式
 
 ```bash
@@ -805,7 +775,7 @@ hologres sql run --write "DELETE FROM users WHERE id = 1"
 | `NOT_LOGICAL_PARTITION` | 表不是逻辑分区表 |
 | `INVALID_PARTITION_PROPERTY` | 无效的分区属性名或值 |
 | `OSS_ERROR` | OSS 操作失败 |
-| `MODEL_TYPE_NOT_SUPPORTED` | `model create --type` 在内置 catalog 中不存在 |
+| `NOT_SUPPORTED` | 命令在当前 CLI 版本中不受支持 |
 | `INTERNAL_ERROR` | 内部错误 |
 
 ## 敏感数据脱敏
