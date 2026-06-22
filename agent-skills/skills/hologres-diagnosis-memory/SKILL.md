@@ -49,7 +49,7 @@ Hologres 云监控指标名称包含 **产品类型前缀**，前缀通过「前
    └── 安全平稳                        → 直接出具「健康」报告
 
 第二阶段：内存分类下钻
-   ├── Q1 宏观定性：水位形态判定（全局高 / 局部倾斜 / 持续不回落）
+   ├── Q1 内存水位总览：水位形态判定（全局高 / 局部倾斜 / 持续不回落）
    ├── Q2 业务指标对齐：排除正常业务增长
    ├── Q3 内存分类初筛：Query vs System/Cache 分流
    └── 进入对应主线（Query / 倾斜 / System / 泄漏）
@@ -201,7 +201,7 @@ holo oncall common oom {instance_id}
 
 ## 第二阶段：内存分类下钻
 
-### Q1：宏观定性 —— 异常窗口与形态判定
+### Q1：内存水位总览
 
 **目标**：区分是整体资源不足、局部数据倾斜，还是疑似泄漏（不回落），以此决定后续分支走向。
 
@@ -288,7 +288,7 @@ hologres sql run --no-limit-check "SELECT state, count(1) AS conn_count FROM pg_
 
 ## 第三阶段：三大主线深挖
 
-### 主线 A：Query 侧 —— 谁是内存杀手？
+### 主线 A：Query 侧 —— 高内存查询分析
 
 #### A1：高内存消耗查询 Top 10
 
@@ -473,7 +473,7 @@ holo oncall common coredumps {instance_id}
 
 ---
 
-## 二、Q1: 宏观定性 —— 异常窗口与形态是什么？
+## 二、Q1: 内存水位总览
 
 ### 1. 结论
 `{q1_conclusion}`
@@ -493,7 +493,7 @@ holo oncall common coredumps {instance_id}
 
 ---
 
-## 三、Q2: 分布定位 —— 是全局压力还是局部倾斜？
+## 三、Q2: Worker 内存分布分析
 
 ### 1. 结论
 `{q2_conclusion}`
@@ -515,7 +515,7 @@ holo oncall common coredumps {instance_id}
 
 ---
 
-## 四、Q3: 查询归因 —— 谁是内存杀手？(Query 主线)
+## 四、Q3: 高内存查询分析
 
 ### 1. 结论
 `{q3_conclusion}`
@@ -544,7 +544,7 @@ holo oncall common coredumps {instance_id}
 
 ---
 
-## 五、Q4: 系统与后台归因 —— 是否有隐性消耗或故障？(System/Write/Internal 主线)
+## 五、Q4: 系统与后台内存分析
 
 ### 1. 结论
 `{q4_conclusion}`
@@ -575,7 +575,7 @@ holo oncall common coredumps {instance_id}
 ## 六、Q5: 治理行动清单 (Action Plan)
 
 ### P0 - 立即处理 (阻断性风险)
-- [ ] `{action_p0_1}` (例如：终止内存杀手 Query xxx，释放内存)
+- [ ] `{action_p0_1}` (例如：终止高内存消耗 Query xxx，释放内存)
 - [ ] `{action_p0_2}` (例如：处理长事务 PID xxx)
 
 ### P1 - 近期优化 (性能提升)
