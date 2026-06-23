@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 import psycopg
 from psycopg.rows import dict_row
 
+from . import credentials
 from .api_connection import ApiConnectionError, HologresApiConnection
 from .config_store import ConfigError, build_dsn_from_profile, get_current_profile, get_profile
 
@@ -215,6 +216,15 @@ def _resolve_profile_dict(profile: Optional[str]) -> dict[str, Any]:
 
 def _api_prerequisites_met(profile: dict[str, Any]) -> bool:
     """Return True if the profile has enough info for the API fallback."""
+    if (profile.get("auth_mode") or "ram") == "sts":
+        # STS 模式：profile 无固定 AK/SK，判断凭证源是否配置（不发网络）。
+        # 回退 API 时走 credential 对象路径（单例 client），不依赖注入的临时 AK。
+        return bool(
+            profile.get("instance_id")
+            and profile.get("region_id")
+            and profile.get("database")
+            and credentials.sts_prerequisites_met(profile)
+        )
     return bool(
         profile.get("access_key_id")
         and profile.get("access_key_secret")
@@ -250,6 +260,14 @@ def get_connection(
             included on each ``ExecuteStatement`` call.
     """
     prof = _resolve_profile_dict(profile)
+    # STS 模式：从凭据源现拉临时凭证，注入到 profile 副本（不入库、不污染 config_store）。
+    # 下游 build_dsn_from_profile / HologresApiConnection 透明消费注入后的 prof。
+    if prof.get("auth_mode") == "sts":
+        prof = dict(prof)
+        sts = credentials.resolve_sts_credentials(prof)  # 失败抛 CredentialsError，向上传播
+        prof["access_key_id"] = sts["access_key_id"]
+        prof["access_key_secret"] = sts["access_key_secret"]
+        prof["security_token"] = sts["security_token"]
     mode = (prof.get("connection_mode") or "auto").lower()
 
     # Pure API mode: no JDBC attempt at all.

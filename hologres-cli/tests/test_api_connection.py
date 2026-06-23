@@ -12,6 +12,7 @@ from hologres_cli.api_connection import (
     _ApiCursor,
     _ApiSessionShim,
     _build_masked_dsn,
+    _create_client,
     _quote_literal,
     _rows_from_response,
     _substitute_params,
@@ -351,3 +352,72 @@ class TestHologresApiConnection:
                 cur.execute("SELECT 1 AS x")
                 assert cur.fetchall() == [{"x": 1}]
                 assert cur.description == [("x",)]
+
+
+class TestCreateClientSts:
+    """L2: _create_client 的 STS 分支用 credential 对象（ram 保持字段方式）。"""
+
+    def test_sts_uses_credential_object(self, mocker):
+        from hologres_cli import api_connection
+
+        fake_cred_client = mocker.MagicMock(name="credential_client")
+        mocker.patch.object(api_connection.credentials, "get_credential_client",
+                            return_value=fake_cred_client)
+        captured = {}
+
+        class FakeConfig:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+        class FakeModels:
+            Config = FakeConfig
+
+        mocker.patch.object(api_connection, "_import_sdk",
+                            return_value=(mocker.MagicMock(), FakeModels, None))
+        api_connection._create_client({"auth_mode": "sts", "region_id": "cn-hangzhou"})
+        assert captured.get("credential") is fake_cred_client
+        assert "access_key_id" not in captured
+
+    def test_ram_uses_ak_sk_fields(self, mocker):
+        from hologres_cli import api_connection
+
+        captured = {}
+
+        class FakeConfig:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+        class FakeModels:
+            Config = FakeConfig
+
+        mocker.patch.object(api_connection, "_import_sdk",
+                            return_value=(mocker.MagicMock(), FakeModels, None))
+        api_connection._create_client({
+            "auth_mode": "ram", "access_key_id": "AK", "access_key_secret": "SK",
+            "region_id": "cn-hangzhou",
+        })
+        assert captured.get("access_key_id") == "AK"
+        assert captured.get("access_key_secret") == "SK"
+        assert "credential" not in captured
+
+
+class TestValidateApiProfileSts:
+    """L2: _validate_api_profile 的 STS 分支（不强制 AK/SK，改校验凭证源）。"""
+
+    def test_sts_passes_without_ak(self, mocker):
+        from hologres_cli import api_connection
+
+        mocker.patch.object(api_connection.credentials, "sts_prerequisites_met",
+                            return_value=True)
+        prof = {"auth_mode": "sts", "instance_id": "i", "region_id": "r",
+                "database": "d", "credentials_uri": "http://x"}
+        _validate_api_profile(prof)  # 不抛
+
+    def test_sts_missing_prereqs_raises(self, mocker):
+        from hologres_cli import api_connection
+
+        mocker.patch.object(api_connection.credentials, "sts_prerequisites_met",
+                            return_value=False)
+        prof = {"auth_mode": "sts", "instance_id": "i", "region_id": "r", "database": "d"}
+        with pytest.raises(ApiConnectionError, match="sts 模式"):
+            _validate_api_profile(prof)

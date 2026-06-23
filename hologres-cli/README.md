@@ -62,7 +62,7 @@ The wizard will prompt for:
 - **Region** (e.g., `cn-hangzhou`, `cn-shanghai`)
 - **Instance ID** (e.g., `hgprecn-cn-xxx`)
 - **Network type**: `internet` / `intranet` / `vpc`
-- **Auth mode**: `basic` (username/password) or `ram` (AccessKey)
+- **Auth mode**: `basic` (username/password), `ram` (AccessKey), or `sts` (temporary credentials — see [STS Authentication](#sts-authentication))
 - **Database name**
 - **Warehouse** (computing group)
 - **Endpoint** (optional, auto-constructed from instance_id + region_id + nettype)
@@ -123,6 +123,8 @@ hologres config delete <name> --confirm  # Delete a profile
 }
 ```
 
+> **STS mode:** Set `"auth_mode": "sts"` and optionally `"credentials_uri": ""` to use temporary credentials fetched at runtime (temporary credentials are **never persisted** to this file). See [STS Authentication](#sts-authentication) below.
+
 ### Connection Mode
 
 The `connection_mode` field controls how the CLI connects to Hologres:
@@ -148,6 +150,32 @@ hologres config set connection_mode auto
 - The RAM account must have `hologram:ExecuteStatement` permission
 
 > **When to use API mode:** The API fallback is useful when the PostgreSQL port (80/443) is firewalled, when connecting cross-region, or when the instance hasn't enabled the PostgreSQL wire-protocol gateway. In `auto` mode this happens transparently.
+
+### STS Authentication
+
+`auth_mode: sts` connects using **STS temporary credentials** (temporary AccessKeyId / AccessKeySecret / SecurityToken) fetched at runtime via the official `alibabacloud-credentials` default chain. This enables **passwordless** access on ECS / containers / Codeup where long-lived AccessKeys should not be stored on disk.
+
+**Credential sources** (default chain order):
+1. Standard STS env vars: `ALIBABA_CLOUD_ACCESS_KEY_ID` + `ALIBABA_CLOUD_ACCESS_KEY_SECRET` + `ALIBABA_CLOUD_SECURITY_TOKEN`
+2. OIDC RAM role, `~/.aliyun/config.json`, ECS instance metadata
+3. `ALIBABA_CLOUD_CREDENTIALS_URI` — a URL returning STS JSON `{"AccessKeyId","AccessKeySecret","SecurityToken","Expiration"}`
+
+**Configure:**
+```bash
+# Option A — passwordless via env var (e.g. on ECS with a RAM role)
+export ALIBABA_CLOUD_CREDENTIALS_URI=http://100.100.100.200/latest/meta-data/Ram/security-credentials/<role>
+hologres config          # choose auth mode: sts, leave "Credentials URI" empty
+
+# Option B — per-profile URI
+hologres config set auth_mode sts
+hologres config set credentials_uri http://my-sts-endpoint/sts
+```
+
+**Notes:**
+- Temporary credentials are **never persisted** to `config.json` — fetched fresh on every command, auto-refreshed in-process by the SDK (Session-type credentials like `credentials_uri` refresh automatically).
+- On the JDBC path the SecurityToken is passed via libpq `options` (`options=sts_token=<token>`); on the OpenAPI path a credential object is used. You do not handle the token manually.
+- Works with all `connection_mode` values (`auto` / `jdbc` / `api`).
+- Do **not** set `ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` together with `ALIBABA_CLOUD_CREDENTIALS_URI` — the default chain resolves the static env vars first and the URI would never be reached.
 
 ## Commands
 
@@ -990,6 +1018,11 @@ hologres sql run --write "DELETE FROM users WHERE id = 1"
 | Code | Description |
 |------|-------------|
 | `CONNECTION_ERROR` | Failed to connect to database (JDBC and API fallback both failed) |
+| `STS_FETCH_ERROR` | Failed to fetch STS temporary credentials (retryable — network/source transient) |
+| `STS_TOKEN_INCOMPLETE` | Credential source returned a non-STS credential (missing SecurityToken) |
+| `STS_PREREQUISITES_MISSING` | sts mode needs `credentials_uri` or `ALIBABA_CLOUD_CREDENTIALS_URI` env var |
+| `CREDENTIALS_URI_INVALID` | `credentials_uri` is invalid or the credential source is unreachable |
+| `CREDENTIALS_PROVIDER_INIT_FAILED` | Default credential chain initialization failed (retryable) |
 | `QUERY_ERROR` | SQL execution error |
 | `LIMIT_REQUIRED` | Query needs LIMIT clause |
 | `WRITE_GUARD_ERROR` | Write operation attempted without `--write` flag |

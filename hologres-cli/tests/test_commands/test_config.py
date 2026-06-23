@@ -220,3 +220,30 @@ class TestConfigRegistered:
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
         assert "config" in result.output
+
+
+class TestConfigWizardSts:
+    """L3: config 向导的 STS 分支（采集 credentials_uri，不采 AK/SK）。"""
+
+    def test_wizard_sts_collects_credentials_uri(self, mock_home):
+        runner = CliRunner()
+        inputs = "\n".join([
+            "cn-hangzhou",        # Region Id
+            "hg-test",            # Instance Id
+            "internet",           # Network type
+            "sts",                # Auth mode
+            "http://my.uri",      # Credentials URI (sts 分支)
+            "db",                 # Database
+            "init_warehouse",     # Warehouse
+            "",                   # Endpoint
+            "80",                 # Port
+            "zh",                 # Language
+        ])
+        result = runner.invoke(cli, ["config"], input=inputs)
+        assert result.exit_code == 0, result.output
+        from hologres_cli.config_store import get_profile
+        p = get_profile("default")
+        assert p["auth_mode"] == "sts"
+        assert p["credentials_uri"] == "http://my.uri"
+        # STS 模式不落 AK/SK
+        assert not p.get("access_key_id")

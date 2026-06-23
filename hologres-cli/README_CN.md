@@ -62,7 +62,7 @@ hologres config
 - **地域**（如 `cn-hangzhou`、`cn-shanghai`）
 - **实例 ID**（如 `hgprecn-cn-xxx`）
 - **网络类型**：`internet` / `intranet` / `vpc`
-- **认证方式**：`basic`（用户名/密码）或 `ram`（AccessKey）
+- **认证方式**：`basic`（用户名/密码）、`ram`（AccessKey）或 `sts`（临时凭证，见 [STS 认证](#sts-认证)）
 - **数据库名**
 - **计算组**（Warehouse）
 - **Endpoint**（可选，自动根据 instance_id + region_id + nettype 构建）
@@ -123,6 +123,8 @@ hologres config delete <name> --confirm  # 删除 Profile
 }
 ```
 
+> **STS 模式：** 设置 `"auth_mode": "sts"` 并可选 `"credentials_uri": ""`，使用运行时拉取的临时凭证（临时凭证**不会**持久化到此文件）。详见下方 [STS 认证](#sts-认证)。
+
 ### 连接模式
 
 `connection_mode` 字段控制 CLI 如何连接 Hologres：
@@ -148,6 +150,32 @@ hologres config set connection_mode auto
 - RAM 账号必须有 `hologram:ExecuteStatement` 权限
 
 > **何时使用 API 模式：** 当 PostgreSQL 端口（80/443）被防火墙拦截、跨地域访问、或实例未开启 PostgreSQL 网关时，API 回退非常有用。在 `auto` 模式下这一切自动透明完成。
+
+### STS 认证
+
+`auth_mode: sts` 使用 **STS 临时凭证**（临时 AccessKeyId / AccessKeySecret / SecurityToken）连接，凭证在运行时通过官方 `alibabacloud-credentials` 默认凭证链获取。这使得在 ECS / 容器 / Codeup 等**不应在磁盘存储长期 AccessKey** 的环境下可以**免密**访问。
+
+**凭证来源**（默认链顺序）：
+1. 标准 STS 环境变量：`ALIBABA_CLOUD_ACCESS_KEY_ID` + `ALIBABA_CLOUD_ACCESS_KEY_SECRET` + `ALIBABA_CLOUD_SECURITY_TOKEN`
+2. OIDC RAM 角色、`~/.aliyun/config.json`、ECS 实例元数据
+3. `ALIBABA_CLOUD_CREDENTIALS_URI` —— 指向返回 STS JSON `{"AccessKeyId","AccessKeySecret","SecurityToken","Expiration"}` 的 URL
+
+**配置：**
+```bash
+# 方式 A —— 通过环境变量免密（如在绑定了 RAM 角色的 ECS 上）
+export ALIBABA_CLOUD_CREDENTIALS_URI=http://100.100.100.200/latest/meta-data/Ram/security-credentials/<role>
+hologres config          # 认证模式选 sts，Credentials URI 留空
+
+# 方式 B —— 为 Profile 指定 URI
+hologres config set auth_mode sts
+hologres config set credentials_uri http://my-sts-endpoint/sts
+```
+
+**说明：**
+- 临时凭证**永不入库** `config.json` —— 每次命令现拉，进程内由 SDK 自动刷新（`credentials_uri` 等 Session 类型凭证内置自动刷新）。
+- JDBC 路径通过 libpq 的 `options` 传递 SecurityToken（`options=sts_token=<token>`）；OpenAPI 路径使用 credential 对象。无需手动处理 token。
+- 适用于所有 `connection_mode`（`auto` / `jdbc` / `api`）。
+- **不要**同时设置 `ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` 和 `ALIBABA_CLOUD_CREDENTIALS_URI` —— 默认链会优先命中静态环境变量，导致 URI 永远走不到。
 
 ## 命令
 
@@ -760,6 +788,11 @@ hologres sql run --write "DELETE FROM users WHERE id = 1"
 | 错误码 | 说明 |
 |--------|------|
 | `CONNECTION_ERROR` | 连接数据库失败（JDBC 和 API 回退均失败） |
+| `STS_FETCH_ERROR` | 获取 STS 临时凭证失败（可重试 —— 网络/凭据源暂时不可用） |
+| `STS_TOKEN_INCOMPLETE` | 凭据源返回的不是 STS 凭证（缺 SecurityToken） |
+| `STS_PREREQUISITES_MISSING` | sts 模式需配置 `credentials_uri` 或 `ALIBABA_CLOUD_CREDENTIALS_URI` 环境变量 |
+| `CREDENTIALS_URI_INVALID` | `credentials_uri` 非法或凭据源不可达 |
+| `CREDENTIALS_PROVIDER_INIT_FAILED` | 默认凭证链初始化失败（可重试） |
 | `QUERY_ERROR` | SQL 执行错误 |
 | `LIMIT_REQUIRED` | 查询需要 LIMIT 子句 |
 | `WRITE_GUARD_ERROR` | 写操作未使用 `--write` 标志 |

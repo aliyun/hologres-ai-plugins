@@ -36,6 +36,18 @@ hologres config set database mydb
 
 Profile resolution priority: `--profile <name>` flag > current profile > error (prompts to run `hologres config`).
 
+### Auth Modes
+
+- `ram` (default): long-lived AccessKey (`access_key_id` + `access_key_secret`).
+- `basic`: DB username/password (`username` + `password`).
+- `sts`: **temporary credentials** (passwordless). Fetched at runtime via the `alibabacloud-credentials` default chain — set env `ALIBABA_CLOUD_CREDENTIALS_URI` or profile `credentials_uri`. Temporary credentials are never persisted; auto-refreshed in-process. Ideal for ECS/containers where long-lived keys must not be stored.
+
+```bash
+hologres config set auth_mode sts
+hologres config set credentials_uri http://my-sts-endpoint/sts   # optional
+# or: export ALIBABA_CLOUD_CREDENTIALS_URI=http://...
+```
+
 ## Quick Start
 
 ```bash

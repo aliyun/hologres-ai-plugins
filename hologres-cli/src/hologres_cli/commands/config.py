@@ -11,6 +11,7 @@ import click
 from ..config_store import (
     ConfigError,
     DEFAULT_PROFILE,
+    SENSITIVE_KEYS,
     SETTABLE_KEYS,
     build_dsn_from_profile,
     delete_profile,
@@ -49,7 +50,7 @@ REGION_CHOICES = [
     "us-west-1", "us-east-1", "eu-central-1",
 ]
 NETTYPE_CHOICES = ["internet", "intranet", "vpc"]
-AUTH_MODE_CHOICES = ["ram", "basic"]
+AUTH_MODE_CHOICES = ["ram", "basic", "sts"]
 LANGUAGE_CHOICES = ["zh", "en"]
 
 
@@ -122,6 +123,7 @@ def _interactive_wizard(profile_name: str) -> None:
     access_key_secret = existing.get("access_key_secret", "")
     username = existing.get("username", "")
     password = existing.get("password", "")
+    credentials_uri = existing.get("credentials_uri", "")
 
     if auth_mode == "ram":
         access_key_id = click.prompt(
@@ -136,7 +138,7 @@ def _interactive_wizard(profile_name: str) -> None:
         )
         if not access_key_secret:
             access_key_secret = existing.get("access_key_secret", "")
-    else:
+    elif auth_mode == "basic":
         username = click.prompt(
             "Username",
             default=username,
@@ -149,6 +151,14 @@ def _interactive_wizard(profile_name: str) -> None:
         )
         if not password:
             password = existing.get("password", "")
+    elif auth_mode == "sts":
+        # STS 模式：临时凭证运行时从凭据源拉取，不在此采集 AK/SK/user/pass。
+        # credentials_uri 留空 → 走环境变量 ALIBABA_CLOUD_CREDENTIALS_URI / 默认链。
+        credentials_uri = click.prompt(
+            "Credentials URI (leave empty to use env ALIBABA_CLOUD_CREDENTIALS_URI)",
+            default=credentials_uri,
+            show_default=False,
+        )
 
     # Database
     database = click.prompt(
@@ -200,14 +210,26 @@ def _interactive_wizard(profile_name: str) -> None:
         "port": port,
         "output_format": "json",
         "language": language,
+        "credentials_uri": credentials_uri,
     }
 
-    # Validate by building DSN
-    try:
-        dsn = build_dsn_from_profile(profile)
-    except ConfigError as e:
-        print_output(error("CONFIG_ERROR", str(e)))
-        return
+    # Validate by building DSN.
+    # sts 模式：临时凭证运行时注入，profile 无 AK/SK，跳过 build_dsn（会因未注入报错），
+    # 仅静态校验必需的非凭证字段。
+    if auth_mode != "sts":
+        try:
+            dsn = build_dsn_from_profile(profile)
+        except ConfigError as e:
+            print_output(error("CONFIG_ERROR", str(e)))
+            return
+    else:
+        if not database:
+            print_output(error("CONFIG_ERROR", "database is required."))
+            return
+        if not (instance_id or endpoint):
+            print_output(error("CONFIG_ERROR",
+                "Either 'instance_id' or 'endpoint' is required for sts mode."))
+            return
 
     # Save
     set_profile(profile)
@@ -220,7 +242,11 @@ def _interactive_wizard(profile_name: str) -> None:
     click.echo(f"  Profile:  {profile_name}")
     click.echo(f"  Endpoint: {endpoint or '(auto-constructed)'}")
     click.echo(f"  Database: {database}")
-    click.echo(f"  Auth:     {auth_mode}")
+    if auth_mode == "sts":
+        auth_display = f"sts (credentials_uri={credentials_uri or 'env: ALIBABA_CLOUD_CREDENTIALS_URI'})"
+    else:
+        auth_display = auth_mode
+    click.echo(f"  Auth:     {auth_display}")
 
 
 @config_cmd.command("set")
@@ -264,7 +290,7 @@ def config_set(ctx: click.Context, key: str, value: str, profile: str) -> None:
 
         p[key] = value
         set_profile(p)
-        print_output(success({"profile": profile_name, "key": key, "value": value if key not in ("access_key_secret", "password") else "***"}, fmt))
+        print_output(success({"profile": profile_name, "key": key, "value": value if key not in SENSITIVE_KEYS else "***"}, fmt))
     except ConfigError as e:
         print_output(error("CONFIG_ERROR", str(e), fmt))
 
@@ -297,7 +323,7 @@ def config_get(ctx: click.Context, key: str, profile: str) -> None:
             return
 
         value = p[key]
-        if key in ("access_key_secret", "password") and value:
+        if key in SENSITIVE_KEYS and value:
             value = "***"
 
         print_output(success({"profile": profile_name, "key": key, "value": value}, fmt))

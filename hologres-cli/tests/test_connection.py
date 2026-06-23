@@ -11,6 +11,7 @@ import pytest
 from hologres_cli.connection import (
     DSNError,
     HologresConnection,
+    _api_prerequisites_met,
     get_connection,
     mask_dsn_password,
     parse_dsn,
@@ -369,3 +370,58 @@ class TestGetConnection:
         """Test get_connection with no config raises DSNError."""
         with pytest.raises(DSNError):
             get_connection()
+
+
+class TestGetConnectionSts:
+    """L2: get_connection 的 STS 注入链路。"""
+
+    def test_injects_options_to_psycopg(self, mocker, mock_psycopg, mock_home):
+        """sts profile → get_connection(auto) 注入三元组 → psycopg.connect 收到 options=sts_token=..."""
+        from hologres_cli import connection
+        sts_profile = {
+            "name": "default", "auth_mode": "sts",
+            "endpoint": "hg.example.com", "port": 80, "database": "db",
+            "instance_id": "i", "region_id": "cn-hangzhou",
+            "credentials_uri": "", "connection_mode": "auto",
+        }
+        mocker.patch.object(connection, "_resolve_profile_dict", return_value=dict(sts_profile))
+        mocker.patch.object(connection.credentials, "resolve_sts_credentials",
+                            return_value={"access_key_id": "STS.AK", "access_key_secret": "SK",
+                                          "security_token": "TOK"})
+        get_connection()
+        kw = mock_psycopg["connect"].call_args.kwargs
+        assert kw["user"] == "STS.AK"
+        assert kw["password"] == "SK"
+        assert kw["options"] == "sts_token=TOK"
+
+    def test_credentials_error_propagates(self, mocker, mock_home):
+        from hologres_cli import connection
+        from hologres_cli.credentials import CredentialsError
+        from hologres_cli.errors import ErrorCode
+        sts_profile = {"auth_mode": "sts", "endpoint": "hg", "port": 80, "database": "db"}
+        mocker.patch.object(connection, "_resolve_profile_dict", return_value=dict(sts_profile))
+        mocker.patch.object(connection.credentials, "resolve_sts_credentials",
+                            side_effect=CredentialsError(ErrorCode.STS_FETCH_ERROR, "boom"))
+        with pytest.raises(CredentialsError) as exc:
+            get_connection()
+        assert exc.value.code == "STS_FETCH_ERROR"
+
+
+class TestApiPrerequisitesMetSts:
+    """L2: _api_prerequisites_met 的 STS 分支。"""
+
+    def test_sts_with_uri(self, monkeypatch):
+        monkeypatch.delenv("ALIBABA_CLOUD_CREDENTIALS_URI", raising=False)
+        assert _api_prerequisites_met({"auth_mode": "sts", "instance_id": "i",
+                                       "region_id": "r", "database": "d",
+                                       "credentials_uri": "http://x"}) is True
+
+    def test_sts_with_env(self, monkeypatch):
+        monkeypatch.setenv("ALIBABA_CLOUD_CREDENTIALS_URI", "http://x")
+        assert _api_prerequisites_met({"auth_mode": "sts", "instance_id": "i",
+                                       "region_id": "r", "database": "d"}) is True
+
+    def test_sts_neither(self, monkeypatch):
+        monkeypatch.delenv("ALIBABA_CLOUD_CREDENTIALS_URI", raising=False)
+        assert _api_prerequisites_met({"auth_mode": "sts", "instance_id": "i",
+                                       "region_id": "r", "database": "d"}) is False

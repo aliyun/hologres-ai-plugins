@@ -9,6 +9,7 @@ from typing import Any, Optional
 import click
 
 from ..connection import ADAPTIVE_EXECUTION_GUC, DSNError, get_connection
+from ..credentials import CredentialsError
 from ..logger import log_operation
 from ..masking import mask_rows
 from ..output import (
@@ -106,6 +107,11 @@ def _execute_single(query: str, profile, fmt, with_schema, no_limit_check, no_ma
         if print_result:
             print_output(connection_error(str(e), fmt))
         return {"error": {"code": "CONNECTION_ERROR", "message": str(e)}}
+    except CredentialsError as e:
+        # STS 凭证解析失败：用异常携带的精确 code（如 STS_FETCH_ERROR）输出
+        if print_result:
+            print_output(error(e.code, str(e), fmt))
+        return {"error": {"code": e.code, "message": str(e)}}
 
     query = query.strip()
 

@@ -337,6 +337,8 @@ hologres config set instance_id hgprecn-cn-xxx
 hologres config set database mydb
 ```
 
+`auth_mode` 支持 `ram`（AccessKey，默认）、`basic`（用户名/密码）和 `sts`（临时凭证 —— 通过 `ALIBABA_CLOUD_CREDENTIALS_URI` 或 `credentials_uri` 免密；详见 [hologres-cli STS 认证](hologres-cli/README_CN.md#sts-认证)）。
+
 连接解析优先级：
 1. **命令行参数**：`hologres --profile <name> status`
 2. **当前 Profile**：`config.json` 中的活跃 Profile

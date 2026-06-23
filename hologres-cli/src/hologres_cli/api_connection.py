@@ -30,6 +30,7 @@ from __future__ import annotations
 import re
 from typing import Any, Iterator, Optional
 
+from . import credentials
 from .config_store import ENDPOINT_TEMPLATES
 
 
@@ -52,11 +53,15 @@ def _validate_api_profile(profile: dict[str, Any]) -> None:
     Raises :class:`ApiConnectionError` with a precise human-readable
     message when something is missing.
     """
+    auth_mode = profile.get("auth_mode", "ram")
     missing: list[str] = []
-    if not profile.get("access_key_id"):
-        missing.append("access_key_id")
-    if not profile.get("access_key_secret"):
-        missing.append("access_key_secret")
+    if auth_mode != "sts":
+        # 非 sts 模式需要显式 AK/SK；sts 的临时凭证由 get_connection 注入或
+        # credential 对象现取，此处静态校验凭证源是否配置。
+        if not profile.get("access_key_id"):
+            missing.append("access_key_id")
+        if not profile.get("access_key_secret"):
+            missing.append("access_key_secret")
     if not profile.get("instance_id"):
         missing.append("instance_id")
     if not profile.get("region_id"):
@@ -68,6 +73,11 @@ def _validate_api_profile(profile: dict[str, Any]) -> None:
             "Hologres API connection requires the following profile fields: "
             + ", ".join(missing)
             + ". Run 'hologres config' to configure them."
+        )
+    if auth_mode == "sts" and not credentials.sts_prerequisites_met(profile):
+        raise ApiConnectionError(
+            "sts 模式需配置 profile.credentials_uri 或设置环境变量 "
+            "ALIBABA_CLOUD_CREDENTIALS_URI / ALIBABA_CLOUD_ACCESS_KEY_ID 等。"
         )
 
 
@@ -156,12 +166,20 @@ def _import_sdk():
 
 
 def _create_client(profile: dict[str, Any]) -> Any:
-    """Build a Hologram OpenAPI client from a profile dict."""
+    """Build a Hologram OpenAPI client from a profile dict.
+
+    STS 模式用 credential 对象（``Config(credential=...)``），SDK 全权取凭证 + 签名 +
+    自动刷新，OpenAPI 路径不出现 security_token 字段、不依赖 SDK 隐式分支；
+    其他模式用显式 AK/SK 字段（保持原行为）。
+    """
     HologramClient, open_api_models, _ = _import_sdk()
-    config = open_api_models.Config(
-        access_key_id=profile.get("access_key_id"),
-        access_key_secret=profile.get("access_key_secret"),
-    )
+    if profile.get("auth_mode") == "sts":
+        config = open_api_models.Config(credential=credentials.get_credential_client(profile))
+    else:
+        config = open_api_models.Config(
+            access_key_id=profile.get("access_key_id"),
+            access_key_secret=profile.get("access_key_secret"),
+        )
     region_id = profile.get("region_id") or "cn-hangzhou"
     config.endpoint = f"hologram.{region_id}.aliyuncs.com"
     config.read_timeout = 60000  # SQL queries can take longer than instance ops.

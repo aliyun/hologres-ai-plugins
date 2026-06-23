@@ -64,9 +64,13 @@ Set a configuration value.
 hologres config set region_id cn-shanghai
 hologres config set database mydb
 hologres config set auth_mode basic
+hologres config set auth_mode sts                                     # STS temporary credentials (passwordless)
+hologres config set credentials_uri http://my-sts-endpoint/sts        # sts only; empty → env ALIBABA_CLOUD_CREDENTIALS_URI
 ```
 
-Settable keys: `region_id`, `instance_id`, `nettype`, `auth_mode`, `access_key_id`, `access_key_secret`, `username`, `password`, `database`, `warehouse`, `endpoint`, `port`, `output_format`, `language`.
+> **sts mode:** Temporary credentials (AccessKeyId/AccessKeySecret/SecurityToken) are fetched at runtime via the `alibabacloud-credentials` default chain — set env `ALIBABA_CLOUD_CREDENTIALS_URI` or profile `credentials_uri`. Temporary credentials are **never persisted**; auto-refreshed in-process. Works with all `connection_mode` values.
+
+Settable keys: `region_id`, `instance_id`, `nettype`, `auth_mode`, `access_key_id`, `access_key_secret`, `username`, `password`, `database`, `warehouse`, `endpoint`, `port`, `output_format`, `language`, `credentials_uri`.
 
 ### config get
 
