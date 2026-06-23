@@ -9,6 +9,7 @@ from typing import Any, Optional, Tuple
 
 import click
 
+from .. import credentials
 from ..config_store import get_current_profile, set_profile
 from ..logger import log_operation
 from ..output import FORMAT_JSON, error, print_output, success, success_rows
@@ -53,42 +54,56 @@ def _import_cms_sdk() -> Tuple[Any, Any, Any, Any, Any]:
     return CMSClient, cms_models, CredentialClient, CredentialConfig, Config
 
 
+def _resolve_ak_credential_client(profile: dict) -> Any:
+    """Resolve a non-STS credential client via the legacy 3-tier priority.
+
+    Kept unchanged for backward compatibility with ``ram``/``basic`` profiles:
+
+    1. metric-specific AK/SK (``cms_access_key_id`` / ``cms_access_key_secret``)
+    2. general AK/SK (``access_key_id`` / ``access_key_secret``)
+    3. ``CredentialClient()`` default chain (env vars, ``~/.aliyun/config.json``,
+       instance RAM role, ...).
+    """
+    _, _, CredentialClient, CredentialConfig, _ = _import_cms_sdk()
+
+    ak = profile.get("cms_access_key_id")
+    sk = profile.get("cms_access_key_secret")
+    if not (ak and sk):
+        ak = profile.get("access_key_id")
+        sk = profile.get("access_key_secret")
+    if ak and sk:
+        return CredentialClient(CredentialConfig(
+            type="access_key",
+            access_key_id=ak,
+            access_key_secret=sk,
+        ))
+    return CredentialClient()
+
+
 def _create_cms_client(region: str) -> Any:
     """Create a CloudMonitor client.
 
-    Credentials are resolved in priority order:
-    1. Metric-specific AK/SK (``cms_access_key_id`` / ``cms_access_key_secret``)
-       from the active profile.
-    2. General AK/SK (``access_key_id`` / ``access_key_secret``) from the
-       active profile.
-    3. Default Alibaba Cloud credential chain (environment variables, SDK
-       config file, instance role, ...).
-    """
-    CMSClient, _, CredentialClient, CredentialConfig, Config = _import_cms_sdk()
+    Credentials are resolved by the profile's ``auth_mode``:
 
-    credential_client: Any = None
+    - ``sts``: reuse the SQL-link credential resolver
+      (:func:`credentials.get_credential_client`) — honors ``credentials_uri``
+      (explicit provider) or the default chain (standard STS env vars /
+      ``ALIBABA_CLOUD_CREDENTIALS_URI`` / ECS metadata), with in-process
+      auto-refresh of session tokens. Identical to the SQL/OpenAPI path.
+    - otherwise (``ram``/``basic``): legacy 3-tier priority via
+      :func:`_resolve_ak_credential_client` (cms AK → general AK → default chain).
+    """
+    CMSClient, _, _, _, Config = _import_cms_sdk()
+
     try:
         profile = get_current_profile()
-        # Priority 1: metric-specific AK/SK
-        ak = profile.get("cms_access_key_id")
-        sk = profile.get("cms_access_key_secret")
-        # Priority 2: general AK/SK
-        if not (ak and sk):
-            ak = profile.get("access_key_id")
-            sk = profile.get("access_key_secret")
-        if ak and sk:
-            cred_config = CredentialConfig(
-                type="access_key",
-                access_key_id=ak,
-                access_key_secret=sk,
-            )
-            credential_client = CredentialClient(cred_config)
     except Exception:
-        # Fall through to the default credential chain on any profile error.
-        credential_client = None
+        profile = {}
 
-    if credential_client is None:
-        credential_client = CredentialClient()
+    if profile.get("auth_mode") == "sts":
+        credential_client = credentials.get_credential_client(profile)
+    else:
+        credential_client = _resolve_ak_credential_client(profile)
 
     config = Config(credential=credential_client, region_id=region)
     config.endpoint = f"metrics.{region}.aliyuncs.com"
@@ -117,6 +132,33 @@ def _credential_error(fmt: str, exc: Exception) -> None:
         f"or use an instance RAM role. Detail: {exc}",
         fmt,
     ))
+
+
+def _init_cms_client(fmt: str, region: str, op_start: float, op_name: str) -> Any:
+    """Create the CMS client, mapping credential errors to structured output.
+
+    Returns the client, or ``None`` after printing an error (caller should return).
+
+    STS failures surface their precise ``CredentialsError`` code (e.g.
+    ``STS_FETCH_ERROR`` with retryable/hint); other init failures fall back to
+    the generic ``CREDENTIAL_ERROR`` hint via :func:`_credential_error`.
+    """
+    try:
+        return _create_cms_client(region)
+    except credentials.CredentialsError as exc:
+        log_operation(
+            op_name, success=False, error_code=exc.code,
+            error_message=str(exc), duration_ms=(time.time() - op_start) * 1000,
+        )
+        print_output(error(exc.code, str(exc), fmt))
+        return None
+    except Exception as exc:
+        log_operation(
+            op_name, success=False, error_code="CREDENTIAL_ERROR",
+            error_message=str(exc), duration_ms=(time.time() - op_start) * 1000,
+        )
+        _credential_error(fmt, exc)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -237,18 +279,8 @@ def list_cmd(ctx: click.Context, search: str | None, region: str | None, page_si
         _dependency_missing_error(fmt)
         return
 
-    try:
-        client = _create_cms_client(region)
-    except Exception as exc:
-        duration_ms = (time.time() - op_start) * 1000
-        log_operation(
-            "metric.list",
-            success=False,
-            error_code="CREDENTIAL_ERROR",
-            error_message=str(exc),
-            duration_ms=duration_ms,
-        )
-        _credential_error(fmt, exc)
+    client = _init_cms_client(fmt, region, op_start, "metric.list")
+    if client is None:
         return
 
     rows: list[dict[str, Any]] = []
@@ -454,18 +486,8 @@ def query_cmd(
         _dependency_missing_error(fmt)
         return
 
-    try:
-        client = _create_cms_client(region)
-    except Exception as exc:
-        duration_ms = (time.time() - op_start) * 1000
-        log_operation(
-            "metric.query",
-            success=False,
-            error_code="CREDENTIAL_ERROR",
-            error_message=str(exc),
-            duration_ms=duration_ms,
-        )
-        _credential_error(fmt, exc)
+    client = _init_cms_client(fmt, region, op_start, "metric.query")
+    if client is None:
         return
 
     # Paginated fetch
@@ -602,18 +624,8 @@ def latest_cmd(
         _dependency_missing_error(fmt)
         return
 
-    try:
-        client = _create_cms_client(region)
-    except Exception as exc:
-        duration_ms = (time.time() - op_start) * 1000
-        log_operation(
-            "metric.latest",
-            success=False,
-            error_code="CREDENTIAL_ERROR",
-            error_message=str(exc),
-            duration_ms=duration_ms,
-        )
-        _credential_error(fmt, exc)
+    client = _init_cms_client(fmt, region, op_start, "metric.latest")
+    if client is None:
         return
 
     all_datapoints: list[dict[str, Any]] = []

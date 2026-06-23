@@ -1282,3 +1282,107 @@ class TestCreateCmsClientCredentials:
         assert "hologres metric config" in msg
         assert "hologres config" in msg
         assert "ALIBABA_CLOUD_ACCESS_KEY_ID" in msg
+
+
+# ---------------------------------------------------------------------------
+# STS auth_mode 分支（metric 链路接入 STS，与 SQL 链路一致）
+# ---------------------------------------------------------------------------
+
+
+class TestCreateCmsClientSts:
+    """auth_mode=sts 时 _create_cms_client 复用 credentials.get_credential_client。"""
+
+    def test_sts_uses_get_credential_client(self, mocker):
+        fake_cred_client = MagicMock(name="sts_cred_client")
+        mocker.patch(
+            "hologres_cli.commands.metric.credentials.get_credential_client",
+            return_value=fake_cred_client,
+        )
+        captured = {}
+
+        class FakeCMSClient:
+            def __init__(self, config):
+                captured["config"] = config
+
+        _inject_fake_sdk(
+            mocker,
+            cms_client_factory=FakeCMSClient,
+            profile={"auth_mode": "sts", "region_id": "cn-hangzhou", "credentials_uri": ""},
+        )
+        from hologres_cli.commands.metric import _create_cms_client
+        _create_cms_client("cn-hangzhou")
+        # sts 分支：Config(credential=get_credential_client 返回的 fake)，不走 AK 字段
+        assert captured["config"].credential is fake_cred_client
+        assert captured["config"].region_id == "cn-hangzhou"
+
+    def test_non_sts_keeps_ak_priority(self, mocker):
+        """回归：ram profile 有 access_key_id → _resolve_ak_credential_client 优先级 2。"""
+        cred_instances = []
+
+        class FakeCredentialClient:
+            def __init__(self, config=None):
+                cred_instances.append(config)
+
+        _inject_fake_sdk(
+            mocker,
+            credential_client_factory=FakeCredentialClient,
+            profile={
+                "auth_mode": "ram",
+                "access_key_id": "LTAIx",
+                "access_key_secret": "sky",
+                "region_id": "cn-hangzhou",
+            },
+        )
+        from hologres_cli.commands.metric import _create_cms_client
+        _create_cms_client("cn-hangzhou")
+        # 优先级 2 命中 → CredentialClient(CredentialConfig(type=access_key, ak, sk))
+        assert len(cred_instances) == 1
+        cfg = cred_instances[0]
+        assert cfg.type == "access_key"
+        assert cfg.access_key_id == "LTAIx"
+        assert cfg.access_key_secret == "sky"
+
+
+class TestMetricCmdStsErrorMapping:
+    """sts 凭证失败时，metric 命令输出精确的 CredentialsError code（非固定 CREDENTIAL_ERROR）。"""
+
+    def _setup_sts_failure(self, mocker, exc):
+        mocker.patch(
+            "hologres_cli.commands.metric.credentials.get_credential_client",
+            side_effect=exc,
+        )
+        _inject_fake_sdk(mocker, profile={"auth_mode": "sts", "region_id": "cn-hangzhou"})
+
+    def test_list_maps_credentials_error(self, mocker):
+        from hologres_cli.credentials import CredentialsError
+        from hologres_cli.errors import ErrorCode
+        self._setup_sts_failure(mocker, CredentialsError(ErrorCode.STS_FETCH_ERROR, "boom"))
+        runner = CliRunner()
+        result = runner.invoke(cli, ["metric", "list", "--region", "cn-hangzhou"])
+        assert result.exit_code == 0
+        out = json.loads(result.output)
+        assert out["ok"] is False
+        assert out["error"]["code"] == "STS_FETCH_ERROR"
+        assert out["error"]["retryable"] is True
+
+    def test_query_maps_credentials_error(self, mocker):
+        from hologres_cli.credentials import CredentialsError
+        from hologres_cli.errors import ErrorCode
+        self._setup_sts_failure(mocker, CredentialsError(ErrorCode.CREDENTIALS_URI_INVALID, "bad uri"))
+        runner = CliRunner()
+        result = runner.invoke(cli, ["metric", "query", "cpu", "--instance-id", "x", "--region", "cn-hangzhou"])
+        assert result.exit_code == 0
+        out = json.loads(result.output)
+        assert out["ok"] is False
+        assert out["error"]["code"] == "CREDENTIALS_URI_INVALID"
+
+    def test_latest_maps_credentials_error(self, mocker):
+        from hologres_cli.credentials import CredentialsError
+        from hologres_cli.errors import ErrorCode
+        self._setup_sts_failure(mocker, CredentialsError(ErrorCode.STS_FETCH_ERROR, "boom"))
+        runner = CliRunner()
+        result = runner.invoke(cli, ["metric", "latest", "cpu", "--instance-id", "x", "--region", "cn-hangzhou"])
+        assert result.exit_code == 0
+        out = json.loads(result.output)
+        assert out["ok"] is False
+        assert out["error"]["code"] == "STS_FETCH_ERROR"

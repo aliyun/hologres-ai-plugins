@@ -123,6 +123,8 @@ hologres config delete <name> --confirm  # 删除 Profile
 }
 ```
 
+> **basic 模式：** `username` 使用 `BASIC$<name>` 格式（Hologres DB 账号前缀，不是普通 PostgreSQL 用户名）。
+>
 > **STS 模式：** 设置 `"auth_mode": "sts"` 并可选 `"credentials_uri": ""`，使用运行时拉取的临时凭证（临时凭证**不会**持久化到此文件）。详见下方 [STS 认证](#sts-认证)。
 
 ### 连接模式
@@ -155,7 +157,7 @@ hologres config set connection_mode auto
 
 `auth_mode: sts` 使用 **STS 临时凭证**（临时 AccessKeyId / AccessKeySecret / SecurityToken）连接，凭证在运行时通过官方 `alibabacloud-credentials` 默认凭证链获取。这使得在 ECS / 容器 / Codeup 等**不应在磁盘存储长期 AccessKey** 的环境下可以**免密**访问。
 
-**凭证来源**（默认链顺序）：
+**凭证来源** —— 若 profile 设了 `credentials_uri` 字段，则直接使用它（显式 provider，绕过默认链）。否则按默认链顺序：
 1. 标准 STS 环境变量：`ALIBABA_CLOUD_ACCESS_KEY_ID` + `ALIBABA_CLOUD_ACCESS_KEY_SECRET` + `ALIBABA_CLOUD_SECURITY_TOKEN`
 2. OIDC RAM 角色、`~/.aliyun/config.json`、ECS 实例元数据
 3. `ALIBABA_CLOUD_CREDENTIALS_URI` —— 指向返回 STS JSON `{"AccessKeyId","AccessKeySecret","SecurityToken","Expiration"}` 的 URL
@@ -176,6 +178,7 @@ hologres config set credentials_uri http://my-sts-endpoint/sts
 - JDBC 路径通过 libpq 的 `options` 传递 SecurityToken（`options=sts_token=<token>`）；OpenAPI 路径使用 credential 对象。无需手动处理 token。
 - 适用于所有 `connection_mode`（`auto` / `jdbc` / `api`）。
 - **不要**同时设置 `ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` 和 `ALIBABA_CLOUD_CREDENTIALS_URI` —— 默认链会优先命中静态环境变量，导致 URI 永远走不到。
+- **`metric`（CMS）命令同样走 STS 解析** —— `hologres metric list/query/latest` 在 `auth_mode=sts` 时与 SQL 完全一致（env STS / `credentials_uri` / 自动轮转），STS 模式下无需 `hologres metric config`。
 
 ## 命令
 

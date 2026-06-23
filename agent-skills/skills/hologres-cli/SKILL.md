@@ -38,15 +38,42 @@ Profile resolution priority: `--profile <name>` flag > current profile > error (
 
 ### Auth Modes
 
-- `ram` (default): long-lived AccessKey (`access_key_id` + `access_key_secret`).
-- `basic`: DB username/password (`username` + `password`).
-- `sts`: **temporary credentials** (passwordless). Fetched at runtime via the `alibabacloud-credentials` default chain — set env `ALIBABA_CLOUD_CREDENTIALS_URI` or profile `credentials_uri`. Temporary credentials are never persisted; auto-refreshed in-process. Ideal for ECS/containers where long-lived keys must not be stored.
+Choose by what credentials you have (all modes also need `region_id` / `instance_id` / `database`):
 
+| Scenario | `auth_mode` | Credential fields |
+|---|---|---|
+| Have an Alibaba Cloud AccessKey (`LTAI…`) | `ram` (default) | `access_key_id` + `access_key_secret` |
+| Have only a Hologres DB account | `basic` | `username` + `password` |
+| On ECS/container/Codeup, want passwordless | `sts` | none persisted — fetched at runtime |
+
+**ram** — long-lived AccessKey:
+```bash
+hologres config set auth_mode ram
+hologres config set access_key_id LTAI5tXXXXXXXXXXXX
+hologres config set access_key_secret XXXXXXXXXXXXXXXX
+```
+
+**basic** — Hologres DB account. The username **must** use the `BASIC$<name>` format (Hologres-specific prefix, **not** a plain PostgreSQL username):
+```bash
+hologres config set auth_mode basic
+hologres config set username 'BASIC$myuser'
+hologres config set password XXXXXXXX
+```
+
+**sts** — temporary credentials, passwordless (ideal for ECS/containers). Temporary credentials are fetched at runtime, **never persisted**, auto-refreshed in-process. Applies uniformly to SQL execution, instance management, **and metric (CMS)** commands (shared `credentials.get_credential_client` resolver):
 ```bash
 hologres config set auth_mode sts
 hologres config set credentials_uri http://my-sts-endpoint/sts   # optional
 # or: export ALIBABA_CLOUD_CREDENTIALS_URI=http://...
 ```
+
+**STS prerequisite:** the assumed RAM role must hold Hologres + CloudMonitor (CMS) permissions — otherwise connections may succeed but operations fail with permission errors.
+
+**`credentials_uri` / `ALIBABA_CLOUD_CREDENTIALS_URI` details** — the URI must `GET`-return JSON (camelCase):
+`{"Code":"Success","AccessKeyId":"STS.xxx","AccessKeySecret":"yyy","SecurityToken":"zzz","Expiration":"2026-06-24T12:00:00Z"}`.
+Resolution priority: **profile `credentials_uri` field** (if set → explicit provider that bypasses the default chain) **> default chain** (whose steps are: standard STS env vars → OIDC → `~/.aliyun/config.json` → ECS metadata → env `ALIBABA_CLOUD_CREDENTIALS_URI` as last-resort fallback). Session-type credentials auto-refresh on expiry; do **not** set the static STS env vars together with the URI (the env vars win and the URI is never reached).
+
+Verify any mode with `hologres status`.
 
 ## Quick Start
 

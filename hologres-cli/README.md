@@ -123,6 +123,8 @@ hologres config delete <name> --confirm  # Delete a profile
 }
 ```
 
+> **basic mode:** `username` uses the `BASIC$<name>` format (Hologres DB account prefix, not a plain PostgreSQL username).
+>
 > **STS mode:** Set `"auth_mode": "sts"` and optionally `"credentials_uri": ""` to use temporary credentials fetched at runtime (temporary credentials are **never persisted** to this file). See [STS Authentication](#sts-authentication) below.
 
 ### Connection Mode
@@ -155,7 +157,7 @@ hologres config set connection_mode auto
 
 `auth_mode: sts` connects using **STS temporary credentials** (temporary AccessKeyId / AccessKeySecret / SecurityToken) fetched at runtime via the official `alibabacloud-credentials` default chain. This enables **passwordless** access on ECS / containers / Codeup where long-lived AccessKeys should not be stored on disk.
 
-**Credential sources** (default chain order):
+**Credential sources** — if the profile has a `credentials_uri` field set, it is used directly (explicit provider, bypassing the chain). Otherwise the default chain order is:
 1. Standard STS env vars: `ALIBABA_CLOUD_ACCESS_KEY_ID` + `ALIBABA_CLOUD_ACCESS_KEY_SECRET` + `ALIBABA_CLOUD_SECURITY_TOKEN`
 2. OIDC RAM role, `~/.aliyun/config.json`, ECS instance metadata
 3. `ALIBABA_CLOUD_CREDENTIALS_URI` — a URL returning STS JSON `{"AccessKeyId","AccessKeySecret","SecurityToken","Expiration"}`
@@ -176,6 +178,7 @@ hologres config set credentials_uri http://my-sts-endpoint/sts
 - On the JDBC path the SecurityToken is passed via libpq `options` (`options=sts_token=<token>`); on the OpenAPI path a credential object is used. You do not handle the token manually.
 - Works with all `connection_mode` values (`auto` / `jdbc` / `api`).
 - Do **not** set `ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET` together with `ALIBABA_CLOUD_CREDENTIALS_URI` — the default chain resolves the static env vars first and the URI would never be reached.
+- **`metric` (CMS) commands use the same STS resolver** — `hologres metric list/query/latest` honor `auth_mode=sts` (env STS / `credentials_uri` / auto-rotation) exactly like SQL; no separate `hologres metric config` is needed for STS.
 
 ## Commands
 
