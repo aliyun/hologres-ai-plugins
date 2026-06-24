@@ -57,7 +57,7 @@ The repo ships `.githooks/pre-commit`. Enable once per clone:
 git config --local core.hooksPath .githooks
 ```
 
-It runs two stages: (1) forwards to your global pre-commit hook (e.g. AccessKey scanner) — required because `core.hooksPath` overrides the global hook path; (2) runs `agent-skills/tests/test_catalog_consistency.py` to block "ghost skills". Bypass a single commit with `git commit --no-verify`.
+It runs three stages: (1) forwards to your global pre-commit hook (e.g. AccessKey scanner) — required because `core.hooksPath` overrides the global hook path; (2) runs `agent-skills/tests/test_catalog_consistency.py` to block "ghost skills"; (3) runs `.githooks/check_uv_lock_sync.py` to block commits that edit dependency sections in any `pyproject.toml` (next to a tracked `uv.lock`) without also staging the lock — plain-text parsing, no tomllib, so it runs on the system `python3` (<3.11). Bypass a single commit with `git commit --no-verify`.
 
 ## Architecture
 
