@@ -7,552 +7,145 @@ description: >
   云监控数据通过 `hologres metric query` / `hologres metric latest` 获取；元仓与 PG 系统表数据通过 `hologres sql run` 获取，全程享有 hologres-cli 的安全护栏、JSON 结构化输出与自动错误重试能力。
 ---
 
+> ⚠️ **执行前就绪检查（所有诊断步骤之前完成）**：
+> 1. 已 `pip install hologres-cli`，且 `hologres status` 能连通目标实例（连接哪个实例 / 库由当前 profile 决定，可用 `--profile <name>` 切换）。
+> 2. 云监控 AK/SK 已就绪（`hologres metric config` 专用配置，或 profile 通用 AK/SK，或默认凭证链）。
+> 3. `export HOLOGRES_SKILL=hologres-diagnosis-cpu`，便于事后审计。
+>
+> 完整就绪细节（安装 / 凭证优先级 / RAM 权限 / 前缀判定 / 时间格式）见 [references/preconditions.md](references/preconditions.md)。
+
 # Hologres CPU 使用率诊断
 
-系统性诊断 Hologres 实例 CPU 异常（打满 / 持续高位），按照「云监控水位 → 宏观定性 → 分布定位 → 查询归因 → 后台干扰」的链路自动化归因，并输出结构化诊断报告。
+按「云监控水位 → 宏观定性 → 分布定位 → 查询归因 → 后台干扰」自动化归因 CPU 异常（打满 / 持续高位），输出结构化 Markdown 诊断报告。
 
 ## 输入参数
 
 | 参数 | 必填 | 说明 |
 |------|------|------|
-| `instance_id` | 是 | Hologres 实例 ID，例如 `hgprecn-cn-xxx` |
-| `start_time` | 是 | 诊断开始时间，ISO-8601 格式（如 `2025-05-19T10:00:00`）或 epoch 毫秒 |
-| `end_time` | 是 | 诊断结束时间，ISO-8601 格式或 epoch 毫秒 |
-| `region` | 否 | 云监控 Region，自动从 config profile 的 `region_id` 读取，无需手动指定；也可通过 `--region` 显式覆盖 |
+| `instance_id` | 是 | Hologres 实例 ID，例如 `hgprecn-cn-xxx`（传给 `hologres metric` 的 `--instance-id`） |
+| `start_time` | 是 | 诊断开始时间，ISO-8601（如 `2025-05-19T10:00:00`）或 epoch 毫秒 |
+| `end_time` | 是 | 诊断结束时间，格式同 `start_time` |
+| `region` | 否 | 云监控 Region，默认从 profile 的 `region_id` 自动读取；可用 `--region` 覆盖 |
 
-> 时间窗口长度决定了「短周期 / 长周期」分支阈值：`<24h` 为短周期，`>24h` 为长周期。
+> 数据库由当前 profile 的 `database` 决定，无需也无法在命令上指定 `--db-name`；如需换库用 `hologres config set database <db>` 或 `--profile <name>`。
 
-## 指标名称前缀约定
+### 时间窗口约束
 
-Hologres 云监控指标名称包含 **产品类型前缀**，前缀通过「前置步骤：实例类型自动判断」自动获取，无需用户手动指定：
+CPU 诊断只分析 **最近 30 天内、且跨度不超过 7 天** 的数据。校验规则（按顺序执行）：
 
-| 实例类型 | 前缀 | 示例 |
-|----------|------|------|
-| 计算组（Warehouse） | `warehouse_` | `warehouse_cpu_usage` |
-| 通用型（Standard） | `standard_` | `standard_cpu_usage` |
-| 从实例（Follower） | `follower_` | `follower_cpu_usage` |
-| Serverless 型 | `serverless_` | `serverless_cpu_usage` |
-| 湖仓加速型（Shared） | `shared_` | `shared_cpu_usage` |
+1. **30 天有效期**：`start_time` 必须满足 `start_time >= current_time - 30d`（`hg_query_log` 默认保留 30 天）。若早于 30 天前，**拒绝执行**并提示：
+   > ⚠️ 诊断时间范围超出 hg_query_log 保留期（30 天），请重新指定 start_time >= {30天前日期}。
+2. **7 天跨度上限**：若 `end_time - start_time > 7天`，使用 `AskUserQuestion` 工具引导用户收窄：
+
+   ```
+   AskUserQuestion:
+     question: "当前时间跨度超过 7 天，CPU 诊断只能分析最近 30 天内的 7 天范围数据。请选择要分析的时间窗口："
+     options:
+       - label: "最近 7 天"
+         description: "分析 end_time 前 7 天的数据"
+       - label: "最近 3 天"
+         description: "分析 end_time 前 3 天的数据"
+       - label: "最近 1 天"
+         description: "分析 end_time 前 1 天的数据"
+   ```
+
+   按用户选择重设 `start_time = end_time - N天`；若用户用 "Other" 自填，校验跨度 ≤ 7 天且 ≥ 30 天前。
+
+> 时间窗口长度决定「短周期 / 长周期」分支：`<24h` 短周期，`>24h` 长周期。
+
+## hologres-cli 约定
+
+- 元仓 / PG 系统表查询统一用 `hologres sql run --no-limit-check "<SQL>"`（聚合诊断无需 LIMIT 保护）。
+- 云监控指标用 `hologres metric query <metric> --instance-id <id> --start-time <s> --end-time <e> --period <p>`（区间）/ `hologres metric latest <metric> --instance-id <id> --period <p>`（最新点）；`instanceId` 由 CLI 自动注入，无需手填 `--dimensions`。
+- 指标名前缀（`standard_` / `warehouse_` / ...）不会被 CLI 自动添加，需由「前置：实例类型判定」结果拼进 metric 名（见 preconditions §5）。
+- 连接层已自动 `SET hg_computing_resource = 'serverless'`；来源标记由 `export HOLOGRES_SKILL` 注入 `application_name`，**无需** 在 SQL 里手写 `SET ...` 前缀。
+- 输出 `digest` / `query_id` / `query` 时必须保留完整内容，**禁止** 使用 `left()` / `substr()` / `::char(N)` / `...` 截断；长 SQL 换行展示。
+- 独立的指标 / SQL 命令可在同一轮并行下发以加速。
 
 ## 诊断主流程
 
 ```
-前置步骤：实例类型自动判断
-   └── 调用 instance-manage get → 获取 InstanceType → 映射指标前缀 {prefix}
+前置：实例类型自动判断
+  └── hologres instance-manage get → data.Instance.InstanceType → {prefix}（见 preconditions §5）
 
-第一阶段：CPU 水位采集 + 状态分级
-   ├── 持续打满 / 持续高位 → 第二阶段（归因）
-   └── 安全平稳         → 直接出具「健康」报告
+Stage 1 — CPU 水位采集 + 状态分级（per warehouse）
+  ├── 🔴 持续打满 / 🟠 持续高位 → Stage 2
+  └── 🟢 安全平稳 / ⚪ 低水位   → 直接出健康报告
 
-第二阶段：四象限归因
-   ├── Q1 宏观定性：业务增长 vs 异常瓶颈
-   ├── Q2 分布定位：全局高 vs 局部高（Worker / Shard）
-   ├── Q3 查询归因：大 Query / 锁竞争 / 长 Query
-   └── Q4 后台干扰：Compaction 写放大 / DDL 变更
+Stage 2 — 四象限归因（独立命令并行）
+  ├── Q1 宏观定性：业务增长 vs 异常瓶颈
+  ├── Q2 分布定位：全局高 vs 局部高
+  ├── Q3 查询归因：大 Query / 长 Query / 锁竞争 / 高频小 Query
+  └── Q4 后台干扰：Compaction 写放大 / DDL 变更
 
-第三阶段：综合输出诊断报告（Markdown）
+Stage 3 — 综合输出 Markdown 诊断报告
 ```
 
-## 前置步骤：实例类型自动判断
-
-在执行任何指标查询之前，必须先获取实例类型并自动映射到对应的指标名前缀 `{prefix}`，无需用户手动指定。
-
-### 执行命令
+### 前置 — 实例类型自动判断
 
 ```bash
 hologres instance-manage get
 ```
 
-### 解析规则
+从返回 JSON 的 `data.Instance.InstanceType` 映射出 `{prefix}`（`Warehouse`→`warehouse_`、`Standard`→`standard_`、`Follower`→`follower_`、`Serverless`→`serverless_`、`Shared`→`shared_`）。后续所有指标名的 `{prefix}` 均由此确定。
 
-从返回 JSON 中提取 `data.Instance.InstanceType` 字段，根据以下映射表确定 `{prefix}`：
+### Stage 1 — 水位采集与分级
 
-| InstanceType | 中文名 | 指标前缀 |
-|---|---|---|
-| Warehouse | 计算组型 | `warehouse_` |
-| Follower | 只读从实例 | `follower_` |
-| Standard | 普通型 | `standard_` |
-| Serverless | Serverless 型 | `serverless_` |
-| Shared | 共享型 | `shared_` |
+详见 [references/cpu-water-level.md](references/cpu-water-level.md)。
 
-### 示例
+下发 `hologres metric query {prefix}cpu_usage --instance-id {instance_id} --start-time {start_time} --end-time {end_time} --period 60`，按 warehouse 粒度对照 🔴/🟠/🟢/⚪ 分级表。任一 warehouse 命中 🔴/🟠 进入 Stage 2。
 
-```bash
-hologres instance-manage get
-```
+### Stage 2 — 四象限归因
 
-返回结果（摘要）：
+详见 [references/quadrant-attribution.md](references/quadrant-attribution.md)。每个象限内的独立命令并行下发：
 
-```json
-{
-  "data": {
-    "Instance": {
-      "InstanceType": "Warehouse",
-      ...
-    }
-  }
-}
-```
+- **Q1**：CMS 取 `{prefix}query_qps`、`{prefix}dml_rps`、`{prefix}query_latency`，判定 *正常增长* / *异常瓶颈* / *拥塞*。
+- **Q2**：CMS 取 `{prefix}cpu_usage_by_worker` + `hg_worker_info` SQL + `pg_stat_activity` SQL，判定 *物理倾斜*（shard 数偏差）或 *局部热点*（单 worker CPU）。
+- **Q3**：`hg_query_log` 按 `cpu_time_ms` Top-10；`pg_stat_activity` 长查询；`pg_locks` 锁链；`digest` 高频小查询。
+- **Q4**：CMS 取 `{prefix}compaction_duration` / `{prefix}compaction_num` + `hg_query_log` DDL 审计（过滤 `bitmap_columns` / `dictionary_encoding_columns` / `clustering_key`）。基线激增 > 50% 且邻近属性 DDL → **写放大**。
 
-→ `InstanceType` 为 `"Warehouse"` → 使用 `warehouse_` 前缀 → 后续查询 `warehouse_cpu_usage`、`warehouse_query_qps` 等。
+### Stage 3 — 输出报告
 
-> **重要**：后续所有指标查询中的 `{prefix}` 均由此步骤自动确定，无需用户手动选择。
-
----
-
-## 前提条件
-
-### 1. 安装 hologres-cli
-
-```bash
-pip install hologres-cli
-```
-
-### 2. 配置 Hologres 连接
-
-```bash
-hologres config          # 交互式向导
-hologres status          # 验证连接
-```
-
-### 3. 配置阿里云凭证（用于云监控）
-
-云监控 API 的 AK/SK 支持 **metric 专用配置**，推荐使用 `hologres metric config` 单独配置，与 Hologres 连接凭证互不影响：
-
-```bash
-# 推荐：为 metric 命令单独配置 AK/SK
-hologres metric config --access-key-id <your_ak> --access-key-secret <your_sk>
-
-# 或交互式配置
-hologres metric config
-```
-
-若未配置 metric 专用凭证，则**回退读取 `hologres config` 配置的通用 AK/SK**（即 `~/.hologres/config.json` 中当前 profile 的 `access_key_id` / `access_key_secret`，敏感字段加密存储）：
-
-```bash
-hologres config         # 交互式向导，会引导填入 AK/SK
-```
-
-若 profile 中均未配置 AK/SK，则回退到阿里云默认凭证链，可通过环境变量等方式提供：
-
-```bash
-# 仅在 profile 未配置 AK/SK 时作为回退方式
-export ALIBABA_CLOUD_ACCESS_KEY_ID=<your_ak>
-export ALIBABA_CLOUD_ACCESS_KEY_SECRET=<your_sk>
-# 也支持 STS / RAM 角色等 alibabacloud-credentials 默认凭证链方式
-```
-
-> 凭证解析优先级：`hologres metric config` 专用 AK/SK > `hologres config` 通用 AK/SK > 环境变量 > SDK 凭证文件 > ECS RAM 角色。
-
-### 4. 权限要求
-
-- Hologres 侧：Superuser 或 `pg_read_all_stats` 权限（读取 `hg_query_log`、`hg_worker_info` 等系统表）
-- 云监控侧：账号具备 `cms:DescribeMetricList` / `cms:DescribeMetricLast` 调用权限
-
-```bash
-hologres sql run "SELECT current_user, usesuper FROM pg_user WHERE usename = current_user"
-```
-
-### 5. 设置 SQL Tracking
-
-```bash
-export HOLOGRES_SKILL=hologres-diagnosis-cpu
-```
-
-所有诊断 SQL 会带上 `application_name = "hologres-cli/hologres-diagnosis-cpu"`，便于事后审计。
-
----
-
-## 第一阶段：CPU 水位采集与状态分级
-
-调用云监控获取 `instance_id` 下各 Warehouse 粒度的 CPU 使用率时间序列，并据此对实例 CPU 状态进行分类。指标名前缀 `{prefix}` 已由前置步骤自动确定。
-
-### 1.1 获取 CPU 时间序列（按 Warehouse 粒度）
-
-```bash
-# 时间窗口内的 CPU 使用率曲线（建议 period=60 秒）
-# 注意：{prefix} 已由前置步骤自动确定（如 Warehouse 实例 → warehouse_cpu_usage）
-hologres metric query {prefix}_cpu_usage \
-    --instance-id {instance_id} \
-    --start-time {start_time} \
-    --end-time {end_time} \
-    --period 60
-```
-
-返回数据点字段（JSON）：
-
-```json
-{"timestamp": 1747641600000, "userId": "xxx", "instanceId": "hgprecn-cn-xxx", "warehouseId": "wh_default", "Maximum": 95.2, "Average": 78.1, "Minimum": 60.4}
-```
-
-### 1.2 获取 CPU 最新点（快速健康检查）
-
-```bash
-hologres metric latest {prefix}_cpu_usage --instance-id {instance_id} --period 60
-```
-
-### 1.3 CPU 状态分级（按 Warehouse 分别判定）
-
-| 状态 | 判定条件 | 后续动作 |
-|------|----------|----------|
-| 🔴 持续打满 | `Max(CPU) = 100%` 且持续时间 `> 5 min` | 进入第二阶段全量归因 |
-| 🟠 持续高位 | `Max(CPU) > 80%` 且持续时间 `> 15 min` | 进入第二阶段全量归因 |
-| 🟢 安全平稳 | `30% < Max(CPU) < 80%` | 跳过归因，输出健康报告 |
-| ⚪ 低水位 | `Max(CPU) < 30%` | 跳过归因，提示资源利用率偏低 |
-
-> **判定要点**：必须基于 Warehouse 粒度分别判定。任一 Warehouse 命中 🔴/🟠 都需进入归因。
-
----
-
-## 第二阶段：四象限归因诊断
-
-### Q1：宏观定性 —— 业务增长 vs 异常瓶颈
-
-**目标**：先判断 CPU 上涨是否由业务自然增长引起。若 QPS/RPS 同比增长且延迟无恶化，则属于「正常增长」；若业务平稳但 CPU 异常上涨，则属于「异常瓶颈」，需进一步归因。
-
-#### 数据源
-
-- 云监控指标：`{prefix}_query_qps`（QPS）、`{prefix}_dml_rps`（DML RPS）、`{prefix}_query_latency`（SQL 延迟）
-
-#### 执行命令
-
-```bash
-# QPS 时间序列（{prefix} 已由前置步骤自动确定）
-hologres metric query {prefix}_query_qps \
-    --instance-id {instance_id} --start-time {start_time} --end-time {end_time} --period 60
-
-# DML RPS 时间序列
-hologres metric query {prefix}_dml_rps \
-    --instance-id {instance_id} --start-time {start_time} --end-time {end_time} --period 60
-
-# 延迟时间序列
-hologres metric query {prefix}_query_latency \
-    --instance-id {instance_id} --start-time {start_time} --end-time {end_time} --period 60
-```
-
-#### 判断逻辑
-
-| 现象 | 结论 | 后续动作 |
-|------|------|----------|
-| CPU↑ + QPS/RPS 同比例↑ + 延迟无恶化 | **正常业务增长** | 评估扩容；可中止归因 |
-| CPU↑ 但 QPS/RPS 平稳 / 下降 | **异常瓶颈** | 继续 Q2 / Q3 / Q4 |
-| CPU↑ + QPS 平稳 + 延迟显著恶化 | **存在拥塞** | 重点排查 Q3（大 Query / 锁） |
-
-#### 异常阈值
-
-| 时间窗口 | 维度 | 异常阈值 |
-|----------|------|----------|
-| 短周期（<24h） | CPU 小时均值波动 | `> 30%` |
-| 长周期（>24h） | CPU 日均值波动 | `> 10%` |
-| 短周期 | SQL Latency 小时波动 | `> 20%` |
-| 长周期 | SQL Latency 日均波动 | `> 10%` |
-
----
-
-### Q2：分布定位 —— 负载分布是否均匀
-
-**目标**：判断 CPU 高位是「全局高」还是「局部高」。
-- **全局高** → 整体资源不足，进入通用排查（Q3）
-- **局部高** → 排查 Worker / Shard 均衡性
-
-#### 数据源
-
-- 云监控：`{prefix}_cpu_usage_by_worker`（按 Worker 维度的 CPU 使用率，如 `standard_cpu_usage_by_worker`）
-- PG 系统表：`hologres.hg_worker_info`（Worker → Shard 映射）
-
-#### 执行命令
-
-```bash
-# 各 Worker CPU 分布（云监控按 worker dimension 拆分）
-hologres metric query {prefix}_cpu_usage_by_worker \
-    --instance-id {instance_id} \
-    --start-time {start_time} --end-time {end_time} --period 60
-```
-
-```bash
-# Worker / Shard 均衡性查询
-hologres sql run --no-limit-check "SELECT worker_id, count(shard_id) AS shard_count, array_agg(shard_id) AS shards FROM hologres.hg_worker_info GROUP BY worker_id ORDER BY shard_count DESC"
-```
-
-```bash
-# 各 Worker 当前活跃 Query 数（结合 pg_stat_activity）
-hologres sql run --no-limit-check "SELECT pid, usename, state, wait_event_type, wait_event, now() - query_start AS wait_duration, left(query, 100) AS sql_snippet FROM pg_stat_activity WHERE wait_event IS NOT NULL AND state = 'active' AND usename != 'system' ORDER BY query_start ASC"
-```
-
-#### 物理不均判定
-
-- Worker 之间 `shard_count` 与平均值差值 **> 1**，或比例偏差 **> 20%** → 判定 **物理不均**
-- 单 Worker CPU 显著高于均值（> 平均值 1.5 倍且 > 70%） → 判定 **局部热点**
-
-#### 输出示例
-
-```
-Worker CPU 分布：
-- worker_0: shards=10, CPU avg=45%
-- worker_1: shards=10, CPU avg=92% ⚠️ 局部热点
-- worker_2: shards=12, CPU avg=48%（Shard 数偏差 +20%）
-```
-
----
-
-### Q3：查询归因 —— 谁是资源杀手
-
-#### 3.1 大 Query 排查（Top CPU Consumers）
-
-**数据源**：元仓 `hologres.hg_query_log`
-
-```bash
-hologres sql run --no-limit-check "SELECT query_id, duration AS duration_ms, cpu_time_ms, query_start, status, usename, warehouse_name, engine_type, query::char(120) AS sql_sample FROM hologres.hg_query_log WHERE query_start >= '{start_time}' AND query_start <= '{end_time}' AND cpu_time_ms IS NOT NULL AND usename != 'system' ORDER BY cpu_time_ms DESC LIMIT 10"
-```
-
-**展示字段**：Query ID、耗时（ms）、CPU 时间（ms）、engine type、Warehouse、SQL 样本。
-
-#### 3.2 长 Query 与锁竞争排查
-
-**Long Query 判定**：
-- 长周期：`Max Duration` 波动 > 10 Hour
-- 短周期：`Max Duration > 1 Hour`
-- 通用：`Max Duration > 历史最大值 50%` 且 `> 10 min`
-
-```bash
-# 当前在执行的长 Query
-hologres sql run --no-limit-check "SELECT pid, usename, state, now() - query_start AS run_duration, wait_event_type, wait_event, left(query, 200) AS sql_snippet FROM pg_stat_activity WHERE state = 'active' AND usename != 'system' AND now() - query_start > interval '10 min' ORDER BY query_start ASC"
-```
-
-```bash
-# 历史长 Query Top 10
-hologres sql run --no-limit-check "SELECT query_id, duration AS duration_ms, cpu_time_ms, query_start, status, usename, warehouse_name, query::char(200) AS sql_sample FROM hologres.hg_query_log WHERE query_start >= '{start_time}' AND query_start <= '{end_time}' AND duration > 600000 AND usename != 'system' ORDER BY duration DESC LIMIT 10"
-```
-
-**锁竞争检测**（结合 `pg_locks`）：
-
-```bash
-hologres sql run --no-limit-check "SELECT blocked.pid AS blocked_pid, blocked.usename AS blocked_user, blocked.query::char(120) AS blocked_query, blocking.pid AS blocking_pid, blocking.usename AS blocking_user, blocking.query::char(120) AS blocking_query, now() - blocked.query_start AS wait_duration FROM pg_stat_activity blocked JOIN pg_locks blk_lock ON blocked.pid = blk_lock.pid AND NOT blk_lock.granted JOIN pg_locks bg_lock ON blk_lock.transactionid = bg_lock.transactionid AND bg_lock.granted JOIN pg_stat_activity blocking ON bg_lock.pid = blocking.pid WHERE blocked.usename != 'system' ORDER BY wait_duration DESC LIMIT 50"
-```
-
-> 同时建议结合 FixedQE 后端的「拿锁耗时」指标，定位阻塞源 PID 与 SQL。
-
-#### 3.3 高频小 Query 排查
-
-```bash
-# 按 SQL 指纹聚合 Top CPU
-hologres sql run --no-limit-check "SELECT digest AS sql_digest, count(1) AS exec_count, round(avg(cpu_time_ms)::numeric, 2) AS avg_cpu_ms, round(sum(cpu_time_ms)::numeric / 1000, 2) AS total_cpu_sec, warehouse_name, max(query)::char(120) AS sql_sample FROM hologres.hg_query_log WHERE query_start >= '{start_time}' AND query_start <= '{end_time}' AND digest IS NOT NULL AND usename != 'system' GROUP BY digest, warehouse_name ORDER BY sum(cpu_time_ms) DESC LIMIT 10"
-```
-
----
-
-### Q4：后台任务干扰
-
-**目标**：判断 CPU 上涨是否由 Compaction 写放大或 DDL 变更引起。
-
-#### 数据源
-
-- 云监控（SE 指标）：`{prefix}_compaction_duration`、`{prefix}_compaction_num`、`{prefix}_se_cpu_usage`
-- 元数据：DDL 审计日志（`hologres.hg_query_log` 中 DDL 类查询）
-
-#### 执行命令
-
-```bash
-# Compaction 时长曲线
-hologres metric query {prefix}_compaction_duration \
-    --instance-id {instance_id} --start-time {start_time} --end-time {end_time} --period 60
-
-# Compaction 次数曲线
-hologres metric query {prefix}_compaction_num \
-    --instance-id {instance_id} --start-time {start_time} --end-time {end_time} --period 60
-```
-
-```bash
-# 时间窗口内的 DDL 变更审计
-hologres sql run --no-limit-check "SELECT query_start, usename, query_id, status, query::char(300) AS ddl_sql FROM hologres.hg_query_log WHERE query_start >= '{start_time}' AND query_start <= '{end_time}' AND command_tag IN ('ALTER TABLE','CREATE TABLE','CALL') AND (query ILIKE '%bitmap_columns%' OR query ILIKE '%dictionary_encoding_columns%' OR query ILIKE '%clustering_key%' OR query ILIKE '%segment_key%' OR query ILIKE '%set_table_property%') ORDER BY query_start DESC LIMIT 50"
-```
-
-#### Compaction 写放大判定
-
-满足以下任一即判定为 **Compaction 写放大干扰**：
-- `compaction_duration` 或 `compaction_num` 曲线相对基线激增 > 50%
-- 激增时间点附近（±10 min）有 `bitmap_columns` / `dictionary_encoding_columns` / `clustering_key` 等表属性 DDL 变更
-
----
-
-## 第三阶段：输出诊断报告
-
-完成第一/二阶段后，输出以下 Markdown 结构化报告。**所有占位符必须基于真实查询结果填充，不得编造。**
-
-```markdown
-# Hologres CPU 使用率异常诊断报告
-
-- 实例 ID：{instance_id}
-- 诊断时段：{start_time} ~ {end_time}
-- 健康评分：{score}/100 | 整体状态：{🔴 持续打满 / 🟠 持续高位 / 🟢 安全平稳}
-
-## 一、今日摘要
-
-> 核心结论：{summary}
-> 根因归类：{root_cause}（业务增长 / 大 Query / 锁竞争 / Shard 不均 / Compaction 干扰 / 复合）
-
-- 关键风险：{risks}
-- 推荐动作：{actions}
-
-## 二、Q1：宏观定性
-
-| 指标 | 当前窗口 | 同比基线 | 波动 | 是否异常 |
-|------|----------|----------|------|----------|
-| CPU 均值 | …% | …% | ±…% | … |
-| QPS | … | … | ±…% | … |
-| RPS | … | … | ±…% | … |
-| SQL Latency P99 | … ms | … ms | ±…% | … |
-
-定性结论：{业务增长 / 异常瓶颈 / 拥塞}
-
-## 三、Q2：分布定位
-
-| Worker | Shard 数 | CPU avg | CPU max | 偏差 |
-|--------|----------|---------|---------|------|
-| worker_0 | … | …% | …% | … |
-| worker_1 | … | …% | …% | … |
-
-分布结论：{全局高 / 局部高（Worker N）/ Shard 物理不均}
-
-## 四、Q3：查询归因
-
-### 4.1 Top 10 大 Query（按 CPU 时间）
-
-| QueryID | Duration | CPU(ms) | Warehouse | Plan | SQL 样本 |
-|---------|----------|---------|-----------|------|----------|
-| … | … | … | … | Fixed/Adaptive | … |
-
-### 4.2 长 Query / 锁源追踪
-
-- 阻塞源 PID：{pid}（用户：{user}）
-- 阻塞 SQL：{sql}
-- 受阻 Query 数：{n}，最大等待时长：{duration}
-
-## 五、Q4：后台干扰
-
-- Compaction 状态：{正常 / 激增 ×N 倍}
-- DDL 变更：{无 / 命中 bitmap_columns 调整 @ {timestamp}}
-- 结论：{是否存在写放大干扰}
-
-## 六、治理行动清单
-
-### P0 立即处理
-- [ ] {例如：取消阻塞源 PID xxx，释放锁}
-- [ ] {例如：终止 Top1 大 Query，避免 CPU 100% 持续}
-
-### P1 近期优化
-- [ ] {例如：对 Top SQL 添加分区裁剪或 clustering key}
-- [ ] {例如：调整 Compaction 时间窗到业务低峰}
-
-### P2 长期规划
-- [ ] {例如：扩容 Warehouse / 拆分读写流量}
-- [ ] {例如：建立 CPU 与 Latency 联合告警阈值}
-```
-
----
-
-## 数据支撑来源映射
-
-| 诊断项 | 数据来源 | 获取方式 |
-|---------|----------|----------|
-| CPU 水位 | 云监控 | `hologres metric query {prefix}_cpu_usage` / `hologres metric latest {prefix}_cpu_usage` |
-| QPS / RPS | 云监控 | `hologres metric query {prefix}_query_qps` / `{prefix}_dml_rps` |
-| SQL 延迟 | 云监控 | `hologres metric query {prefix}_query_latency` |
-| Worker CPU | 云监控 | `hologres metric query {prefix}_cpu_usage_by_worker` |
-| 锁等待 | 云监控 + PG 系统表 | `hologres metric` + `hologres sql run`（`pg_locks` + `pg_stat_activity`） |
-| 慢 / 长 Query | 元仓 | `hologres sql run`（`hologres.hg_query_log`） |
-| Shard 分布 | PG 系统表 | `hologres sql run`（`hologres.hg_worker_info`） |
-| Compaction | 云监控 + 元数据 | `hologres metric query {prefix}_compaction_*` + `hg_query_log` DDL 审计 |
-
-## 异常判断阈值配置
-
-| 维度 | 时间窗口 | 异常阈值 |
-|------|----------|----------|
-| CPU | 长周期（>24h） | 日均值波动 > 10% |
-| CPU | 短周期（<24h） | 小时均值波动 > 30% |
-| SQL Latency | 长周期 | 日均延迟波动 > 10% |
-| SQL Latency | 短周期 | 小时延迟波动 > 20% |
-| Long Query | 长周期 | Max Duration 波动 > 10 Hour |
-| Long Query | 短周期 | Max Duration > 1 Hour |
-| Shard | 实时 | Shard 数偏差 > 1 或 > 20% |
-| Compaction | 实时 | duration / num 相对基线激增 > 50% |
+套用 [references/report-template.md](references/report-template.md) 的 Markdown 骨架，所有占位符必须用真实查询结果填充，不得编造。
 
 ## 执行指导
 
-**环境准备**：
+执行顺序：
 
-```bash
-export HOLOGRES_SKILL=hologres-diagnosis-cpu
-# 推荐：通过 `hologres metric config` 为 metric 命令单独配置 AK/SK
-# hologres metric config --access-key-id <ak> --access-key-secret <sk>
-# 也可通过 `hologres config` 在 profile 中配置通用 AK/SK，云监控会自动读取
-# 仅当 profile 未配置 AK/SK 时，再使用环境变量作为回退：
-# export ALIBABA_CLOUD_ACCESS_KEY_ID=<ak>
-# export ALIBABA_CLOUD_ACCESS_KEY_SECRET=<sk>
-```
+0. `hologres instance-manage get` —— 取一次，确定 `{prefix}`。
+1. Stage 1 —— `{prefix}cpu_usage` 时序 → 状态分级。
+2.（若 🔴/🟠）Stage 2 —— 在同一轮内并行下发 Q1 + Q2 + Q3 + Q4 中相互独立的命令。
+3. Stage 3 —— 汇总出报告。
 
-**逐步执行，每步汇报中间结果**：
+错误处理（CLI 返回结构化错误，按 `retryable` 字段决定）：
 
-0. `hologres instance-manage get` —— 获取实例类型，自动映射指标前缀 `{prefix}`
-1. `hologres metric query {prefix}_cpu_usage` —— 获取 CPU 时间序列，做状态分级
-2. （若命中打满 / 高位）`hologres metric query {prefix}_query_qps / {prefix}_dml_rps / {prefix}_query_latency` —— Q1 宏观定性
-3. `hologres metric query {prefix}_cpu_usage_by_worker` + `hologres sql run`（`hg_worker_info`） —— Q2 分布定位
-4. `hologres sql run`（`hg_query_log` Top CPU + `pg_locks` 阻塞链） —— Q3 查询归因
-5. `hologres sql run`（DDL 审计） —— Q4 后台干扰
-6. 综合 1~5 步结果，按第三阶段模板输出 Markdown 诊断报告
+| 场景 | 动作 |
+|------|------|
+| 网络超时 / 连接错误（`retryable: true`） | 等 3 秒重试一次 |
+| 权限不足 | 提示用户核对 PG 权限 / 云监控 RAM 策略 |
+| 参数错误 | 核对时间格式、`--instance-id`、metric 名前缀 |
+| 云监控限流（`API_ERROR`） | 等 5 秒重试 |
+| 依赖缺失（`DEPENDENCY_MISSING`） | `pip install 'hologres-cli[cms]'` |
+| 凭证错误（`CREDENTIAL_ERROR`） | `hologres metric config` 配置专用 AK/SK，或 profile 通用 AK/SK |
+| **CLI 返回空结果（无数据）** | **禁止自行改参重试或变通获取；直接跳过该步骤，在输出中标注「无数据」** |
 
-**错误处理**：
+## References
 
-CLI 返回结构化错误时，根据 `retryable` 字段决定是否重试：
-
-```json
-{"ok": false, "error": {"code": "QUERY_TIMEOUT", "message": "...", "retryable": true, "hint": "..."}}
-```
-
-- `retryable: true` → 等待 3 秒后重试一次
-- `retryable: false` → 根据 `hint` 调整参数后重试
-
-常见可重试错误：`CONNECTION_ERROR`、`CONNECTION_TIMEOUT`、`QUERY_TIMEOUT`、`QUERY_ERROR`、`API_ERROR`（云监控限流）。
-
-云监控特有错误：
-
-| Code | 说明 | 处理 |
-|------|------|------|
-| `DEPENDENCY_MISSING` | 缺少 `alibabacloud_cms20190101` 等 SDK | `pip install 'hologres-cli[cms]'` |
-| `CREDENTIAL_ERROR` | 凭证未配置或失效 | 通过 `hologres metric config` 配置专用 AK/SK（推荐），或通过 `hologres config` 配置通用 AK/SK，或设置 `ALIBABA_CLOUD_ACCESS_KEY_*` 环境变量作为回退 |
-| `API_ERROR` | 云监控 API 调用失败 | 检查 Region / 限流，重试 |
-| `INVALID_INPUT` | 时间格式或 dimensions JSON 不合法 | 修正后重试 |
+| File | Content |
+|------|---------|
+| [references/preconditions.md](references/preconditions.md) | 安装 / 凭证优先级 / RAM 权限 / 前缀判定 / 时间格式 |
+| [references/cpu-water-level.md](references/cpu-water-level.md) | Stage 1 指标采集 + 状态分级表 |
+| [references/quadrant-attribution.md](references/quadrant-attribution.md) | Stage 2 Q1–Q4 SQL 与判定规则 |
+| [references/report-template.md](references/report-template.md) | Stage 3 Markdown 报告骨架 |
+| [references/thresholds.md](references/thresholds.md) | 数据源映射 + 异常阈值 |
 
 ## 注意事项
 
-1. `hologres.hg_query_log` 默认保留一个月，单次最多返回 10000 条；查询必须带 `query_start` 范围条件，避免全表扫描
-2. 元仓 SQL 不要使用 `to_char(query_start, ...)` 等表达式条件（无法走索引）
-3. 云监控 `period` 推荐 `60s`（细粒度）或 `300s`（长周期）；时间跨度大时使用 `300s` 减少数据点
-4. 时间格式建议 ISO-8601（`2025-05-19T10:00:00`），云监控会按 UTC 处理
-5. `digest` 字段从 V2.2 起支持，低版本实例为空，需降级为按 `query` 文本聚合
-6. `cpu_usage_by_worker` 等 Worker 粒度指标在多 Warehouse 场景下需结合 `warehouse` dimension 过滤
-7. 所有 `hologres metric` / `hologres sql run` 返回 JSON，结果在 `data.rows`（SQL）或顶层数组（云监控数据点）
-8. 使用 `--no-limit-check` 跳过 LIMIT 检查（聚合诊断查询无需 LIMIT 保护）
-
-## 参考命令速查
-
-```bash
-# 前缀通过 `hologres instance-manage get` 自动获取（InstanceType → 前缀映射）
-# 也可用 list 查看实际可用指标名：
-hologres metric list --search cpu
-
-# CPU 水位（以通用型 standard_ 为例）
-hologres metric query standard_cpu_usage --instance-id {id} --start-time {s} --end-time {e} --period 60
-hologres metric latest standard_cpu_usage --instance-id {id}
-
-# 业务负载
-hologres metric query standard_query_qps --instance-id {id} --start-time {s} --end-time {e}
-hologres metric query standard_dml_rps --instance-id {id} --start-time {s} --end-time {e}
-hologres metric query standard_query_latency --instance-id {id} --start-time {s} --end-time {e}
-
-# Worker 维度
-hologres metric query standard_cpu_usage_by_worker --instance-id {id} --start-time {s} --end-time {e}
-
-# 计算组实例则使用 warehouse_ 前缀：
-hologres metric query warehouse_cpu_usage --instance-id {id} --start-time {s} --end-time {e} --period 60
-```
+1. `hologres.hg_query_log` 默认保留 30 天、单次最多返回 10000 条；查询必须带 `query_start` 范围条件，避免全表扫描。
+2. 元仓 SQL 不要对 `query_start` 套 `to_char(...)` 等表达式条件（无法走索引）。
+3. 云监控 `period` 推荐 `60`（细粒度）或 `300`（长周期）；跨度大时用 `300` 减少数据点。
+4. 时间格式建议 ISO-8601（`2025-05-19T10:00:00`）；`hologres metric` 对无时区 ISO 串按 UTC 解析，北京时间可显式带 epoch 毫秒或注意时区换算。
+5. `digest` 字段自 V2.2 起支持，低版本实例为空，需降级为按 `query` 文本聚合。
+6. `cpu_usage_by_worker` 等 Worker 粒度指标在多 Warehouse 场景下需结合 `warehouse` dimension 过滤。
+7. 所有 `hologres metric` / `hologres sql run` 返回 JSON：SQL 结果在 `data.rows`，云监控数据点在顶层数组（datapoint 含 `timestamp` / `Average` / `Maximum` / `Minimum` 等）。
+8. 健康评分与状态仅供参考，根因以四象限累积证据为准。

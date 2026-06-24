@@ -2,13 +2,9 @@
 
 本文档包含日报中 Q5（成本是否异常，能否治理）和 Q6（未来是否存在容量风险）诊断所需的详细查询和预测方法。
 
-> **前置准备**：
+> **前置准备**：SQL 查询通过 `hologres sql run --no-limit-check` 执行；云监控指标通过 `hologres metric query`（命名空间 `acs_hologres`）查询。连接层已自动 `SET hg_computing_resource = 'serverless'`，来源标记由 `export HOLOGRES_SKILL=hologres-daily-report` 注入，无需手写 `SET ...`。
 >
-> ```bash
-> export HOLOGRES_SKILL=hologres-daily-report
-> ```
->
-> 以下查询中 `{report_date}` 替换为报告日期，`{prefix}` 替换为实例对应的指标前缀。
+> 以下查询中 `{report_date}` 替换为报告日期，`{prefix}` 替换为实例对应的指标前缀（含尾下划线）。
 
 ---
 
@@ -20,60 +16,72 @@
 
 ```bash
 # 查询近 7 天存储使用量趋势（1h 粒度）
-hologres metric query {prefix}storage_usage \
-  --start "{7_days_ago}T00:00:00" \
-  --end "{report_date}T23:59:59" \
-  --period 3600
+hologres metric query {prefix}storage_usage --instance-id {instance_id} --start-time "{7_days_ago}T00:00:00" --end-time "{report_date}T23:59:59" --period 3600
 ```
+
+> 部分实例无 `{prefix}storage_usage`，可改用 `storage_usage_percent`（无前缀）或 `warehouse_hot_storage_used`（热存储量，单位 KB）。用 `hologres metric list --search storage` 确认可用指标名。
 
 **输出解读**：
 - 获取每天的存储使用量快照
 - 计算当日 vs 昨日的环比变化
 - 计算近 7 天的日均增长量
 
-#### 1.2 通过系统表查询存储
+#### 1.2 通过 hg_table_info 查询冷热存构成
+
+> 存储总量已通过 1.1 的云监控获取，本节补充冷热存拆分信息（CMS 不提供冷热存分离数据）。
 
 ```bash
-# 数据库总存储大小
-hologres sql run "SELECT pg_size_pretty(pg_database_size(current_database())) as db_size, pg_database_size(current_database()) as db_size_bytes"
-```
-
-### 2. 表存储排名
-
-```bash
-# Top 20 大表（含 schema）
-hologres sql run --no-limit-check "SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname || '.' || tablename)) as total_size, pg_total_relation_size(schemaname || '.' || tablename) as size_bytes FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema', 'hologres') AND pg_total_relation_size(schemaname || '.' || tablename) > 0 ORDER BY size_bytes DESC LIMIT 20"
+# 当前冷热存汇总
+hologres sql run --no-limit-check "SELECT pg_size_pretty(sum(hot_storage_size)) as hot_size, pg_size_pretty(sum(cold_storage_size)) as cold_size, sum(hot_storage_size) as hot_bytes, sum(cold_storage_size) as cold_bytes FROM hologres.hg_table_info WHERE db_name = current_database() AND collect_time = (SELECT max(collect_time) FROM hologres.hg_table_info WHERE db_name = current_database())"
 ```
 
 **输出解读**：
-- 识别占用存储最大的表
-- 关注是否有异常大表（如临时表、日志表不清理）
+- `hot_size` / `cold_size`：热存和冷存各自占用空间
+- 结合 1.1 的 CMS 存储总量，可计算冷热存占比
+- 注意：`hg_table_info` 为 T+1 产出，反映前一天的存储快照
+
+### 2. 表存储排名
+
+> 使用 `hologres.hg_table_info`（V1.3+，按天采集 T+1）获取表存储数据，比 `pg_total_relation_size` 更准确（含冷热存分离，分区父表可正确返回行数）。
+
+```bash
+# Top 20 大表（含 schema、冷热存明细）
+hologres sql run --no-limit-check "SELECT schema_name, table_name, type, pg_size_pretty(hot_storage_size + cold_storage_size) as total_size, hot_storage_size + cold_storage_size as size_bytes, pg_size_pretty(hot_storage_size) as hot_size, pg_size_pretty(cold_storage_size) as cold_size, row_count FROM hologres.hg_table_info WHERE db_name = current_database() AND schema_name NOT IN ('pg_catalog', 'information_schema', 'hologres', 'hologres_statistic') AND type IN ('TABLE', 'PARTITION TABLE') AND (hot_storage_size + cold_storage_size) > 0 AND collect_time = (SELECT max(collect_time) FROM hologres.hg_table_info WHERE db_name = current_database()) ORDER BY size_bytes DESC LIMIT 20"
+```
+
+**输出解读**：
+- `size_bytes`：表总存储量（热存 + 冷存）
+- `hot_size` / `cold_size`：热存和冷存各自占用空间
+- 识别占用存储最大的表，关注是否有异常大表（如临时表、日志表不清理）
+- 注意：`hg_table_info` 数据为 T+1 产出，反映的是前一天的存储快照
 
 ### 3. 空表检测
 
 ```bash
-# 有表结构但无数据的表
-hologres sql run --no-limit-check "SELECT schemaname, tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema', 'hologres') AND pg_total_relation_size(schemaname || '.' || tablename) = 0 LIMIT 20"
+# 有表结构但无数据的表（行数 = 0 且无存储）
+hologres sql run --no-limit-check "SELECT schema_name, table_name, type, owner_name, create_time FROM hologres.hg_table_info WHERE db_name = current_database() AND schema_name NOT IN ('pg_catalog', 'information_schema', 'hologres', 'hologres_statistic') AND type IN ('TABLE', 'PARTITION TABLE') AND row_count = 0 AND (hot_storage_size + cold_storage_size) = 0 AND collect_time = (SELECT max(collect_time) FROM hologres.hg_table_info WHERE db_name = current_database()) ORDER BY create_time ASC LIMIT 20"
 ```
 
 ### 4. 冷数据识别
 
-通过 `hg_query_log` 判断近 30 天未被访问的大表：
+通过 `hg_table_info` 的 `last_access_time` 字段直接判断表的最后访问时间，比 `hg_query_log` ILIKE 模糊匹配更准确：
 
 ```bash
-hologres sql run --no-limit-check "SELECT t.schemaname, t.tablename, pg_size_pretty(pg_total_relation_size(t.schemaname || '.' || t.tablename)) as size, pg_total_relation_size(t.schemaname || '.' || t.tablename) as size_bytes FROM pg_tables t WHERE t.schemaname NOT IN ('pg_catalog', 'information_schema', 'hologres') AND pg_total_relation_size(t.schemaname || '.' || t.tablename) > 1073741824 AND NOT EXISTS (SELECT 1 FROM hologres.hg_query_log q WHERE q.query ILIKE '%' || t.tablename || '%' AND q.query_start >= now() - interval '30 days' AND q.usename <> 'system') ORDER BY size_bytes DESC LIMIT 20"
+# 30 天未访问且大小 > 1GB 的表
+hologres sql run --no-limit-check "SELECT schema_name, table_name, pg_size_pretty(hot_storage_size + cold_storage_size) as size, hot_storage_size + cold_storage_size as size_bytes, row_count, last_access_time, owner_name FROM hologres.hg_table_info WHERE db_name = current_database() AND schema_name NOT IN ('pg_catalog', 'information_schema', 'hologres', 'hologres_statistic') AND type IN ('TABLE', 'PARTITION TABLE') AND (hot_storage_size + cold_storage_size) > 1073741824 AND (last_access_time < now() - interval '30 days' OR last_access_time IS NULL) AND collect_time = (SELECT max(collect_time) FROM hologres.hg_table_info WHERE db_name = current_database()) ORDER BY size_bytes DESC LIMIT 20"
 ```
 
 **输出解读**：
-- 列出 30 天未被查询且大小 > 1GB 的表
+- 列出 30 天未被访问且大小 > 1GB 的表
 - 这些表是潜在的冷数据，可评估归档或删除
-- 注意：基于 `ILIKE` 匹配表名，可能存在误判（如表名是其他表名的子串）
+- `last_access_time` 为系统精确记录的表访问时间，无 ILIKE 子串误判问题
+- `last_access_time IS NULL` 的表表示自 V1.3 以来从未被访问过
 
 ### 5. 临时表/备份表检测
 
 ```bash
-# 疑似临时表或备份表（命名模式匹配）
-hologres sql run --no-limit-check "SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname || '.' || tablename)) as size, pg_total_relation_size(schemaname || '.' || tablename) as size_bytes FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema', 'hologres') AND (tablename ILIKE 'tmp_%' OR tablename ILIKE '%_tmp' OR tablename ILIKE '%_bak' OR tablename ILIKE '%_backup%' OR tablename ILIKE '%_old' OR tablename ILIKE '%_copy%' OR tablename ILIKE 'test_%') AND pg_total_relation_size(schemaname || '.' || tablename) > 104857600 ORDER BY size_bytes DESC LIMIT 20"
+# 疑似临时表或备份表（命名模式匹配，通过 hg_table_info 获取存储和 Owner）
+hologres sql run --no-limit-check "SELECT schema_name, table_name, pg_size_pretty(hot_storage_size + cold_storage_size) as size, hot_storage_size + cold_storage_size as size_bytes, row_count, owner_name, last_access_time FROM hologres.hg_table_info WHERE db_name = current_database() AND schema_name NOT IN ('pg_catalog', 'information_schema', 'hologres', 'hologres_statistic') AND type IN ('TABLE', 'PARTITION TABLE') AND (table_name ILIKE 'tmp_%' OR table_name ILIKE '%_tmp' OR table_name ILIKE '%_bak' OR table_name ILIKE '%_backup%' OR table_name ILIKE '%_old' OR table_name ILIKE '%_copy%' OR table_name ILIKE 'test_%') AND (hot_storage_size + cold_storage_size) > 104857600 AND collect_time = (SELECT max(collect_time) FROM hologres.hg_table_info WHERE db_name = current_database()) ORDER BY size_bytes DESC LIMIT 20"
 ```
 
 **输出解读**：
@@ -155,8 +163,8 @@ hologres sql run "SHOW max_connections"
 ### 4. 表数量预测
 
 ```bash
-# 当前表数量
-hologres sql run "SELECT count(*) as table_count FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema', 'hologres')"
+# 当前表数量（通过 hg_table_info 统计）
+hologres sql run --no-limit-check "SELECT count(*) as table_count FROM hologres.hg_table_info WHERE db_name = current_database() AND schema_name NOT IN ('pg_catalog', 'information_schema', 'hologres', 'hologres_statistic') AND type IN ('TABLE', 'PARTITION TABLE', 'LOGICAL PARTITION TABLE') AND collect_time = (SELECT max(collect_time) FROM hologres.hg_table_info WHERE db_name = current_database())"
 
 # 近 7 天新增表数量（通过 DDL 日志推算）
 hologres sql run --no-limit-check "SELECT count(*) as new_tables FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz - interval '7 days' AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND command_tag = 'CREATE TABLE' AND usename <> 'system'"

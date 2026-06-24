@@ -1,6 +1,6 @@
 {
   "name": "hologres-diagnosis-cpu",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Hologres 实例 CPU 使用率异常诊断技能。当用户提到 CPU 打满、CPU 持续高位、Worker CPU 不均、负载诊断、CPU 归因分析、后台 Compaction 干扰等场景时使用。覆盖宏观定性（业务增长 vs 异常瓶颈）、分布定位（Worker/Shard 均衡性）、查询归因（大 Query / 锁竞争 / 长 Query）、后台任务干扰（Compaction / DDL）四大归因维度，输出结构化诊断报告与治理行动清单。Triggers: \"hologres CPU 诊断\", \"CPU 打满\", \"CPU 高位\", \"CPU 异常\", \"CPU 归因\", \"hologres cpu diagnosis\", \"hologres cpu usage\".",
   "dependencies": {
     "hologres-cli": "*"

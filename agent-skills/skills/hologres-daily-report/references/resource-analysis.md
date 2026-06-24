@@ -2,13 +2,9 @@
 
 本文档包含日报中 Q3（计算资源是否紧张）诊断所需的详细指标查询命令和判断逻辑。
 
-> **前置准备**：
+> **前置准备**：SQL 查询通过 `hologres sql run --no-limit-check` 执行；云监控指标通过 `hologres metric query`（命名空间 `acs_hologres`）查询。云监控凭证见 [preconditions.md](preconditions.md)（`hologres metric config` 专用 AK/SK，或 profile 通用 AK/SK）。
 >
-> ```bash
-> export HOLOGRES_SKILL=hologres-daily-report
-> ```
->
-> 需要已配置云监控凭证：`hologres metric config --access-key-id <AK> --access-key-secret <SK>`
+> 连接层已自动 `SET hg_computing_resource = 'serverless'`，来源标记由 `export HOLOGRES_SKILL=hologres-daily-report` 注入，无需手写 `SET ...`。
 
 ---
 
@@ -22,9 +18,9 @@
 hologres instance-manage get
 ```
 
-根据返回的实例类型确定前缀 `{prefix}`：
+从返回 JSON 的 `data.Instance.InstanceType` 确定前缀 `{prefix}`（含尾下划线）：
 
-| 实例类型（instanceType） | 前缀 |
+| 实例类型（InstanceType） | 前缀 |
 |--------------------------|------|
 | Standard / 通用型 | `standard_` |
 | Warehouse / 计算组型 | `warehouse_` |
@@ -32,7 +28,7 @@ hologres instance-manage get
 | Serverless | `serverless_` |
 | Shared / 共享型 | `shared_` |
 
-以下命令中 `{prefix}` 替换为实际前缀，`{report_date}` 替换为报告日期（如 `2026-04-27`）。
+以下命令中 `{prefix}` 替换为实际前缀，`{report_date}` 替换为报告日期（如 `2026-04-27`）。时间格式 ISO-8601 按 UTC 解析，北京时间请显式带 epoch ms 或 `+08:00`。
 
 ---
 
@@ -41,29 +37,23 @@ hologres instance-manage get
 ### 1.1 时序查询（24h，60s 粒度）
 
 ```bash
-hologres metric query {prefix}cpu_usage \
-  --start "{report_date}T00:00:00" \
-  --end "{report_date}T23:59:59" \
-  --period 60
+hologres metric query {prefix}cpu_usage --instance-id {instance_id} --start-time "{report_date}T00:00:00" --end-time "{report_date}T23:59:59" --period 60
 ```
 
 ### 1.2 最新值快照
 
 ```bash
-hologres metric latest {prefix}cpu_usage
+hologres metric latest {prefix}cpu_usage --instance-id {instance_id} --period 60
 ```
 
 ### 1.3 按 Worker 节点查询
 
 ```bash
-hologres metric query {prefix}cpu_usage_by_worker \
-  --start "{report_date}T00:00:00" \
-  --end "{report_date}T23:59:59" \
-  --period 60
+hologres metric query {prefix}cpu_usage_by_worker --instance-id {instance_id} --start-time "{report_date}T00:00:00" --end-time "{report_date}T23:59:59" --period 60
 ```
 
 **输出解读**：
-- 时序数据为 JSON 数组，每个数据点包含 `timestamp` 和 `value`
+- 时序数据为 JSON 数组，每个数据点包含 `timestamp` 和 `Average` / `Maximum` / `Minimum` 等字段
 - 从时序数据中计算：avg（平均值）、P95、max（峰值）
 - 识别 CPU 峰值出现的时间段
 
@@ -78,10 +68,7 @@ hologres metric query {prefix}cpu_usage_by_worker \
 ## 2. 内存使用率
 
 ```bash
-hologres metric query {prefix}memory_usage \
-  --start "{report_date}T00:00:00" \
-  --end "{report_date}T23:59:59" \
-  --period 60
+hologres metric query {prefix}memory_usage --instance-id {instance_id} --start-time "{report_date}T00:00:00" --end-time "{report_date}T23:59:59" --period 60
 ```
 
 **诊断逻辑**：
@@ -100,10 +87,7 @@ hologres sql run --no-limit-check "SELECT count(*) as oom_count FROM hologres.hg
 ## 3. 连接数
 
 ```bash
-hologres metric query {prefix}connections \
-  --start "{report_date}T00:00:00" \
-  --end "{report_date}T23:59:59" \
-  --period 60
+hologres metric query {prefix}connections --instance-id {instance_id} --start-time "{report_date}T00:00:00" --end-time "{report_date}T23:59:59" --period 60
 ```
 
 **诊断逻辑**：
@@ -119,10 +103,7 @@ hologres metric query {prefix}connections \
 ### 4.1 云监控查询延迟
 
 ```bash
-hologres metric query {prefix}query_latency \
-  --start "{report_date}T00:00:00" \
-  --end "{report_date}T23:59:59" \
-  --period 60
+hologres metric query {prefix}query_latency --instance-id {instance_id} --start-time "{report_date}T00:00:00" --end-time "{report_date}T23:59:59" --period 60
 ```
 
 ### 4.2 通过 hg_query_log 计算 P99
@@ -149,10 +130,7 @@ hologres sql run --no-limit-check "SELECT percentile_cont(0.99) WITHIN GROUP (OR
 ## 5. 查询 QPS
 
 ```bash
-hologres metric query {prefix}query_qps \
-  --start "{report_date}T00:00:00" \
-  --end "{report_date}T23:59:59" \
-  --period 60
+hologres metric query {prefix}query_qps --instance-id {instance_id} --start-time "{report_date}T00:00:00" --end-time "{report_date}T23:59:59" --period 60
 ```
 
 **输出解读**：
@@ -165,11 +143,10 @@ hologres metric query {prefix}query_qps \
 
 ### 6.1 云监控查询
 
-> 使用 **coordinator-query-queue-analyzer** skill 的指标（如可用）。
+> 可先用 `hologres metric list --search queue` 确认 Queue 相关指标名后查询，例如：
 
 ```bash
-# 搜索可用的 Queue 相关指标
-hologres metric list --search queue
+hologres metric query {prefix}query_queue --instance-id {instance_id} --start-time "{report_date}T00:00:00" --end-time "{report_date}T23:59:59" --period 60
 ```
 
 ### 6.2 通过 pg_stat_activity 检测排队

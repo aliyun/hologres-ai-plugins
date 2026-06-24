@@ -2,13 +2,9 @@
 
 本文档包含日报中 Q4（SQL 和任务是否存在性能或正确性问题）诊断所需的详细查询和分析逻辑。
 
-> **前置准备**：
+> **前置准备**：SQL 查询通过 `hologres sql run --no-limit-check` 执行。连接层已自动 `SET hg_computing_resource = 'serverless'`，来源标记由 `export HOLOGRES_SKILL=hologres-daily-report` 注入，无需手写 `SET ...`。
 >
-> ```bash
-> export HOLOGRES_SKILL=hologres-daily-report
-> ```
->
-> 以下查询中 `{report_date}` 替换为报告日期（如 `2026-04-27`）。
+> 以下查询中 `{report_date}` 替换为报告日期（如 `2026-04-27`）。输出 `digest` / `query_id` / `query` 必须完整，**禁止** 使用 `left()` / `substr()` / `::char(N)` 截断。
 
 ---
 
@@ -27,8 +23,6 @@ hologres sql run --no-limit-check "SELECT count(*) as total_queries, count(*) FI
 ---
 
 ## 2. 慢查询 Top N
-
-> 引用 **hologres-slow-query-analysis** skill 的分析逻辑。
 
 ### 2.1 按最大耗时排序的 Top 10
 
@@ -50,13 +44,13 @@ hologres sql run --no-limit-check "SELECT digest as sql_fingerprint, count(*) as
 
 ### 2.4 获取慢查询的完整 SQL 示例
 
-对于 Top N 中的每个 `sql_fingerprint`，获取一条完整 SQL 示例用于根因分析：
+对于 Top N 中的每个 `sql_fingerprint`，获取一条完整 SQL 示例用于根因分析（`query` 字段不可截断，必须输出全文）：
 
 ```bash
-hologres sql run --no-limit-check "SELECT query_id, left(query, 500) as query_preview, duration, cpu_time_ms, memory_bytes, read_rows, read_bytes, query_start FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND digest = '{sql_fingerprint}' ORDER BY duration DESC LIMIT 1"
+hologres sql run --no-limit-check "SELECT query_id, query, duration, cpu_time_ms, memory_bytes, read_rows, read_bytes, query_start FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND digest = '{sql_fingerprint}' ORDER BY duration DESC LIMIT 1"
 ```
 
-**根因判断规则**（引用 **hologres-slow-query-analysis** skill）：
+**根因判断规则**：
 
 | 现象 | 可能根因 | 优化建议 |
 |------|---------|---------|
@@ -66,13 +60,11 @@ hologres sql run --no-limit-check "SELECT query_id, left(query, 500) as query_pr
 | duration 远大于 cpu_time_ms | IO 瓶颈或锁等待 | 检查存储层、优化索引 |
 | read_bytes 极大 | 缺少索引或过滤条件 | 添加 clustering_key、bitmap 索引 |
 
-> 如需对单条 SQL 进行深入分析，可使用 **hologres-query-optimizer** skill 执行 `hologres sql explain "<query>"` 获取执行计划。
+> 如需对单条 SQL 进行深入分析，可使用 **hologres-query-optimizer** skill 执行 `EXPLAIN ANALYZE`（`hologres sql explain`）获取执行计划并进行优化。
 
 ---
 
 ## 3. 失败查询分类统计
-
-> 引用 **hologres-instance-health-analyse** skill 的错误分类逻辑。
 
 ### 3.1 按错误类型分类
 
@@ -83,7 +75,7 @@ hologres sql run --no-limit-check "SELECT CASE WHEN message ILIKE '%out of memor
 ### 3.2 失败查询示例（每类取 1 条）
 
 ```bash
-hologres sql run --no-limit-check "SELECT DISTINCT ON (CASE WHEN message ILIKE '%out of memory%' OR message ILIKE '%OOM%' THEN 'OOM' WHEN message ILIKE '%cancel%' OR message ILIKE '%timeout%' THEN 'Timeout' WHEN message ILIKE '%permission%' OR message ILIKE '%denied%' THEN 'Permission' ELSE 'Other' END) query_id, left(query, 300) as query_preview, left(message, 200) as error_message, duration, query_start FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'FAILED' AND usename <> 'system' ORDER BY CASE WHEN message ILIKE '%out of memory%' OR message ILIKE '%OOM%' THEN 'OOM' WHEN message ILIKE '%cancel%' OR message ILIKE '%timeout%' THEN 'Timeout' WHEN message ILIKE '%permission%' OR message ILIKE '%denied%' THEN 'Permission' ELSE 'Other' END, duration DESC LIMIT 10"
+hologres sql run --no-limit-check "SELECT DISTINCT ON (CASE WHEN message ILIKE '%out of memory%' OR message ILIKE '%OOM%' THEN 'OOM' WHEN message ILIKE '%cancel%' OR message ILIKE '%timeout%' THEN 'Timeout' WHEN message ILIKE '%permission%' OR message ILIKE '%denied%' THEN 'Permission' ELSE 'Other' END) query_id, query as query_full, message as error_message, duration, query_start FROM hologres.hg_query_log WHERE query_start >= '{report_date} 00:00:00'::timestamptz AND query_start < '{report_date} 00:00:00'::timestamptz + interval '1 day' AND status = 'FAILED' AND usename <> 'system' ORDER BY CASE WHEN message ILIKE '%out of memory%' OR message ILIKE '%OOM%' THEN 'OOM' WHEN message ILIKE '%cancel%' OR message ILIKE '%timeout%' THEN 'Timeout' WHEN message ILIKE '%permission%' OR message ILIKE '%denied%' THEN 'Permission' ELSE 'Other' END, duration DESC LIMIT 10"
 ```
 
 ---
@@ -107,6 +99,8 @@ hologres sql run --no-limit-check "SELECT cur.sql_fingerprint, cur.avg_duration_
 ```bash
 # 列出所有 Dynamic Table 及其刷新信息
 hologres dt list
+# 或直接查系统表（视本名可能因版本而异）
+hologres sql run --no-limit-check "SELECT * FROM hologres.hg_dynamic_tables"
 ```
 
 **输出解读**：
