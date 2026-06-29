@@ -11,7 +11,7 @@ import copy
 import json
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from .crypto import decrypt, encrypt
 
@@ -27,6 +27,34 @@ ENDPOINT_TEMPLATES = {
     "intranet": "{instance_id}-{region_id}-internal.hologres.aliyuncs.com",
     "vpc": "{instance_id}-{region_id}-vpc-st.hologres.aliyuncs.com",
 }
+
+
+def split_endpoint_host_port(endpoint: str) -> tuple[str, Optional[int]]:
+    """从一个可能带 ``:port`` 的 endpoint 字符串中拆出 ``(host, port)``。
+
+    ``endpoint`` 字段语义为「仅 host」,但容错处理用户粘入的 ``host:port`` 完整形式,
+    以免与独立的 ``port`` 字段叠加产生 ``host:80:80``。port 字段始终是端口的权威来源,
+    此处返回的内嵌 port 仅供向导作为提示默认值,运行期 DSN 构建会丢弃它。
+
+    - ``"host.example.com"``     -> ``("host.example.com", None)``
+    - ``"host.example.com:80"``  -> ``("host.example.com", 80)``
+    - ``"[::1]:80"``             -> ``("::1", 80)``
+    - ``""``                     -> ``("", None)``
+    - ``"host:abc"`` (非整数端口) -> ``("host", None)`` (丢弃非法端口,交上层兜底)
+    """
+    text = (endpoint or "").strip()
+    if not text:
+        return "", None
+    # 套临时 scheme 让 urlparse 正确拆分 host/port(顺带支持 IPv6 字面量)
+    parsed = urlparse(f"//{text}", scheme="")
+    host = parsed.hostname
+    if host is None:
+        return text, None
+    try:
+        raw_port = parsed.port  # 非整数端口时 urlparse 抛 ValueError
+    except ValueError:
+        raw_port = None
+    return host, raw_port
 
 # Default profile template
 DEFAULT_PROFILE: dict[str, Any] = {
@@ -282,7 +310,13 @@ def build_dsn_from_profile(profile: dict[str, Any]) -> str:
     # Determine host
     endpoint = profile.get("endpoint", "")
     if endpoint:
-        host = endpoint
+        # endpoint 语义为「仅 host」;容错剥离用户粘入的 ``:port``,避免与 port 字段
+        # 叠加产生 ``host:80:80``。port 始终取 port 字段(权威来源)。
+        host, _embedded_port = split_endpoint_host_port(endpoint)
+        if not host:
+            raise ConfigError(
+                "Invalid 'endpoint' value. Provide a host (port is set via the 'port' field)."
+            )
     else:
         instance_id = profile.get("instance_id", "")
         region_id = profile.get("region_id", "")

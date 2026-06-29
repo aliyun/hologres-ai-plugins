@@ -301,7 +301,7 @@ Build enterprise search & RAG knowledge bases on Hologres using the native build
 pip install hologres-cli
 
 # Or install a specific version
-pip install hologres-cli==0.1.0
+pip install hologres-cli==0.2.5
 
 # Initial configuration
 hologres config

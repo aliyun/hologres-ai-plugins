@@ -85,9 +85,14 @@ hologres config set credentials_uri http://my-sts-endpoint/sts        # optional
 > - `basic` — Hologres DB account; the username uses the `BASIC$<name>` format (Hologres-specific, **not** a plain PostgreSQL username).
 > - `sts` — temporary credentials fetched at runtime via the `alibabacloud-credentials` default chain; **never persisted**, auto-refreshed in-process. Works with all `connection_mode` values and all command groups (SQL / instance-manage / metric).
 
+> **`connection_mode` reference** — decides the transport and which fields are required. See SKILL.md "Connection Modes" for the full per-mode prompt checklist.
+> - `auto` (default) — JDBC first, transparent fallback to OpenAPI `ExecuteStatement`. Needs direct-mode fields; fallback additionally needs API-mode prerequisites (RAM/STS).
+> - `jdbc` — JDBC only, no fallback. Needs instance endpoint fields (`instance_id`/`nettype` or `endpoint`, `port`, `database`).
+> - `api` — OpenAPI only. Needs `region_id` + `instance_id` + `database` + `ram`/`sts` auth (**`basic` not supported**). The instance endpoint / `port` / `nettype` are **not used**. Requires `ExecuteStatement` enabled on the instance and `hologram:ExecuteStatement` permission.
+
 > **`credentials_uri` / `ALIBABA_CLOUD_CREDENTIALS_URI`:** the URI must GET-return JSON (camelCase) `{"Code":"Success","AccessKeyId":"STS.xxx","AccessKeySecret":"yyy","SecurityToken":"zzz","Expiration":"2026-06-24T12:00:00Z"}`. Priority: profile `credentials_uri` field (explicit provider, bypasses the default chain) > default chain (standard STS env vars → OIDC → `~/.aliyun/config.json` → ECS metadata → env `ALIBABA_CLOUD_CREDENTIALS_URI`). The assumed RAM role needs Hologres + CloudMonitor permissions.
 
-Settable keys: `region_id`, `instance_id`, `nettype`, `auth_mode`, `access_key_id`, `access_key_secret`, `username`, `password`, `database`, `warehouse`, `endpoint`, `port`, `output_format`, `language`, `credentials_uri`.
+Settable keys: `region_id`, `instance_id`, `nettype`, `auth_mode`, `access_key_id`, `access_key_secret`, `username`, `password`, `database`, `warehouse`, `endpoint`, `port`, `output_format`, `language`, `connection_mode`, `credentials_uri`.
 
 ### config get
 

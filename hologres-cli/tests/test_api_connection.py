@@ -91,6 +91,13 @@ class TestBuildMaskedDsn:
         assert "hgprecn-cn-test123-cn-hangzhou" in dsn
         assert "***" in dsn
 
+    def test_with_endpoint_containing_port(self, api_profile):
+        """endpoint 带 :80 时,masked DSN 不出现双端口（与 JDBC 路径一致）。"""
+        api_profile["endpoint"] = "custom-host.aliyuncs.com:80"
+        dsn = _build_masked_dsn(api_profile)
+        assert ":80:80" not in dsn
+        assert "@custom-host.aliyuncs.com:80/" in dsn
+
 
 class TestQuoteLiteral:
     """Tests for _quote_literal."""

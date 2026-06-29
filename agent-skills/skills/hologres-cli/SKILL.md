@@ -17,7 +17,7 @@ AI-agent-friendly command-line interface for Hologres with safety guardrails and
 pip install hologres-cli
 
 # Or install a specific version
-pip install hologres-cli==0.2.0
+pip install hologres-cli==0.2.5
 ```
 
 ## Configuration
@@ -35,6 +35,44 @@ hologres config set database mydb
 ```
 
 Profile resolution priority: `--profile <name>` flag > current profile > error (prompts to run `hologres config`).
+
+### Connection Modes
+
+`connection_mode` decides the transport and **which fields the user must provide**. When helping a user set up a profile, first pick the mode, then prompt **only** for the fields that mode needs. Set it with `hologres config set connection_mode <auto|jdbc|api>`.
+
+**Direct mode (`auto` / `jdbc`)** — connects via the instance's PostgreSQL endpoint (`{instance_id}-{region_id}[.internal|-vpc-st].hologres.aliyuncs.com:80`). This is the only mode that uses the instance endpoint. Prompt the user for:
+
+| Field | Required? | Notes |
+|---|---|---|
+| `region_id` | yes | e.g. `cn-hangzhou` |
+| `instance_id` | yes* | e.g. `hgpostcn-cn-xxx`. *Required unless an explicit `endpoint` host is given |
+| `nettype` | yes* | `internet` / `intranet` / `vpc`. *Only used to auto-construct the host when no explicit `endpoint` is set |
+| `auth_mode` + credentials | yes | `ram` / `basic` / `sts` — see Auth Modes below |
+| `database` | yes | |
+| `warehouse` | recommended | computing group |
+| `endpoint` | optional | host only (no port). If the user pastes `host:port`, the embedded port is stripped and `port` field wins. Leave empty to auto-construct from instance_id + region_id + nettype |
+| `port` | optional | default `80`; host-side port, user-changeable |
+
+> **`auto` vs `jdbc`:** `auto` (default) tries JDBC first and transparently falls back to the OpenAPI `ExecuteStatement` API if the JDBC connect fails. To make that fallback available, `auto` additionally needs the API-mode prerequisites below (RAM/STS credentials). `jdbc` is strict — no fallback, classic lazy connect.
+
+**API mode (`api`)** — runs SQL through the Hologram OpenAPI `ExecuteStatement` against `hologram.{region}.aliyuncs.com`. The instance endpoint / port / nettype are **not used**. Prompt the user for:
+
+| Field | Required? | Notes |
+|---|---|---|
+| `region_id` | yes | |
+| `instance_id` | yes | |
+| `database` | yes | |
+| `auth_mode` + credentials | yes | `ram` (AK/SK) or `sts` only — **`basic` is NOT supported** (API needs cloud AK/SK, not a DB account) |
+| `warehouse` | recommended | |
+
+API-mode instance-side prerequisites (prompt the user to verify, cannot be set via config):
+- The instance must have `ExecuteStatement` enabled (`hologres instance-manage enable-execute-statement`; check with `get-execute-statement-enabled`).
+- The RAM account/role must hold `hologram:ExecuteStatement` permission.
+
+**Quick decision guide for the Agent:**
+- User can reach the instance's PostgreSQL port (80/443) over the network → direct mode (`auto`).
+- PostgreSQL port firewalled / cross-region / instance hasn't enabled the PG gateway, **or** user only has cloud AK/SK and no DB account → `api` mode.
+- On ECS/container/Codeup with a RAM role, passwordless → `sts` auth works in **both** modes.
 
 ### Auth Modes
 

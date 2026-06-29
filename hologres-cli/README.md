@@ -27,7 +27,7 @@ pip install hologres-cli
 Or install a specific version:
 
 ```bash
-pip install hologres-cli==0.1.0
+pip install hologres-cli==0.2.5
 ```
 
 Using `uv`:
@@ -62,11 +62,12 @@ The wizard will prompt for:
 - **Region** (e.g., `cn-hangzhou`, `cn-shanghai`)
 - **Instance ID** (e.g., `hgprecn-cn-xxx`)
 - **Network type**: `internet` / `intranet` / `vpc`
+- **Connection mode**: `auto` (default, JDBC with API fallback) / `jdbc` / `api`. In `api` mode the instance endpoint is not used (the OpenAPI endpoint `hologram.{region}.aliyuncs.com` is used instead), so the wizard skips the Endpoint/Port prompts.
 - **Auth mode**: `basic` (username/password), `ram` (AccessKey), or `sts` (temporary credentials — see [STS Authentication](#sts-authentication))
 - **Database name**
 - **Warehouse** (computing group)
-- **Endpoint** (optional, auto-constructed from instance_id + region_id + nettype)
-- **Port** (default: `80`)
+- **Endpoint** (optional, host only — only needed in `auto`/`jdbc` mode; port is set via the `Port` field; auto-constructed from instance_id + region_id + nettype when empty. If you paste a `host:port` value, the embedded port is stripped and the `Port` field still wins.)
+- **Port** (default: `80`, only needed in `auto`/`jdbc` mode)
 
 ### Endpoint Auto-Construction
 

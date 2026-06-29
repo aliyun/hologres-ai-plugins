@@ -10,7 +10,6 @@
 set -e
 
 # ── Constants ────────────────────────────────────────────────────────────────
-VERSION="0.2.0"
 PACKAGE="hologres-cli"
 BOLD="\033[1m"
 GREEN="\033[0;32m"
@@ -233,7 +232,7 @@ print_summary() {
 main() {
     printf "\n"
     printf "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}\n"
-    printf "${BOLD}${CYAN}  Hologres CLI Installer v%s${RESET}\n" "$VERSION"
+    printf "${BOLD}${CYAN}  Hologres CLI Installer${RESET}\n"
     printf "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}\n"
     printf "\n"
 

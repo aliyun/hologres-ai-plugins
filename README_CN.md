@@ -297,7 +297,7 @@ Hologres 运维诊断日报 —— 不是监控面板的数据搬运，而是由
 pip install hologres-cli
 
 # 或安装指定版本
-pip install hologres-cli==0.1.0
+pip install hologres-cli==0.2.5
 
 # 初始化配置
 hologres config
