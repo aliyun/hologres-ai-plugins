@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.2.6 — 2026-06-29
+
+### Hologres CLI (`hologres-cli`)
+
+- **fix(api)**: 修正 ExecuteStatement API 请求体字段名及响应解析，修复 API 模式下 SQL 执行失败的问题
+
+### 维护
+
+- 同步两个包版本号至 0.2.6（`pyproject.toml` + 运行时 `__version__` + `uv.lock` 成对更新）
+
+---
+
 ## v0.2.5 — 2026-06-29
 
 ### Hologres CLI (`hologres-cli`)

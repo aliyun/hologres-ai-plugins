@@ -17,7 +17,7 @@ AI-agent-friendly command-line interface for Hologres with safety guardrails and
 pip install hologres-cli
 
 # Or install a specific version
-pip install hologres-cli==0.2.5
+pip install hologres-cli==0.2.6
 ```
 
 ## Configuration

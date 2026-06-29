@@ -286,6 +286,14 @@ def _rows_from_response(body: dict[str, Any]) -> list[dict[str, Any]]:
         # EnableExecuteStatement-style boolean payload — nothing to expose.
         return []
 
+    # ---- Top-level data error: {success: false, errorCode, errorMessage} ----
+    if isinstance(data, dict) and data.get("success") is False:
+        err_code = data.get("errorCode") or "SQL_ERROR"
+        err_msg = data.get("errorMessage") or "Query failed"
+        raise ApiConnectionError(
+            f"ExecuteStatement query error ({err_code}): {err_msg}"
+        )
+
     # ---- Documented structure: data.results[0].records / columnMetadata ----
     if isinstance(data, dict):
         results = data.get("results") or []
