@@ -12,7 +12,6 @@
 set -e
 
 # ── Constants ────────────────────────────────────────────────────────────────
-VERSION="0.2.1"
 PACKAGE="hologres-agent-skills"
 BOLD="\033[1m"
 GREEN="\033[0;32m"
@@ -267,7 +266,7 @@ print_summary() {
 main() {
     printf "\n"
     printf "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}\n"
-    printf "${BOLD}${CYAN}  Hologres Agent Skills Installer v%s${RESET}\n" "$VERSION"
+    printf "${BOLD}${CYAN}  Hologres Agent Skills Installer${RESET}\n"
     printf "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}\n"
     printf "\n"
 

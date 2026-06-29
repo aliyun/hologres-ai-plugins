@@ -27,7 +27,7 @@ pip install hologres-cli
 安装指定版本：
 
 ```bash
-pip install hologres-cli==0.1.0
+pip install hologres-cli==0.2.5
 ```
 
 使用 `uv`：

@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.2.5 — 2026-06-29
+
+### Hologres CLI (`hologres-cli`)
+
+- **fix(config)**: endpoint 处理优化 —— 粘贴 `host:port` 时自动剥离内嵌端口（端口以 `Port` 字段为准）；实例 endpoint 现在仅直连模式（`auto` / `jdbc`）需要，`api` 模式不再依赖实例 endpoint
+- **chore(deps)**: 升级 alibabacloud SPI 相关依赖
+
+### Hologres Agent Skills (`hologres-agent-skills`)
+
+- **docs(skill)**: `hologres-cli` 技能新增「按连接模式分发的配置输入清单」，让 Agent 能按 `auto` / `jdbc` / `api` 模式准确提示用户所需字段
+
+### 维护
+
+- 同步两个包版本号至 0.2.5（`pyproject.toml` + 运行时 `__version__` + `uv.lock` 成对更新）
+- 修正 `holo_plugin_installer` 运行时 `__version__` 长期滞后（`0.1.0` → `0.2.5`）
+- 两个 `install.sh` 移除写死的版本常量，默认安装最新版
+
+---
+
 ## v0.2.0 — 2026-04-17
 
 Hologres AI Plugins v0.2.0 发布。包含面向 AI Agent 的 Hologres CLI 工具和 8 个 AI Agent 技能。

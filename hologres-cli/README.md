@@ -27,7 +27,7 @@ pip install hologres-cli
 Or install a specific version:
 
 ```bash
-pip install hologres-cli==0.1.0
+pip install hologres-cli==0.2.5
 ```
 
 Using `uv`:
