@@ -114,10 +114,12 @@ _PARAM_PLACEHOLDER = re.compile(r"%s")
 def _quote_literal(value: Any) -> str:
     """Conservatively quote a single SQL literal for inline substitution.
 
-    The OpenAPI ``ExecuteStatement`` endpoint takes a raw SQL string and
-    has no separate parameter slot, so we fall back to client-side
-    substitution.  Only the small set of types that the rest of the CLI
-    actually passes is supported.
+    The OpenAPI ``ExecuteStatement`` endpoint supports server-side
+    parameterised queries (``$1``/``$2`` placeholders via the
+    ``parameters`` array), but the rest of the CLI uses psycopg-style
+    ``%s`` placeholders with client-side substitution.  We keep the
+    client-side approach for compatibility; only the small set of types
+    that the CLI actually passes is supported.
     """
     if value is None:
         return "NULL"
@@ -185,7 +187,7 @@ def _create_client(profile: dict[str, Any]) -> Any:
         )
     region_id = profile.get("region_id") or "cn-hangzhou"
     config.endpoint = f"hologram.{region_id}.aliyuncs.com"
-    config.read_timeout = 60000  # SQL queries can take longer than instance ops.
+    config.read_timeout = 60000  # HTTP-level timeout (ms); server caps queryTimeout at 30s.
     return HologramClient(config)
 
 
@@ -199,9 +201,11 @@ def _execute_statement_via_call_api(
     """Invoke the ``ExecuteStatement`` OpenAPI through the SDK's generic
     ``call_api`` mechanism.
 
-    The dedicated method ``client.execute_statement`` is only available in
-    newer SDK builds, so we always go through ``call_api`` for maximum
-    compatibility.
+    We build the request body manually with the exact camelCase field
+    names required by the server (``sql``, ``dbName``, ``maxRows``,
+    ``queryTimeout``).  The SDK's typed ``execute_statement`` method
+    would do this automatically, but ``call_api`` keeps us independent
+    of SDK model changes and lets us control every field.
     """
     _, open_api_models, util_models = _import_sdk()
     from alibabacloud_openapi_util.client import Client as OpenApiUtilClient
@@ -209,9 +213,13 @@ def _execute_statement_via_call_api(
     if runtime_options is None:
         runtime_options = util_models.RuntimeOptions()
 
+    # Field names must match the official API schema exactly (camelCase):
+    # https://help.aliyun.com/zh/hologres/developer-reference/api-hologram-2022-06-01-executestatement
     body: dict[str, Any] = {
-        "Statement": statement,
-        "Database": database,
+        "sql": statement,
+        "dbName": database,
+        "maxRows": 1000,       # API maximum; avoids silent truncation at default 200
+        "queryTimeout": 30,    # API maximum in seconds (hard cap)
     }
 
     req = open_api_models.OpenApiRequest(
@@ -255,8 +263,21 @@ def _normalize_response(raw: Any) -> dict[str, Any]:
 def _rows_from_response(body: dict[str, Any]) -> list[dict[str, Any]]:
     """Parse the ``data`` payload into ``[{col: value, ...}, ...]``.
 
-    The server may return data in several shapes; we try the documented
-    variant first, then degrade gracefully.
+    The documented ExecuteStatement response structure is::
+
+        {
+          "data": {
+            "results": [{
+              "columnMetadata": [{"name": "id", "type": "int4", "nullable": true}],
+              "records": [["1", "hello"], ["2", "world"]],
+              "count": 2,
+              "truncated": false
+            }]
+          }
+        }
+
+    We try this structure first, then fall back to legacy shapes that
+    earlier SDK versions or non-standard endpoints may return.
     """
     data = body.get("data") if isinstance(body, dict) else None
     if data is None:
@@ -264,11 +285,51 @@ def _rows_from_response(body: dict[str, Any]) -> list[dict[str, Any]]:
     if isinstance(data, bool):
         # EnableExecuteStatement-style boolean payload — nothing to expose.
         return []
+
+    # ---- Documented structure: data.results[0].records / columnMetadata ----
+    if isinstance(data, dict):
+        results = data.get("results") or []
+        if results and isinstance(results[0], dict):
+            result_obj = results[0]
+
+            # Check for per-statement error before extracting rows.
+            if result_obj.get("success") is False:
+                err_code = result_obj.get("errorCode") or "SQL_ERROR"
+                err_msg = result_obj.get("errorMessage") or "Query failed"
+                raise ApiConnectionError(
+                    f"ExecuteStatement query error ({err_code}): {err_msg}"
+                )
+
+            meta = result_obj.get("columnMetadata") or []
+            records = result_obj.get("records") or []
+            col_names: list[str] = []
+            for i, col in enumerate(meta):
+                if isinstance(col, dict):
+                    name = col.get("name") or col.get("Name") or f"col_{i}"
+                else:
+                    name = str(col) if col else f"col_{i}"
+                col_names.append(str(name))
+
+            rows: list[dict[str, Any]] = []
+            for rec in records:
+                if isinstance(rec, dict):
+                    rows.append(rec)
+                elif isinstance(rec, (list, tuple)):
+                    if col_names and len(col_names) == len(rec):
+                        rows.append({col_names[i]: rec[i] for i in range(len(rec))})
+                    else:
+                        rows.append({f"col_{i}": v for i, v in enumerate(rec)})
+                else:
+                    rows.append({"value": rec})
+            return rows
+
+    # ---- Fallback: already a list of dicts ----
     if isinstance(data, list):
-        # Already a list of dicts.
         if data and isinstance(data[0], dict):
             return data
         return [{"value": item} for item in data]
+
+    # ---- Fallback: legacy flat dict with columns/rows keys ----
     if isinstance(data, dict):
         columns_meta = (
             data.get("columns")
@@ -276,27 +337,27 @@ def _rows_from_response(body: dict[str, Any]) -> list[dict[str, Any]]:
             or data.get("columnMetaList")
             or []
         )
-        rows = (
+        legacy_rows = (
             data.get("rows")
             or data.get("Rows")
             or data.get("rowList")
             or []
         )
-        column_names: list[str] = []
+        legacy_col_names: list[str] = []
         for col in columns_meta:
             if isinstance(col, dict):
                 name = col.get("name") or col.get("Name") or col.get("columnName")
                 if name:
-                    column_names.append(str(name))
+                    legacy_col_names.append(str(name))
             elif isinstance(col, str):
-                column_names.append(col)
+                legacy_col_names.append(col)
         result: list[dict[str, Any]] = []
-        for row in rows:
+        for row in legacy_rows:
             if isinstance(row, dict):
                 result.append(row)
             elif isinstance(row, (list, tuple)):
-                if column_names and len(column_names) == len(row):
-                    result.append({column_names[i]: row[i] for i in range(len(row))})
+                if legacy_col_names and len(legacy_col_names) == len(row):
+                    result.append({legacy_col_names[i]: row[i] for i in range(len(row))})
                 else:
                     result.append({f"col_{i}": v for i, v in enumerate(row)})
             else:
