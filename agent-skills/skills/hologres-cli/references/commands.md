@@ -87,7 +87,7 @@ hologres config set credentials_uri http://my-sts-endpoint/sts        # optional
 
 > **`credentials_uri` / `ALIBABA_CLOUD_CREDENTIALS_URI`:** the URI must GET-return JSON (camelCase) `{"Code":"Success","AccessKeyId":"STS.xxx","AccessKeySecret":"yyy","SecurityToken":"zzz","Expiration":"2026-06-24T12:00:00Z"}`. Priority: profile `credentials_uri` field (explicit provider, bypasses the default chain) > default chain (standard STS env vars → OIDC → `~/.aliyun/config.json` → ECS metadata → env `ALIBABA_CLOUD_CREDENTIALS_URI`). The assumed RAM role needs Hologres + CloudMonitor permissions.
 
-Settable keys: `region_id`, `instance_id`, `nettype`, `auth_mode`, `access_key_id`, `access_key_secret`, `username`, `password`, `database`, `warehouse`, `endpoint`, `port`, `output_format`, `language`, `credentials_uri`.
+Settable keys: `region_id`, `instance_id`, `nettype`, `auth_mode`, `access_key_id`, `access_key_secret`, `username`, `password`, `database`, `warehouse`, `endpoint`, `port`, `output_format`, `language`, `connection_mode`, `credentials_uri`.
 
 ### config get
 

@@ -31,7 +31,7 @@ import re
 from typing import Any, Iterator, Optional
 
 from . import credentials
-from .config_store import ENDPOINT_TEMPLATES
+from .config_store import ENDPOINT_TEMPLATES, split_endpoint_host_port
 
 
 class ApiConnectionError(Exception):
@@ -89,6 +89,9 @@ def _build_masked_dsn(profile: dict[str, Any]) -> str:
     JDBC path uses; this keeps audit logs comparable across transports.
     """
     host = profile.get("endpoint") or ""
+    if host:
+        # 与 JDBC 路径一致:剥离用户粘入的 ``:port``,port 始终取 port 字段。
+        host, _embedded_port = split_endpoint_host_port(host)
     if not host:
         instance_id = profile.get("instance_id", "")
         region_id = profile.get("region_id", "")

@@ -23,6 +23,7 @@ from hologres_cli.config_store import (
     migrate_from_legacy,
     save_config,
     set_profile,
+    split_endpoint_host_port,
     switch_profile,
 )
 
@@ -501,6 +502,97 @@ class TestBuildDsnFromProfile:
         }
         with pytest.raises(ConfigError, match="未注入临时凭证"):
             build_dsn_from_profile(profile)
+
+    # --- A. endpoint 带端口的容错剥离 ---------------------------------------
+
+    def test_build_dsn_endpoint_with_port_stripped(self):
+        """endpoint 带 :80 时,DSN 不应出现 host:80:80,port 来自 port 字段。"""
+        from hologres_cli.connection import parse_dsn
+
+        profile = {
+            "name": "test",
+            "endpoint": "hgpostcn-cn-jfq4uk9hn009-cn-hangzhou.hologres.aliyuncs.com:80",
+            "auth_mode": "ram",
+            "access_key_id": "LTAI5tTest",
+            "access_key_secret": "SecretKey123",
+            "database": "mydb",
+            "port": 80,
+        }
+        dsn = build_dsn_from_profile(profile)
+        assert ":80:80" not in dsn  # 不双端口
+        params = parse_dsn(dsn)  # 不抛 ValueError
+        assert params["host"] == "hgpostcn-cn-jfq4uk9hn009-cn-hangzhou.hologres.aliyuncs.com"
+        assert params["port"] == 80
+
+    def test_build_dsn_endpoint_with_nondefault_port_field_wins(self):
+        """endpoint 内嵌 :443 但 port 字段=80 → DSN 用 80（port 字段为权威来源）。"""
+        profile = {
+            "name": "test",
+            "endpoint": "host.example.com:443",
+            "auth_mode": "ram",
+            "access_key_id": "LTAI5tTest",
+            "access_key_secret": "SecretKey123",
+            "database": "mydb",
+            "port": 80,
+        }
+        dsn = build_dsn_from_profile(profile)
+        assert "@host.example.com:80/" in dsn
+        assert ":443" not in dsn
+
+    def test_split_endpoint_host_port(self):
+        """split_endpoint_host_port 覆盖 无端口/带端口/IPv6/空串/非整数端口。"""
+        assert split_endpoint_host_port("host.example.com") == ("host.example.com", None)
+        assert split_endpoint_host_port("host.example.com:80") == ("host.example.com", 80)
+        assert split_endpoint_host_port("[::1]:80") == ("::1", 80)
+        assert split_endpoint_host_port("") == ("", None)
+        assert split_endpoint_host_port("   ") == ("", None)
+        assert split_endpoint_host_port("host:abc") == ("host", None)
+
+    # --- B. 仅实例 ID 自动拼接（锁定真实公网/VPC 格式）-----------------------
+
+    def test_build_dsn_auto_public_endpoint_matches_real(self):
+        """仅给实例 ID(+region),nettype=internet → 公网 endpoint 与真实格式一致。"""
+        from hologres_cli.connection import parse_dsn
+
+        profile = {
+            "name": "test",
+            "endpoint": "",
+            "instance_id": "hgpostcn-cn-jfq4uk9hn009",
+            "region_id": "cn-hangzhou",
+            "nettype": "internet",
+            "auth_mode": "ram",
+            "access_key_id": "LTAI5tTest",
+            "access_key_secret": "SecretKey123",
+            "database": "mydb",
+            "port": 80,
+        }
+        dsn = build_dsn_from_profile(profile)
+        assert "hgpostcn-cn-jfq4uk9hn009-cn-hangzhou.hologres.aliyuncs.com" in dsn
+        params = parse_dsn(dsn)  # 不抛错
+        assert params["port"] == 80
+        assert params["host"] == "hgpostcn-cn-jfq4uk9hn009-cn-hangzhou.hologres.aliyuncs.com"
+
+    def test_build_dsn_auto_vpc_endpoint_matches_real(self):
+        """仅给实例 ID(+region),nettype=vpc → VPC endpoint 与真实格式一致。"""
+        from hologres_cli.connection import parse_dsn
+
+        profile = {
+            "name": "test",
+            "endpoint": "",
+            "instance_id": "hgpostcn-cn-jfq4uk9hn009",
+            "region_id": "cn-hangzhou",
+            "nettype": "vpc",
+            "auth_mode": "ram",
+            "access_key_id": "LTAI5tTest",
+            "access_key_secret": "SecretKey123",
+            "database": "mydb",
+            "port": 80,
+        }
+        dsn = build_dsn_from_profile(profile)
+        assert "hgpostcn-cn-jfq4uk9hn009-cn-hangzhou-vpc-st.hologres.aliyuncs.com" in dsn
+        params = parse_dsn(dsn)  # 不抛错
+        assert params["port"] == 80
+        assert params["host"] == "hgpostcn-cn-jfq4uk9hn009-cn-hangzhou-vpc-st.hologres.aliyuncs.com"
 
 
 class TestMigrateFromLegacy:

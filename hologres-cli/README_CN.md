@@ -62,11 +62,12 @@ hologres config
 - **地域**（如 `cn-hangzhou`、`cn-shanghai`）
 - **实例 ID**（如 `hgprecn-cn-xxx`）
 - **网络类型**：`internet` / `intranet` / `vpc`
+- **连接模式**：`auto`（默认,JDBC 优先 + API 回退）/ `jdbc` / `api`。`api` 模式不使用实例 endpoint(改用 OpenAPI endpoint `hologram.{region}.aliyuncs.com`),向导会跳过 Endpoint/Port 采集。
 - **认证方式**：`basic`（用户名/密码）、`ram`（AccessKey）或 `sts`（临时凭证，见 [STS 认证](#sts-认证)）
 - **数据库名**
 - **计算组**（Warehouse）
-- **Endpoint**（可选，自动根据 instance_id + region_id + nettype 构建）
-- **端口**（默认：`80`）
+- **Endpoint**（可选，仅 host —— 仅 `auto`/`jdbc` 模式需要；端口通过 `Port` 字段单独配置；留空时自动根据 instance_id + region_id + nettype 构建。若粘入 `host:port` 完整形式，内嵌端口会被剥离，仍以 `Port` 字段为准）
+- **端口**（默认：`80`,仅 `auto`/`jdbc` 模式需要）
 
 ### Endpoint 自动构建
 

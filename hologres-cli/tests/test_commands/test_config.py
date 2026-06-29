@@ -231,6 +231,7 @@ class TestConfigWizardSts:
             "cn-hangzhou",        # Region Id
             "hg-test",            # Instance Id
             "internet",           # Network type
+            "",                   # Connection mode (default auto)
             "sts",                # Auth mode
             "http://my.uri",      # Credentials URI (sts 分支)
             "db",                 # Database
@@ -245,5 +246,49 @@ class TestConfigWizardSts:
         p = get_profile("default")
         assert p["auth_mode"] == "sts"
         assert p["credentials_uri"] == "http://my.uri"
+        assert p["connection_mode"] == "auto"
         # STS 模式不落 AK/SK
         assert not p.get("access_key_id")
+
+
+class TestConfigWizardApiMode:
+    """L3: api 模式向导跳过 Endpoint/Port 采集(实例 endpoint 仅直连模式需要)。"""
+
+    def test_wizard_api_mode_skips_endpoint_port(self, mock_home):
+        runner = CliRunner()
+        inputs = "\n".join([
+            "cn-hangzhou",        # Region Id
+            "hg-test",            # Instance Id
+            "internet",           # Network type
+            "api",                # Connection mode → 跳过 Endpoint/Port
+            "ram",                # Auth mode
+            "LTAI5tTest",         # Access Key Id
+            "SecretKey123",       # Access Key Secret
+            "db",                 # Database
+            "init_warehouse",     # Warehouse
+            "zh",                 # Language
+        ])
+        result = runner.invoke(cli, ["config"], input=inputs)
+        assert result.exit_code == 0, result.output
+        from hologres_cli.config_store import get_profile
+        p = get_profile("default")
+        assert p["connection_mode"] == "api"
+        # api 模式不消费实例 endpoint,落盘为空
+        assert p["endpoint"] == ""
+
+    def test_wizard_api_mode_missing_instance_id_fails(self, mock_home):
+        runner = CliRunner()
+        inputs = "\n".join([
+            "cn-hangzhou",        # Region Id
+            "",                   # Instance Id (空 → api 模式校验失败)
+            "internet",           # Network type
+            "api",                # Connection mode
+            "ram",                # Auth mode
+            "LTAI5tTest",         # Access Key Id
+            "SecretKey123",       # Access Key Secret
+            "db",                 # Database
+            "init_warehouse",     # Warehouse
+            "zh",                 # Language
+        ])
+        result = runner.invoke(cli, ["config"], input=inputs)
+        assert result.exit_code != 0 or "api mode requires" in result.output

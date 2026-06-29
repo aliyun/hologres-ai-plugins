@@ -23,6 +23,7 @@ from ..config_store import (
     migrate_from_legacy,
     set_profile,
     switch_profile,
+    split_endpoint_host_port,
 )
 from ..output import FORMAT_JSON, error, print_output, success, success_rows
 
@@ -52,6 +53,9 @@ REGION_CHOICES = [
 NETTYPE_CHOICES = ["internet", "intranet", "vpc"]
 AUTH_MODE_CHOICES = ["ram", "basic", "sts"]
 LANGUAGE_CHOICES = ["zh", "en"]
+# 连接模式:jdbc/api 直连走实例 endpoint(host:port);api 走 hologram.{region}.aliyuncs.com,
+# 不消费实例 endpoint,故向导在 api 模式下跳过 Endpoint/Port 采集。
+CONNECTION_MODE_CHOICES = ["auto", "jdbc", "api"]
 
 
 @click.group("config", invoke_without_command=True)
@@ -109,6 +113,15 @@ def _interactive_wizard(profile_name: str) -> None:
         f"Network type [{'/'.join(NETTYPE_CHOICES)}]",
         type=click.Choice(NETTYPE_CHOICES, case_sensitive=False),
         default=existing.get("nettype", "internet"),
+    )
+
+    # Connection mode — 决定是否需要实例 Endpoint/Port。
+    # auto/jdbc:直连(JDBC 优先),需要实例 endpoint;api:走 OpenAPI,不需要实例 endpoint。
+    connection_mode = click.prompt(
+        f"Connection mode [{'/'.join(CONNECTION_MODE_CHOICES)}] "
+        "(api = no instance endpoint needed)",
+        type=click.Choice(CONNECTION_MODE_CHOICES, case_sensitive=False),
+        default=existing.get("connection_mode", "auto"),
     )
 
     # Auth mode
@@ -172,19 +185,30 @@ def _interactive_wizard(profile_name: str) -> None:
         default=existing.get("warehouse", "init_warehouse"),
     )
 
-    # Optional: direct endpoint override
-    endpoint = click.prompt(
-        "Endpoint (leave empty to auto-construct from Instance Id)",
-        default=existing.get("endpoint", ""),
-    )
+    # Optional: direct endpoint override (host only — port is set separately below).
+    # 仅直连模式(auto/jdbc)需要实例 Endpoint/Port;api 模式走 OpenAPI,跳过采集。
+    if connection_mode != "api":
+        raw_endpoint = click.prompt(
+            "Endpoint (host only, no port — leave empty to auto-construct from Instance Id)",
+            default=existing.get("endpoint", ""),
+        )
+        endpoint_host, embedded_port = split_endpoint_host_port(raw_endpoint)
+        endpoint = endpoint_host
 
-    # Port
-    port_default = existing.get("port", 80)
-    port = click.prompt(
-        "Port",
-        default=port_default,
-        type=int,
-    )
+        # Port — port 字段是端口的唯一权威来源(默认 80,用户可改)。
+        # 若 endpoint 内嵌了 port,用它作为本次提示默认值,让用户显式确认。
+        port_default = existing.get("port", 80)
+        if embedded_port is not None:
+            port_default = embedded_port
+        port = click.prompt(
+            "Port",
+            default=port_default,
+            type=int,
+        )
+    else:
+        # api 模式:不消费实例 endpoint/port,留空落盘。
+        endpoint = ""
+        port = existing.get("port", 80)
 
     # Language
     language = click.prompt(
@@ -210,13 +234,26 @@ def _interactive_wizard(profile_name: str) -> None:
         "port": port,
         "output_format": "json",
         "language": language,
+        "connection_mode": connection_mode,
         "credentials_uri": credentials_uri,
     }
 
     # Validate by building DSN.
     # sts 模式：临时凭证运行时注入，profile 无 AK/SK，跳过 build_dsn（会因未注入报错），
     # 仅静态校验必需的非凭证字段。
-    if auth_mode != "sts":
+    # api 模式：不消费实例 endpoint,不走 JDBC DSN;仅校验 OpenAPI 必需字段。
+    if connection_mode == "api":
+        missing = [
+            k for k in ("instance_id", "region_id", "database")
+            if not profile.get(k)
+        ]
+        if missing:
+            print_output(error(
+                "CONFIG_ERROR",
+                f"api mode requires: {', '.join(missing)}",
+            ))
+            return
+    elif auth_mode != "sts":
         try:
             dsn = build_dsn_from_profile(profile)
         except ConfigError as e:
@@ -240,7 +277,10 @@ def _interactive_wizard(profile_name: str) -> None:
     click.echo(CONFIGURE_DONE_BANNER)
     click.echo()
     click.echo(f"  Profile:  {profile_name}")
-    click.echo(f"  Endpoint: {endpoint or '(auto-constructed)'}")
+    if connection_mode == "api":
+        click.echo("  Endpoint: (not needed, api mode)")
+    else:
+        click.echo(f"  Endpoint: {endpoint or '(auto-constructed)'}")
     click.echo(f"  Database: {database}")
     if auth_mode == "sts":
         auth_display = f"sts (credentials_uri={credentials_uri or 'env: ALIBABA_CLOUD_CREDENTIALS_URI'})"

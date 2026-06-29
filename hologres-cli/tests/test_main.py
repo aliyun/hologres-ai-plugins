@@ -10,6 +10,7 @@ from click.testing import CliRunner
 
 from hologres_cli.connection import DSNError
 from hologres_cli.main import _generate_ai_guide, cli, main
+from hologres_cli import __version__
 
 
 class TestGenerateAiGuide:
@@ -59,7 +60,7 @@ class TestCli:
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
-        assert "0.2.0" in result.output
+        assert __version__ in result.output
 
     def test_cli_help(self):
         """Test --help flag."""
