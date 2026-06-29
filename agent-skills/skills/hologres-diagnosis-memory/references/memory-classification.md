@@ -10,11 +10,13 @@
 
 | 指标名 | 说明 | 粒度 |
 |--------|------|------|
-| `{prefix}_memory_usage` | 实例整体内存使用率 | 实例/Warehouse |
-| `{prefix}_memory_usage_by_worker` | 各 Worker 内存使用率 | Worker |
-| `{prefix}_memory_usage_detail` | 内存分类明细（按 memType 拆分：query / cache / meta / system 等） | 实例/Warehouse |
-| `{prefix}_qe_memory_used_percentage` | QE 引擎 Query 内存使用率 | 实例/Warehouse |
-| `{prefix}_cpu_usage` | CPU 使用率（辅助判断） | 实例/Warehouse |
+| `{prefix}memory_usage` | 实例整体内存使用率 | 实例/Warehouse |
+| `{prefix}memory_usage_by_worker` | 各 Worker 内存使用率 | Worker |
+| `{prefix}memory_usage_detail` | 内存分类明细（按 memType 拆分：query / cache / meta / system 等） | 实例/Warehouse |
+| `{prefix}qe_memory_used_percentage` | QE 引擎 Query 内存使用率 | 实例/Warehouse |
+| `{prefix}cpu_usage` | CPU 使用率（辅助判断） | 实例/Warehouse |
+
+> 注：`{prefix}` 含尾下划线（如 `warehouse_`），故完整指标名为 `warehouse_memory_usage`。
 
 ### 指标发现
 

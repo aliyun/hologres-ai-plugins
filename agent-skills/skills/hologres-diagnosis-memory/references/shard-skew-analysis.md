@@ -20,8 +20,8 @@ hologres sql run --no-limit-check "SELECT worker_id, count(shard_id) AS shard_co
 ### 命令
 
 ```bash
-# 各 Worker 内存使用率（云监控）
-hologres metric query {prefix}_memory_usage_by_worker \
+# 各 Worker 内存使用率（云监控；{prefix} 含尾下划线，如 warehouse_）
+hologres metric query {prefix}memory_usage_by_worker \
     --instance-id {instance_id} \
     --start-time {start_time} --end-time {end_time} --period 60
 ```
@@ -37,7 +37,7 @@ hologres metric query {prefix}_memory_usage_by_worker \
 
 ```bash
 # 高频访问特定 Worker 的 Query（结合 hg_query_log + hg_worker_info）
-hologres sql run --no-limit-check "SELECT query_id, usename, warehouse_name, memory_bytes, cpu_time_ms, duration AS duration_ms, query::char(200) AS sql_sample FROM hologres.hg_query_log WHERE query_start >= '{start_time}' AND query_start <= '{end_time}' AND memory_bytes > 1073741824 AND usename != 'system' ORDER BY memory_bytes DESC LIMIT 20"
+hologres sql run --no-limit-check "SELECT query_id, usename, warehouse_name, memory_bytes, cpu_time_ms, duration AS duration_ms, query AS sql_full FROM hologres.hg_query_log WHERE query_start >= '{start_time}' AND query_start <= '{end_time}' AND memory_bytes > 1073741824 AND usename != 'system' ORDER BY memory_bytes DESC LIMIT 20"
 ```
 
 ### 热点 Key 检测

@@ -341,6 +341,8 @@ hologres config set instance_id hgprecn-cn-xxx
 hologres config set database mydb
 ```
 
+`auth_mode` supports `ram` (AccessKey, default), `basic` (username/password), and `sts` (temporary credentials — passwordless via `ALIBABA_CLOUD_CREDENTIALS_URI` or `credentials_uri`; see [hologres-cli STS Authentication](hologres-cli/README.md#sts-authentication)).
+
 Connection resolution priority:
 1. **CLI flag**: `hologres --profile <name> status`
 2. **Current profile**: The active profile in `config.json`

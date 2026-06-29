@@ -62,11 +62,32 @@ Set a configuration value.
 
 ```bash
 hologres config set region_id cn-shanghai
+hologres config set instance_id hgprecn-cn-xxx
 hologres config set database mydb
+
+# ram (Alibaba Cloud AccessKey)
+hologres config set auth_mode ram
+hologres config set access_key_id LTAI5tXXXXXXXXXXXX
+hologres config set access_key_secret XXXXXXXXXXXXXXXX
+
+# basic (Hologres DB account; username MUST be BASIC$<name>)
 hologres config set auth_mode basic
+hologres config set username 'BASIC$myuser'
+hologres config set password XXXXXXXX
+
+# sts (temporary credentials, passwordless)
+hologres config set auth_mode sts
+hologres config set credentials_uri http://my-sts-endpoint/sts        # optional; empty → default chain (env ALIBABA_CLOUD_CREDENTIALS_URI etc.)
 ```
 
-Settable keys: `region_id`, `instance_id`, `nettype`, `auth_mode`, `access_key_id`, `access_key_secret`, `username`, `password`, `database`, `warehouse`, `endpoint`, `port`, `output_format`, `language`.
+> **auth_mode reference:**
+> - `ram` — long-lived Alibaba Cloud AccessKey (`access_key_id` + `access_key_secret`).
+> - `basic` — Hologres DB account; the username uses the `BASIC$<name>` format (Hologres-specific, **not** a plain PostgreSQL username).
+> - `sts` — temporary credentials fetched at runtime via the `alibabacloud-credentials` default chain; **never persisted**, auto-refreshed in-process. Works with all `connection_mode` values and all command groups (SQL / instance-manage / metric).
+
+> **`credentials_uri` / `ALIBABA_CLOUD_CREDENTIALS_URI`:** the URI must GET-return JSON (camelCase) `{"Code":"Success","AccessKeyId":"STS.xxx","AccessKeySecret":"yyy","SecurityToken":"zzz","Expiration":"2026-06-24T12:00:00Z"}`. Priority: profile `credentials_uri` field (explicit provider, bypasses the default chain) > default chain (standard STS env vars → OIDC → `~/.aliyun/config.json` → ECS metadata → env `ALIBABA_CLOUD_CREDENTIALS_URI`). The assumed RAM role needs Hologres + CloudMonitor permissions.
+
+Settable keys: `region_id`, `instance_id`, `nettype`, `auth_mode`, `access_key_id`, `access_key_secret`, `username`, `password`, `database`, `warehouse`, `endpoint`, `port`, `output_format`, `language`, `credentials_uri`.
 
 ### config get
 

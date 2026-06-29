@@ -63,6 +63,32 @@ class ErrorCode(Enum):
         "Specified profile does not exist. Use 'hologres config list' to see available profiles.",
     )
 
+    # --- STS / Credentials ---
+    STS_FETCH_ERROR = ErrorMeta(
+        "STS_FETCH_ERROR", True,
+        "获取 STS 临时凭证失败，可能是网络抖动或凭据源暂不可用，请稍后重试；持续失败请检查 credentials_uri / RAM 角色。",
+    )
+    STS_TOKEN_INCOMPLETE = ErrorMeta(
+        "STS_TOKEN_INCOMPLETE", False,
+        "凭据源返回的不是 STS 临时凭证（缺 AccessKeyId/AccessKeySecret/SecurityToken）。",
+    )
+    STS_PREREQUISITES_MISSING = ErrorMeta(
+        "STS_PREREQUISITES_MISSING", False,
+        "sts 模式需配置 profile.credentials_uri 或设置环境变量 ALIBABA_CLOUD_CREDENTIALS_URI / ALIBABA_CLOUD_ACCESS_KEY_ID 等。",
+    )
+    CREDENTIALS_URI_INVALID = ErrorMeta(
+        "CREDENTIALS_URI_INVALID", False,
+        "credentials_uri 配置非法或凭据源不可达，请检查 URL 格式与连通性。",
+    )
+    CREDENTIALS_PROVIDER_INIT_FAILED = ErrorMeta(
+        "CREDENTIALS_PROVIDER_INIT_FAILED", True,
+        "默认凭证链初始化失败，请检查 ECS RAM 角色 / 环境变量 / ~/.aliyun/config.json 配置。",
+    )
+    STS_PROFILE_NOT_INJECTED = ErrorMeta(
+        "STS_PROFILE_NOT_INJECTED", False,
+        "（内部）sts profile 在构造连接前未注入临时凭证，应由 get_connection 注入。",
+    )
+
     # --- Input Validation ---
     INVALID_INPUT = ErrorMeta(
         "INVALID_INPUT", False,

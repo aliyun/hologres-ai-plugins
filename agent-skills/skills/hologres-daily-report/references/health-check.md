@@ -2,11 +2,11 @@
 
 本文档包含日报中 Q1（实例整体健康）和 Q2（可用性与稳定性）诊断所需的详细 SQL 和判断逻辑。
 
-> **前置准备**：所有命令通过 `hologres-cli` 执行，输出为 JSON 格式 `{"ok": true, "data": {...}}`。
+> **前置准备**：所有 SQL 查询通过 `hologres sql run --no-limit-check` 执行，实例/计算组信息通过 `hologres instance-manage get` / `hologres warehouse` 获取，云监控指标通过 `hologres metric query`（命名空间 `acs_hologres`）查询。
 >
-> ```bash
-> export HOLOGRES_SKILL=hologres-daily-report
-> ```
+> 连接层已自动 `SET hg_computing_resource = 'serverless'`；来源标记由 `export HOLOGRES_SKILL=hologres-daily-report` 注入 `application_name`，无需在 SQL 内手写 `SET ...`。
+>
+> CMS 指标名称为 `{prefix}<metric>`，前缀 `{prefix}` 由实例类型决定（参见 `resource-analysis.md` 的「指标名称前缀约定」）。
 
 ---
 
@@ -15,22 +15,18 @@
 ### 1.1 实例状态与版本
 
 ```bash
-# 连接状态（版本、数据库、用户）
-hologres status
-
-# 实例详情（版本、最大连接数）
-hologres instance <instance_name>
-
-# 实例管理信息（实例类型、运行状态、规格）
+# 实例详情（状态、版本、实例类型、规格、最大连接数）
 hologres instance-manage get
 
 # Warehouse 资源分配
 hologres warehouse
+
+# （可选）通过 SQL 查询服务端版本
+hologres sql run "SELECT version()"
 ```
 
 **输出解读**：
-- `hologres status` 返回 `server_version`，用于判断当前版本
-- `hologres instance-manage get` 返回实例类型（Standard/Warehouse/Shared 等），用于确定监控指标前缀
+- `hologres instance-manage get` 返回 `data.Instance` 下的实例状态、版本、实例类型（Standard/Warehouse/Shared 等，用于确定监控指标前缀）、规格等
 - `hologres warehouse` 返回各 Warehouse 的 CPU/内存/Shard 分配和状态
 
 **版本 EOS 判断**：
@@ -41,11 +37,9 @@ hologres warehouse
 | 3.0.x | 请查询最新 EOS 时间表 | 根据距离判断 |
 | 3.1.x | 请查询最新 EOS 时间表 | 根据距离判断 |
 
-> 使用 **hologres-instance-health-analyse** skill 或官方文档获取准确的 EOS 时间表。
+> 请参考阿里云官方文档获取准确的 EOS 时间表。
 
 ### 1.2 连接数与分布
-
-> 引用 **hologres-instance-health-analyse** skill 的 warehouse-metrics 查询。
 
 ```bash
 # 按状态统计连接数
@@ -89,8 +83,8 @@ hologres sql run --no-limit-check "SELECT blocked_locks.pid AS blocked_pid, bloc
 ### 1.4 长时间运行查询
 
 ```bash
-# 运行超过 5 分钟的查询
-hologres sql run --no-limit-check "SELECT pid, usename, application_name, state, now() - query_start as duration, left(query, 200) as query_preview FROM pg_stat_activity WHERE state = 'active' AND now() - query_start > interval '5 minutes' AND backend_type = 'client backend' ORDER BY duration DESC LIMIT 10"
+# 运行超过 5 分钟的查询（query 完整输出，不截断）
+hologres sql run --no-limit-check "SELECT pid, usename, application_name, state, now() - query_start as duration, query as query_full FROM pg_stat_activity WHERE state = 'active' AND now() - query_start > interval '5 minutes' AND backend_type = 'client backend' ORDER BY duration DESC LIMIT 10"
 ```
 
 **诊断阈值**：
@@ -100,15 +94,20 @@ hologres sql run --no-limit-check "SELECT pid, usename, application_name, state,
 ### 1.5 FE Replay 延迟
 
 ```bash
-# 查询 FE replay 延迟（如系统表可用）
-hologres sql run --no-limit-check "SELECT * FROM hologres.hg_stat_replica_delay"
+# 查询当日 FE replay 延迟时序数据（60s 粒度）
+hologres metric query {prefix}fe_replay_delay --instance-id {instance_id} --start-time "{report_date}T00:00:00" --end-time "{report_date}T23:59:59" --period 60
 ```
 
-> 注意：此系统表在部分版本（如 V4.x）中可能不存在。如果查询失败，跳过此项，在日报中标注"数据不可用"。
+> 注意：此指标仅 Hologres V2.2 及以上版本支持。如果查询无数据或失败，跳过此项，在日报中标注「数据不可用」。
+
+**输出解读**：
+- 返回每个 FE 节点的 replay 延迟时序数据（单位：毫秒），每个数据点包含 `timestamp` 和 value 字段
+- 从时序数据中关注：max（峰值）及持续超过阈值的时长
+- 若某个 FE 节点的延迟持续高于其他节点，可能存在该 FE 卡住的情况
 
 **诊断阈值**：
-- replay 延迟 > 10ms 持续 5 分钟 → 异常
-- 延迟 > 100ms → 严重异常
+- replay 延迟持续 > 1 分钟 → 关注，检查是否有长时间运行的 DDL 或 Query
+- replay 延迟持续 > 5 分钟（连续 10 个 1 分钟周期 ≥ 300000ms）→ 异常，需结合 `pg_stat_activity` 排查并终止阻塞 Query
 
 ---
 
@@ -192,3 +191,34 @@ hologres sql run --no-limit-check "SELECT command_tag, count(*) as cnt, min(quer
 ### 建议
 - {建议}
 ```
+
+---
+
+## Health Score Rules
+
+Baseline 100 points. Subtract per the table below; the floor is 0. Final score = `max(0, 100 - total deduction)`.
+
+| Check | Trigger | Deduction |
+|-------|---------|-----------|
+| Instance status not Running | coredump / read-only | -20 |
+| Version past EOS | end of support | -10 |
+| Version < 3 months from EOS | nearing end of support | -5 |
+| CPU continuous 1h p95 > 90% | resource pressure | -10 |
+| Memory continuous 1h p95 > 90% | resource pressure | -10 |
+| OOM event present | memory overflow | -15 |
+| Connections continuous 10min > 90% | connection saturation | -10 |
+| Query latency P99 up > 50% | performance regression | -5 |
+| Query Queue backlog > 500ms | severe queueing | -5 |
+| Slow SQL > 10 records | many performance issues | -5 |
+| Failed queries > 10 records | many errors | -5 |
+| Storage MoM growth > 10% | abnormal storage growth | -5 |
+| Storage usage > 80% | capacity risk | -10 |
+| Connection peak > 80% of cap | connection risk | -5 |
+| Restart / coredump same day | availability event | -15 |
+
+### Score Tiers
+
+- 90–100: Healthy
+- 70–89: Mostly healthy, with attention items
+- 50–69: Needs governance
+- < 50: Severe issues, act immediately

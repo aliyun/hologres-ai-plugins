@@ -692,3 +692,31 @@ class TestSqlGroupCompatibility:
         assert output["ok"] is True
         # Should be run output, not explain output
         assert "plan" not in output.get("data", {})
+
+
+class TestSqlStsCredentialsError:
+    """L3: sts 凭证失败时，sql 命令输出结构化 STS_FETCH_ERROR（_execute_single 捕获，不 exit）。"""
+
+    def test_sql_run_sts_fetch_error(self, mocker, mock_home):
+        from pathlib import Path
+        from hologres_cli.credentials import CredentialsError
+        from hologres_cli.errors import ErrorCode
+
+        sts_profile = {
+            "name": "default", "auth_mode": "sts", "endpoint": "hg", "port": 80,
+            "database": "db", "instance_id": "i", "region_id": "cn-hangzhou",
+            "credentials_uri": "", "connection_mode": "jdbc",
+        }
+        cfg = Path.home() / ".hologres" / "config.json"
+        cfg.parent.mkdir(parents=True, exist_ok=True)
+        cfg.write_text(json.dumps({"current": "default", "profiles": [sts_profile]}))
+
+        mocker.patch("hologres_cli.connection.credentials.resolve_sts_credentials",
+                     side_effect=CredentialsError(ErrorCode.STS_FETCH_ERROR, "boom"))
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sql", "run", "SELECT 1"])
+        assert result.exit_code == 0, result.output
+        output = json.loads(result.output)
+        assert output["ok"] is False
+        assert output["error"]["code"] == "STS_FETCH_ERROR"
+        assert output["error"]["retryable"] is True

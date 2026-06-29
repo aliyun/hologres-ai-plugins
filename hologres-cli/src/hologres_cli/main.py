@@ -9,6 +9,7 @@ import click
 
 from . import __version__
 from .connection import DSNError
+from .credentials import CredentialsError
 from .output import FORMAT_JSON, VALID_FORMATS, error, print_output, success
 
 
@@ -124,6 +125,11 @@ def history_cmd(ctx: click.Context, count: int) -> None:
 def main() -> None:
     try:
         cli(obj={})
+    except CredentialsError as e:
+        # STS 凭证解析失败（拉取/过期/配置）——用异常携带的精确 code 输出，
+        # error(code_str) 会自动补上 retryable/hint 元数据。
+        print_output(error(e.code, str(e)))
+        sys.exit(1)
     except DSNError as e:
         print_output(error("CONNECTION_ERROR", str(e)))
         sys.exit(1)

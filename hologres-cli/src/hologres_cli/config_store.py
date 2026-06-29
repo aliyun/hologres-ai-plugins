@@ -56,7 +56,7 @@ SETTABLE_KEYS = {
     "database", "warehouse", "endpoint", "port",
     "output_format", "language",
     "cms_access_key_id", "cms_access_key_secret",
-    "connection_mode",
+    "connection_mode", "credentials_uri",
 }
 
 # Sensitive keys that should be masked in display
@@ -309,6 +309,7 @@ def build_dsn_from_profile(profile: dict[str, Any]) -> str:
 
     # Determine credentials
     auth_mode = profile.get("auth_mode", "ram")
+    options_value = ""  # 仅 sts 模式非空：libpq options="sts_token=<token>"
     if auth_mode == "ram":
         user = profile.get("access_key_id", "")
         password = profile.get("access_key_secret", "")
@@ -325,8 +326,25 @@ def build_dsn_from_profile(profile: dict[str, Any]) -> str:
                 "username is required for Basic auth mode. "
                 "Run 'hologres config' to configure."
             )
+    elif auth_mode == "sts":
+        # STS 模式：临时凭证（AccessKeyId/AccessKeySecret/SecurityToken）由调用方
+        # （get_connection）从凭据源现拉注入到 profile 副本，本函数不主动拉取，
+        # 也绝不将其落盘。保持纯函数职责。
+        user = profile.get("access_key_id", "")
+        password = profile.get("access_key_secret", "")
+        token = profile.get("security_token", "")
+        if not (user and password and token):
+            raise ConfigError(
+                "sts profile 未注入临时凭证（AccessKeyId/AccessKeySecret/SecurityToken）。"
+                " 该值应由 get_connection 在调用前从凭据源（标准 STS 环境变量 / "
+                "credentials_uri / ALIBABA_CLOUD_CREDENTIALS_URI）拉取注入，而非存入 profile。"
+            )
+        # SecurityToken 通过 libpq 的 options 参数传递：options="sts_token=<token>"。
+        # 整段 quote(safe="") 确保 token 中的 / + = 等不被 parse_qs 误解
+        # （+ 会被当空格）。connection.parse_dsn 用 parse_qs 自动 unquote 还原。
+        options_value = quote(f"sts_token={token}", safe="")
     else:
-        raise ConfigError(f"Unknown auth_mode '{auth_mode}'. Valid values: ram, basic")
+        raise ConfigError(f"Unknown auth_mode '{auth_mode}'. Valid values: ram, basic, sts")
 
     # Database
     database = profile.get("database", "")
@@ -347,6 +365,9 @@ def build_dsn_from_profile(profile: dict[str, Any]) -> str:
         dsn = f"hologres://{user_encoded}:{password_encoded}@{host}:{port}/{database}"
     else:
         dsn = f"hologres://{user_encoded}@{host}:{port}/{database}"
+
+    if options_value:
+        dsn += f"?options={options_value}"
 
     return dsn
 

@@ -449,6 +449,59 @@ class TestBuildDsnFromProfile:
         assert "test@host" in dsn
         assert ":@" not in dsn
 
+    def test_build_dsn_sts_with_injected_credentials(self):
+        """STS 模式：已注入临时凭证 → DSN 含 ?options=sts_token=..."""
+        profile = {
+            "name": "test",
+            "endpoint": "host.example.com",
+            "auth_mode": "sts",
+            "access_key_id": "STS.AKID",
+            "access_key_secret": "secret",
+            "security_token": "tok",
+            "database": "mydb",
+            "port": 80,
+        }
+        dsn = build_dsn_from_profile(profile)
+        assert "STS.AKID" in dsn
+        assert "secret" in dsn
+        assert "?options=" in dsn
+
+    def test_build_dsn_sts_options_roundtrip_special_chars(self):
+        """头号回归测试：token 含 / + = 时，build_dsn → parse_dsn 往返完整还原。
+
+        + 必须被 quote 成 %2B，否则 parse_qs 会把它当空格吞掉。
+        """
+        from hologres_cli.connection import parse_dsn
+
+        token = "ab/cd+ef==gh"
+        profile = {
+            "name": "test",
+            "endpoint": "host.example.com",
+            "auth_mode": "sts",
+            "access_key_id": "STS.AKID",
+            "access_key_secret": "sk",
+            "security_token": token,
+            "database": "mydb",
+            "port": 80,
+        }
+        dsn = build_dsn_from_profile(profile)
+        params = parse_dsn(dsn)
+        assert params["options"] == f"sts_token={token}"  # + 不丢、= 保留
+        assert params["user"] == "STS.AKID"
+        assert params["password"] == "sk"
+
+    def test_build_dsn_sts_not_injected_raises(self):
+        """STS 模式未注入临时凭证 → ConfigError（应由 get_connection 注入）。"""
+        profile = {
+            "name": "test",
+            "endpoint": "host.example.com",
+            "auth_mode": "sts",
+            "database": "mydb",
+            "port": 80,
+        }
+        with pytest.raises(ConfigError, match="未注入临时凭证"):
+            build_dsn_from_profile(profile)
+
 
 class TestMigrateFromLegacy:
     """Tests for migrate_from_legacy function."""

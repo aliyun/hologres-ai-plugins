@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # Project-local pre-commit hook.
 #
-# Runs in two stages:
+# Runs in three stages:
 #   1. Forwards to the user's globally-configured pre-commit hook (e.g. Alibaba
 #      AccessKey scanner installed at ~/.aliyunAKScanHook/hooks/pre-commit).
 #      This is necessary because enabling repo-local hooks via
@@ -9,6 +9,9 @@
 #      path, so we must re-invoke the global hook explicitly to preserve it.
 #   2. Runs the catalog consistency check
 #      (agent-skills/tests/test_catalog_consistency.py).
+#   3. Checks that uv.lock stays in sync with pyproject.toml dependency changes
+#      (blocks commits that edit dependency sections without staging the lock;
+#      see check_uv_lock_sync.py — bypass with `git commit --no-verify`).
 #
 # Install (one-time, per clone):
 #   git config --local core.hooksPath .githooks
@@ -37,3 +40,6 @@ fi
 
 # -------- Stage 2: catalog consistency --------
 python3 "$REPO_ROOT/agent-skills/tests/test_catalog_consistency.py"
+
+# -------- Stage 3: uv.lock / pyproject.toml dependency sync --------
+python3 "$REPO_ROOT/.githooks/check_uv_lock_sync.py"

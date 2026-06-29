@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 import click
 
+from .. import credentials
 from ..config_store import ConfigError, get_current_profile, get_profile
 from ..logger import log_operation
 from ..output import FORMAT_JSON, error, print_output, success, success_rows
@@ -80,21 +81,27 @@ def _import_hologram_sdk():
 
 
 def _create_hologram_client(profile: dict) -> Any:
-    """Create a Hologram API client from the given profile."""
+    """Create a Hologram API client from the given profile.
+
+    STS 模式用 credential 对象（``Config(credential=...)``），SDK 全权取凭证 + 签名 +
+    自动刷新；其他模式用显式 AK/SK 字段（保持原行为）。
+    """
     HologramClient, _, open_api_models = _import_hologram_sdk()
 
-    ak = profile.get("access_key_id") or ""
-    sk = profile.get("access_key_secret") or ""
-    if not ak or not sk:
-        raise ValueError(
-            "access_key_id / access_key_secret missing from profile. "
-            "Run 'hologres config' to configure."
+    if profile.get("auth_mode") == "sts":
+        config = open_api_models.Config(credential=credentials.get_credential_client(profile))
+    else:
+        ak = profile.get("access_key_id") or ""
+        sk = profile.get("access_key_secret") or ""
+        if not ak or not sk:
+            raise ValueError(
+                "access_key_id / access_key_secret missing from profile. "
+                "Run 'hologres config' to configure."
+            )
+        config = open_api_models.Config(
+            access_key_id=ak,
+            access_key_secret=sk,
         )
-
-    config = open_api_models.Config(
-        access_key_id=ak,
-        access_key_secret=sk,
-    )
     region_id = profile.get("region_id") or "cn-hangzhou"
     config.endpoint = f"hologram.{region_id}.aliyuncs.com"
     config.read_timeout = 20000  # ms; avoid premature SDK timeouts
