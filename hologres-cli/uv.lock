@@ -181,18 +181,24 @@ wheels = [
 
 [[package]]
 name = "alibabacloud-credentials-api"
-version = "1.0.0"
+version = "1.0.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a0/87/1d7019d23891897cb076b2f7e3c81ab3c2ba91de3bb067196f675d60d34c/alibabacloud-credentials-api-1.0.0.tar.gz", hash = "sha256:8c340038d904f0218d7214a8f4088c31912bfcf279af2cbc7d9be4897a97dd2f", size = 2330, upload-time = "2025-01-13T05:53:04.931Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/89/7e/6145e2d132752f0de72701df556304c59dda311405a252a598ad6fd9b4de/alibabacloud_credentials_api-1.0.1.tar.gz", hash = "sha256:8ea0668a6558f6956b8d20b2e561d19a80ea29c22cf56a3004d434b24a981b36", size = 2314, upload-time = "2026-06-25T06:50:33.198Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0b/49/ff401af96d77d40ab918096d831bd3360f3eec60f10e65125e5789c4e617/alibabacloud_credentials_api-1.0.1-py3-none-any.whl", hash = "sha256:5f27889113214fc53493b3e918eb26d73dfab2022e22bdaac262849b8e58cbc0", size = 2230, upload-time = "2026-06-25T06:49:09.991Z" },
+]
 
 [[package]]
 name = "alibabacloud-gateway-spi"
-version = "0.0.3"
+version = "0.0.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "alibabacloud-credentials" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ab/98/d7111245f17935bf72ee9bea60bbbeff2bc42cdfe24d2544db52bc517e1a/alibabacloud_gateway_spi-0.0.3.tar.gz", hash = "sha256:10d1c53a3fc5f87915fbd6b4985b98338a776e9b44a0263f56643c5048223b8b", size = 4249, upload-time = "2025-02-23T16:29:54.222Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cd/67/7cd36a36bf0ec53efd3fe31eaf398713f375b7b1cdcd32c51b6c0fdc09e2/alibabacloud_gateway_spi-0.0.4.tar.gz", hash = "sha256:73d6e20d65b54eed26d89c19640d3a7572e18c45ecada627f806f5dbe8ed2130", size = 4253, upload-time = "2026-06-25T06:34:08.238Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/45/85/81170c45e9d1240736f9776a1c690b958c975509381221b5f8d960b5376d/alibabacloud_gateway_spi-0.0.4-py3-none-any.whl", hash = "sha256:0d5256e95d8719da8ec9611b7ffbb12c2d26fdf7ce52c8f64e4e06350731e893", size = 4290, upload-time = "2026-06-25T06:34:07.22Z" },
+]
 
 [[package]]
 name = "alibabacloud-hologram20220601"
@@ -767,7 +773,7 @@ wheels = [
 
 [[package]]
 name = "hologres-cli"
-version = "0.2.3"
+version = "0.2.4"
 source = { editable = "." }
 dependencies = [
     { name = "alibabacloud-cms20190101" },
