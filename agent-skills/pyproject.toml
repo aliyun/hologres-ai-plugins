@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hologres-agent-skills"
-version = "0.2.5"
+version = "0.2.6"
 description = "Install Hologres Agent Skills to various AI coding tools (Claude Code, GitHub Copilot, Codex, Cursor, etc.)"
 readme = "README.md"
 requires-python = ">=3.10"

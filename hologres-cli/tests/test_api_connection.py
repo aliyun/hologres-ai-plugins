@@ -13,6 +13,7 @@ from hologres_cli.api_connection import (
     _ApiSessionShim,
     _build_masked_dsn,
     _create_client,
+    _execute_statement_via_call_api,
     _quote_literal,
     _rows_from_response,
     _substitute_params,
@@ -168,6 +169,95 @@ class TestRowsFromResponse:
     def test_data_bool(self):
         assert _rows_from_response({"data": True}) == []
 
+    # ---- Documented API response structure ----
+
+    def test_documented_structure_results_with_records(self):
+        """The official ExecuteStatement response uses data.results[0].records / columnMetadata."""
+        body = {
+            "data": {
+                "results": [{
+                    "success": True,
+                    "sql": "SELECT id, name FROM users LIMIT 2",
+                    "count": 2,
+                    "truncated": False,
+                    "queryId": "abc-123",
+                    "columnMetadata": [
+                        {"name": "id", "type": "int4", "nullable": False},
+                        {"name": "name", "type": "text", "nullable": True},
+                    ],
+                    "records": [
+                        ["1", "Alice"],
+                        ["2", "Bob"],
+                    ],
+                }]
+            }
+        }
+        rows = _rows_from_response(body)
+        assert rows == [{"id": "1", "name": "Alice"}, {"id": "2", "name": "Bob"}]
+
+    def test_documented_structure_empty_records(self):
+        body = {
+            "data": {
+                "results": [{
+                    "success": True,
+                    "columnMetadata": [{"name": "n", "type": "int4", "nullable": True}],
+                    "records": [],
+                    "count": 0,
+                }]
+            }
+        }
+        assert _rows_from_response(body) == []
+
+    def test_documented_structure_single_column(self):
+        body = {
+            "data": {
+                "results": [{
+                    "success": True,
+                    "columnMetadata": [{"name": "n", "type": "int4", "nullable": True}],
+                    "records": [["42"]],
+                    "count": 1,
+                }]
+            }
+        }
+        rows = _rows_from_response(body)
+        assert rows == [{"n": "42"}]
+
+    def test_documented_structure_null_values(self):
+        """NULL values are serialised as the string '\\N' by the API."""
+        body = {
+            "data": {
+                "results": [{
+                    "success": True,
+                    "columnMetadata": [
+                        {"name": "id", "type": "int4", "nullable": False},
+                        {"name": "name", "type": "text", "nullable": True},
+                    ],
+                    "records": [["1", "\\N"]],
+                    "count": 1,
+                }]
+            }
+        }
+        rows = _rows_from_response(body)
+        assert rows == [{"id": "1", "name": "\\N"}]
+
+    def test_documented_structure_per_statement_error(self):
+        """results[0].success=False should raise ApiConnectionError."""
+        body = {
+            "data": {
+                "results": [{
+                    "success": False,
+                    "errorCode": "SQL_ERROR",
+                    "errorMessage": 'relation "nonexistent" does not exist',
+                    "columnMetadata": [],
+                    "records": [],
+                }]
+            }
+        }
+        with pytest.raises(ApiConnectionError, match="does not exist"):
+            _rows_from_response(body)
+
+    # ---- Legacy / fallback structures ----
+
     def test_data_list_of_dicts(self):
         rows = _rows_from_response({"data": [{"id": 1}, {"id": 2}]})
         assert rows == [{"id": 1}, {"id": 2}]
@@ -219,8 +309,12 @@ class TestApiCursor:
             "body": {
                 "success": True,
                 "data": {
-                    "columns": [{"name": "id"}],
-                    "rows": [[1]],
+                    "results": [{
+                        "success": True,
+                        "columnMetadata": [{"name": "id", "type": "int4", "nullable": True}],
+                        "records": [["1"]],
+                        "count": 1,
+                    }]
                 },
             }
         }
@@ -231,7 +325,7 @@ class TestApiCursor:
             conn = HologresApiConnection(api_profile)
             cursor = _ApiCursor(conn)
             cursor.execute("SELECT 1 AS id")
-            assert cursor.fetchall() == [{"id": 1}]
+            assert cursor.fetchall() == [{"id": "1"}]
             assert cursor.description == [("id",)]
             assert cursor.rowcount == 1
 
@@ -277,8 +371,12 @@ class TestHologresApiConnection:
             "body": {
                 "success": True,
                 "data": {
-                    "columns": [{"name": "n"}],
-                    "rows": [[42]],
+                    "results": [{
+                        "success": True,
+                        "columnMetadata": [{"name": "n", "type": "int4", "nullable": True}],
+                        "records": [["42"]],
+                        "count": 1,
+                    }]
                 },
             }
         }
@@ -288,7 +386,7 @@ class TestHologresApiConnection:
         ) as mock_api, patch("hologres_cli.api_connection._create_client"):
             conn = HologresApiConnection(api_profile)
             result = conn.execute("SELECT 42 AS n")
-            assert result == [{"n": 42}]
+            assert result == [{"n": "42"}]
             # Verify session GUCs were prepended
             call_args = mock_api.call_args
             sql_sent = call_args.kwargs.get("statement") or call_args[1] if len(call_args) > 1 else call_args.kwargs.get("statement", "")
@@ -347,7 +445,14 @@ class TestHologresApiConnection:
         mock_response = {
             "body": {
                 "success": True,
-                "data": {"columns": [{"name": "x"}], "rows": [[1]]},
+                "data": {
+                    "results": [{
+                        "success": True,
+                        "columnMetadata": [{"name": "x", "type": "int4", "nullable": True}],
+                        "records": [["1"]],
+                        "count": 1,
+                    }]
+                },
             }
         }
         with patch(
@@ -357,8 +462,82 @@ class TestHologresApiConnection:
             conn = HologresApiConnection(api_profile)
             with conn.cursor() as cur:
                 cur.execute("SELECT 1 AS x")
-                assert cur.fetchall() == [{"x": 1}]
+                assert cur.fetchall() == [{"x": "1"}]
                 assert cur.description == [("x",)]
+
+
+class TestExecuteStatementRequestBody:
+    """Verify that _execute_statement_via_call_api builds the request body
+    with the correct field names per the official API schema.
+
+    See: https://help.aliyun.com/zh/hologres/developer-reference/api-hologram-2022-06-01-executestatement
+    """
+
+    def _call_with_captured_body(self, mocker):
+        """Helper: invoke _execute_statement_via_call_api and return the captured body dict."""
+        import sys
+        from hologres_cli import api_connection
+
+        captured_body = {}
+
+        class FakeOpenApiRequest:
+            def __init__(self, **kwargs):
+                captured_body.update(kwargs.get("body", {}))
+
+        class FakeParams:
+            def __init__(self, **kwargs):
+                pass
+
+        class FakeModels:
+            Config = mocker.MagicMock()
+            OpenApiRequest = FakeOpenApiRequest
+            Params = FakeParams
+
+        class FakeUtilModels:
+            RuntimeOptions = mocker.MagicMock
+
+        # Stub alibabacloud_openapi_util so the import inside the function succeeds.
+        fake_util = mocker.MagicMock()
+        fake_util.Client.get_encode_param = mocker.MagicMock(return_value="hgprecn-cn-test")
+        mocker.patch.dict(sys.modules, {"alibabacloud_openapi_util": fake_util,
+                                         "alibabacloud_openapi_util.client": fake_util.Client})
+
+        mock_client = mocker.MagicMock()
+        mock_client.call_api.return_value = {"body": {"success": True, "data": None}}
+
+        mocker.patch.object(
+            api_connection, "_import_sdk",
+            return_value=(mocker.MagicMock(), FakeModels, FakeUtilModels),
+        )
+
+        api_connection._execute_statement_via_call_api(
+            client=mock_client,
+            instance_id="hgprecn-cn-test",
+            statement="SELECT 1",
+            database="mydb",
+        )
+        return captured_body
+
+    def test_body_uses_sql_and_dbname(self, mocker):
+        """Body must use camelCase keys 'sql' and 'dbName', not 'Statement'/'Database'."""
+        captured_body = self._call_with_captured_body(mocker)
+
+        # Correct keys per official API schema
+        assert "sql" in captured_body, "Body must use 'sql' (not 'Statement')"
+        assert "dbName" in captured_body, "Body must use 'dbName' (not 'Database')"
+        assert captured_body["sql"] == "SELECT 1"
+        assert captured_body["dbName"] == "mydb"
+
+        # Wrong keys must NOT be present
+        assert "Statement" not in captured_body
+        assert "Database" not in captured_body
+
+    def test_body_includes_maxrows_and_querytimeout(self, mocker):
+        """Body should include maxRows (API max=1000) and queryTimeout (API max=30s)."""
+        captured_body = self._call_with_captured_body(mocker)
+
+        assert captured_body.get("maxRows") == 1000
+        assert captured_body.get("queryTimeout") == 30
 
 
 class TestCreateClientSts:

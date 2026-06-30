@@ -806,37 +806,29 @@ def scale_cmd(
 # ---------------------------------------------------------------------------
 
 
-def _call_execute_statement_lifecycle_api(
-    client: Any,
-    instance_id: str,
-    action: str,
-    pathname_suffix: str,
-    method: str,
-) -> Any:
-    """Invoke one of the ExecuteStatement lifecycle APIs via ``call_api``.
+def _call_execute_statement_lifecycle_api(client: Any, instance_id: str, action: str) -> Any:
+    """Invoke one of the ExecuteStatement lifecycle APIs via the SDK typed methods.
 
-    All three (Enable / Disable / GetEnabled) follow the same shape:
-    ROA path under ``/api/v1/instances/{id}/<suffix>``, no body, no
-    query parameters.
+    The ``alibabacloud_hologram20220601`` SDK exposes typed methods
+    (``enable_execute_statement`` / ``disable_execute_statement`` /
+    ``get_execute_statement_enabled``) that build the correct ROA path
+    internally. A hand-built ``call_api`` path previously 404'd against the
+    real API, so we delegate to the typed methods instead.
     """
-    from alibabacloud_tea_openapi import models as open_api_models
-    from alibabacloud_tea_util import models as util_models
-    from alibabacloud_openapi_util.client import Client as OpenApiUtilClient
-
-    runtime = util_models.RuntimeOptions()
-    req = open_api_models.OpenApiRequest(headers={})
-    params = open_api_models.Params(
-        action=action,
-        version="2022-06-01",
-        protocol="HTTPS",
-        pathname=f"/api/v1/instances/{OpenApiUtilClient.get_encode_param(instance_id)}/{pathname_suffix}",
-        method=method,
-        auth_type="AK",
-        style="ROA",
-        req_body_type="json",
-        body_type="json",
-    )
-    return client.call_api(params, req, runtime)
+    _, hologram_models, _ = _import_hologram_sdk()
+    if action == "EnableExecuteStatement":
+        return client.enable_execute_statement(
+            instance_id, hologram_models.EnableExecuteStatementRequest()
+        )
+    if action == "DisableExecuteStatement":
+        return client.disable_execute_statement(
+            instance_id, hologram_models.DisableExecuteStatementRequest()
+        )
+    if action == "GetExecuteStatementEnabled":
+        return client.get_execute_statement_enabled(
+            instance_id, hologram_models.GetExecuteStatementEnabledRequest()
+        )
+    raise ValueError(f"Unknown ExecuteStatement lifecycle action: {action}")
 
 
 def _execute_statement_lifecycle_command(
@@ -844,8 +836,6 @@ def _execute_statement_lifecycle_command(
     op: str,
     instance_id: Optional[str],
     action: str,
-    pathname_suffix: str,
-    method: str = "POST",
 ) -> None:
     """Shared implementation for enable/disable/get-enabled commands."""
     fmt = ctx.obj.get("format", FORMAT_JSON)
@@ -872,9 +862,7 @@ def _execute_statement_lifecycle_command(
         return
 
     try:
-        response = _call_execute_statement_lifecycle_api(
-            client, iid, action, pathname_suffix, method
-        )
+        response = _call_execute_statement_lifecycle_api(client, iid, action)
     except Exception as exc:
         _handle_api_exception(op, exc, fmt, op_start)
         return
@@ -911,7 +899,6 @@ def enable_execute_statement_cmd(ctx: click.Context, instance_id: Optional[str])
         op="instance-manage.enable-execute-statement",
         instance_id=instance_id,
         action="EnableExecuteStatement",
-        pathname_suffix="enableExecuteStatement",
     )
 
 
@@ -932,7 +919,6 @@ def disable_execute_statement_cmd(ctx: click.Context, instance_id: Optional[str]
         op="instance-manage.disable-execute-statement",
         instance_id=instance_id,
         action="DisableExecuteStatement",
-        pathname_suffix="disableExecuteStatement",
     )
 
 
@@ -953,6 +939,4 @@ def get_execute_statement_enabled_cmd(ctx: click.Context, instance_id: Optional[
         op="instance-manage.get-execute-statement-enabled",
         instance_id=instance_id,
         action="GetExecuteStatementEnabled",
-        pathname_suffix="getExecuteStatementEnabled",
-        method="GET",
     )

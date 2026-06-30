@@ -773,7 +773,7 @@ wheels = [
 
 [[package]]
 name = "hologres-cli"
-version = "0.2.5"
+version = "0.2.6"
 source = { editable = "." }
 dependencies = [
     { name = "alibabacloud-cms20190101" },
