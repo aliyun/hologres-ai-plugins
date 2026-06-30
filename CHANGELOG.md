@@ -5,6 +5,8 @@
 ### Hologres CLI (`hologres-cli`)
 
 - **fix(api)**: 修正 ExecuteStatement API 请求体字段名及响应解析，修复 API 模式下 SQL 执行失败的问题
+- **fix(instance-manage)**: `enable/disable/get-execute-statement-enabled` 原用手搓 `call_api` 路径（`/api/v1/instances/{id}/enableExecuteStatement`），对真实 OpenAPI 返回 404 `InvalidAction.NotFound`；改用 Hologram SDK 的 typed 方法（`enable/disable/get_execute_statement_enabled`）构建正确 ROA 路径，命令恢复可用
+- **test**: 新增 OpenAPI 集成测试，覆盖全部三个云出口 —— ExecuteStatement SQL（42 项）、CloudMonitor CMS metrics（`metric list/query/latest` 真实调用）、Hologram 实例管理（`instance-manage` list/get/enable/disable 真实调用），共 50 项 live 测试全绿、零 mock
 
 ### 维护
 
